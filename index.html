@@ -106,7 +106,10 @@ document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>setV
 (function(){
 'use strict';
 const CONFIG_KEY='production-hr-cloud-settings-v1';
-let cfg={};try{cfg=JSON.parse(localStorage.getItem(CONFIG_KEY)||'{}')}catch(e){cfg={}}
+const FIXED_URL='https://wykgtliowgftigqpwddx.supabase.co';
+const FIXED_KEY='sb_publishable_c3IK8Hmk71y6pI9y04m3Gg_SV5FmOaZ';
+let cfg={url:FIXED_URL,key:FIXED_KEY,user:''};
+try{const saved=JSON.parse(localStorage.getItem(CONFIG_KEY)||'{}');cfg.user=saved.user||'';}catch(e){}
 let session=null,rev=null,writing=false,queued=false,dirty=false,conflict=false,polling=false;
 view='cloud';
 let syncTimer=null,refreshTimer=null,lastCloudError='';
@@ -125,8 +128,7 @@ function panel(){
  return `<div class="panel" style="padding:20px;margin-bottom:20px"><h2 style="margin-top:0">3인 공유 연결 설정</h2>
  <div class="notice">GitHub Pages만으로는 직원 데이터가 공유되지 않습니다. 승인된 계정과 접근 제한된 DB를 설정한 후 로그인해야 3명에게 변경 내용이 반영됩니다. GitHub 저장소에는 초기 직원 데이터·백업 파일을 올리지 마세요.</div>
  <div class="formgrid" style="margin-top:15px">
- <label>Supabase 프로젝트 주소<input id="cloudUrl" placeholder="https://xxxxx.supabase.co" value="${esc(cfg.url||'')}"></label>
- <label>Supabase 공개용 키 (anon/publishable)<input id="cloudKey" type="password" autocomplete="off" value="${esc(cfg.key||'')}"></label>
+ <div class="notice" style="grid-column:1/-1">연결된 공용 프로젝트: <b>production-hr-system</b> · 프로젝트 주소와 공개용 키는 자동 설정됩니다.</div>
  <label>로그인 계정<input id="cloudUser" type="text" autocomplete="username" value="${esc(cfg.user||'')}"></label>
  <label>로그인 비밀번호<input id="cloudPassword" type="password" autocomplete="current-password" placeholder="접속할 때 입력"></label>
  </div>
@@ -149,10 +151,10 @@ render=function(){if(!session)view='cloud';if(view==='cloud'){
  }else{oldRender();}status();};
 function normalize(data){const o=(data&&typeof data==='object')?data:{};for(const k of ['employees','plans','history','audit','recruitment','snapshots'])if(!Array.isArray(o[k]))o[k]=[];o.settings??={retirementAge:60};return o;}
 async function login(){
- const url=ensureUrl(el('#cloudUrl').value),key=el('#cloudKey').value.trim(),user=el('#cloudUser').value.trim(),password=el('#cloudPassword').value;
+ const url=FIXED_URL,key=FIXED_KEY,user=el('#cloudUser').value.trim(),password=el('#cloudPassword').value;
  if(!/^https:\/\/[^/]+\.supabase\.co$/.test(url)){alert('Supabase 프로젝트 HTTPS 주소를 확인하세요.');return}
  if(!key||!user||!password){alert('주소, 공개용 키, 계정, 비밀번호를 입력하세요.');return}
- cfg={url,key,user};try{localStorage.setItem(CONFIG_KEY,JSON.stringify(cfg))}catch(e){}
+ cfg={url:FIXED_URL,key:FIXED_KEY,user};try{localStorage.setItem(CONFIG_KEY,JSON.stringify({user}))}catch(e){}
  try{const r=await fetch(cfg.url+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({email:user,password})});
  const data=await r.json();if(!r.ok||!data.access_token)throw Error(data.msg||data.error_description||'로그인 실패');
  session=data;conflict=false;dirty=false;await fetchLatest(true);if(rev===null)throw Error('공유 데이터 조회 권한을 확인하지 못했습니다.');start();view='dashboard';render();status();alert('공유 데이터에 연결했습니다.');
