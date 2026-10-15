@@ -314,7 +314,7 @@ function prepareOrgFields(){const corp=document.getElementById('eCorp'),hq=docum
 }
 // Bulk transfer form: explicit selection, preview, one commit and per-person history.
 names.bulk=['일괄 인사발령','대상자를 선택하고 변경할 항목만 적용합니다. 모든 대상자에 발령 연혁이 기록됩니다.'];
-const nav=document.querySelector('.navs');const empNav=nav.querySelector('[data-view="employees"]');empNav.insertAdjacentHTML('afterend','<button class="nav" data-view="bulk">⇄ 일괄 인사발령</button>');
+const nav=document.querySelector('.navs');const empNav=nav.querySelector('[data-view="employees"]');empNav.insertAdjacentHTML('afterend','<button class="nav" data-view="bulk">⇄ 일괄 인사발령</button>');nav.querySelector('[data-view="bulk"]').addEventListener('click',()=>setView('bulk'));
 let selection=new Set(),bulkCorp='',bulkHq='',bulkSearch='';
 function candidates(){return db.employees.filter(e=>(!bulkCorp||e.corporation===bulkCorp)&&(!bulkHq||e.headquarters===bulkHq)&&(!bulkSearch||[e.name,e.employee_no,e.department].some(v=>String(v||'').includes(bulkSearch)))).sort(cmp)}
 function opt(id,items,value,blank){return select(id,items,value,blank)}
@@ -328,6 +328,32 @@ document.addEventListener('change',ev=>{if(ev.target.id==='fCorp'){filters.depar
 document.addEventListener('click',ev=>{if(ev.target.id==='bulkSelectAll'){candidates().forEach(e=>selection.add(String(e.id)));render()}if(ev.target.id==='bulkClear'){selection.clear();render()}});
 document.addEventListener('input',ev=>{if(ev.target.id==='bulkSearch'){bulkSearch=ev.target.value;render();const n=document.getElementById('bulkSearch');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}}});
 const oldSetView=setView;setView=function(v){if(v==='bulk'&&view==='employees'){document.querySelectorAll('.bulkEmp:checked').forEach(n=>selection.add(n.value))}oldSetView(v)};
+// Monthly historical dashboard: historical totals come ONLY from immutable saved monthly snapshots.
+const priorDashboardByMonth=dashboard;
+function monthEndLabel(y,m){return `${y}-${String(m).padStart(2,'0')}-${String(new Date(y,m,0).getDate()).padStart(2,'0')}`}
+function historicalDashboard(s){
+ const plans=plansFor(planYear);
+ const units=s.units||{};
+ const byCorp={};
+ for(const [key,count] of Object.entries(units)){
+   const corp=key.split('␟')[0]||'미지정';byCorp[corp]=(byCorp[corp]||0)+Number(count||0);
+ }
+ const metrics=plans.map(p=>({p,n:Number(units[keyOf(p)]||0),target:monthTarget(p,planMonth)}));
+ const total=Number(s.total ?? Object.values(byCorp).reduce((a,b)=>a+b,0));
+ const target=metrics.reduce((v,x)=>v+x.target,0),short=metrics.reduce((v,x)=>v+Math.max(0,x.target-x.n),0),extra=metrics.reduce((v,x)=>v+Math.max(0,x.n-x.target),0);
+ const months=yearPicker();
+ const info=`<div class="notice"><b>${monthEndLabel(planYear,planMonth)} 저장 인원 기준</b> · 기록시각 ${esc(s.captured||'월말 자동기록')} · 재직·휴직 포함 · 과거 직원별 명부나 현장관리자 직책을 소급 계산하지 않습니다.</div>`;
+ const orgrows=metrics.sort((a,b)=>Math.max(0,b.target-b.n)-Math.max(0,a.target-a.n)).map(({p,n,target})=>`<tr><td>${esc(p.corporation)} · ${esc(orgLabel(p.headquarters))}<br><b>${esc(p.department)}</b></td><td class="right">${fmt(target)}</td><td class="right">${fmt(n)}</td><td class="right ${target>n?'negative':target<n?'warning':'positive'}">${target>n?'-'+(target-n):target<n?'+'+(n-target):'일치'}</td></tr>`).join('');
+ const max=Math.max(1,...Object.values(byCorp));
+ return months+info+`<div class="cards">${card('선택월 말 운영 인원',total,'월말 저장 기록')}${card('사업계획 정원',target,'선택 연·월의 계획')}${card('부족 TO',short,'월말 기록과 계획 비교','negative')}${card('초과 TO',extra,'월말 기록과 계획 비교','warning')}</div><div class="section"><section class="panel"><h2>선택월 말 조직별 정원 비교</h2><div class="tablewrap"><table><thead><tr><th>법인 / 본부 / 부서</th><th class="right">계획</th><th class="right">월말 인원</th><th class="right">부족 / 초과</th></tr></thead><tbody>${orgrows||'<tr><td colspan="4">해당 월 계획 없음</td></tr>'}</tbody></table></div></section><section class="panel"><h2>선택월 말 법인별 인원</h2>${Object.entries(byCorp).sort((a,b)=>CORPS.indexOf(a[0])-CORPS.indexOf(b[0])).map(([corp,n])=>`<div style="margin:17px 0"><div class="summaryline" style="justify-content:space-between;margin-bottom:7px"><b>${esc(corp)}</b><b>${fmt(n)}명</b></div><div class="bar"><i style="width:${100*n/max}%"></i></div></div>`).join('')||'<p class="muted">등록된 인원이 없습니다.</p>'}</section></div>`;
+}
+dashboard=function(){
+ const s=snapshotMonth(planYear,planMonth);
+ if(s)return historicalDashboard(s);
+ const now=new Date(),isCurrent=(now.getFullYear()===Number(planYear)&&now.getMonth()+1===Number(planMonth));
+ if(!isCurrent)return yearPicker()+`<section class="panel"><h2>${planYear}년 ${planMonth}월 월말 기록 없음</h2><div class="notice">해당 월의 월말 실적이 아직 저장되지 않았습니다. <b>현재 인원을 과거 월말 수치로 대신 표시하지 않습니다.</b> 자동 기록은 Supabase 예약 SQL 설정 후 매월 말일 23:59(한국시간)에 실행됩니다.</div><button class="btn" onclick="setView('forecast')">월별 실적 확인 →</button></section>`;
+ return priorDashboardByMonth().replace('<div class="notice"><b>TO 산정 기준</b>', '<div class="notice"><b>당월 잠정 현황 · 월말 확정 전</b> · 월말 저장이 실행되면 선택월은 확정 기록으로 자동 전환됩니다.</div><div class="notice"><b>TO 산정 기준</b>');
+};
 // Display top level organizational parent in all reports without altering TO keys.
 const oldOrg=organizationView;organizationView=function(){let html=oldOrg();return html.replaceAll('화스너생산실','제조본부 / 화스너생산실').replaceAll('생산운영실','제조본부 / 생산운영실').replaceAll('정밀부품생산실','제조본부 / 정밀부품생산실').replaceAll('생산기술실','제조본부 / 생산기술실')};
 })();
