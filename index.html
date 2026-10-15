@@ -98,9 +98,38 @@ backupView = function(){return _v3Backup().replace('전체 백업에는 사업�
 const _v3Executive=executiveView;
 executiveView = function(){const base=_v3Executive();let plans=plansFor(planYear);const summary=plans.map(p=>({...forecastMetrics(p),p}));const expected=summary.reduce((v,x)=>v+x.pending,0),remaining=summary.reduce((v,x)=>v+x.remaining,0),snap=snapshotMonth(planYear,planMonth);return base.replace('<section class="panel"><h2>법인 · 본부별 정원 운영 현황</h2>',`<section class="panel"><h2>채용 및 월별 실적 보조지표</h2><div class="kpirow"><span><b>입사 예정</b> ${expected}명</span><span><b>추가 채용 필요</b> ${remaining}명</span><span><b>선택월 기록 인원</b> ${snap?snap.total+'명':'미기록'}</span></div><p class="hint">현재 인원과 저장된 월별 실적은 시점이 서로 다를 수 있습니다.</p></section><section class="panel"><h2>법인 · 본부별 정원 운영 현황</h2>`)}
 document.addEventListener('change',e=>{if(e.target.id==='unionFilter'){unionFilter=e.target.value;render()}});
-document.addEventListener('input',e=>{if(e.target.id==='unionSearch'){unionSearch=e.target.value;render();const n=$('#unionSearch');if(n){n.focus();n.setSelectionRange(unionSearch.length,unionSearch.length)}}});
+document.addEventListener('input',e=>{if(e.target.id==='unionSearch'){unionSearch=e.target.value;scheduleSearchRender('unionSearch')}});
 
-document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));$('#saveNow').addEventListener('click',()=>{if(save())alert('공동 DB 저장을 요청했습니다. 상단에 공동 DB 저장 완료가 나타나면 반영된 것입니다.')});$('#modalWrap').addEventListener('click',e=>{if(e.target===$('#modalWrap'))closeModal()});document.addEventListener('change',e=>{if(e.target.id==='planYear'){let y=Number(e.target.value);if(y>=2000&&y<=2100){planYear=y;render()}}if(e.target.id==='planMonth'){planMonth=Number(e.target.value);render()}if(['fCorp','fDept','fStatus'].includes(e.target.id)){filters[{fCorp:'corporation',fDept:'department',fStatus:'status'}[e.target.id]]=e.target.value;render()}});document.addEventListener('input',e=>{if(e.target.id==='recruitSearch'){recruitmentSearch=e.target.value;render();const el=$('#recruitSearch');el.focus();el.setSelectionRange(recruitmentSearch.length,recruitmentSearch.length)}if(e.target.id==='employeeSearch'){let p=e.target.selectionStart;search=e.target.value;render();let el=$('#employeeSearch');el.focus();el.setSelectionRange(p,p)}});render();
+
+/* Korean IME-safe search: keep the active input mounted while composing.
+   All list screens share the same deferred refresh helper. */
+const SEARCH_INPUT_IDS=new Set(['employeeSearch','recruitSearch','unionSearch','leaderSearch','bulkSearch']);
+const imeComposing=new Set();
+const searchRefreshTimers=new Map();
+function scheduleSearchRender(id){
+  clearTimeout(searchRefreshTimers.get(id));
+  if(imeComposing.has(id))return;
+  searchRefreshTimers.set(id,setTimeout(()=>{
+    searchRefreshTimers.delete(id);
+    if(imeComposing.has(id))return;
+    const input=document.getElementById(id);
+    if(!input)return;
+    const start=input.selectionStart,end=input.selectionEnd;
+    render();
+    const refreshed=document.getElementById(id);
+    if(refreshed){refreshed.focus({preventScroll:true});try{refreshed.setSelectionRange(start,end)}catch(e){}}
+  },280));
+}
+document.addEventListener('compositionstart',e=>{if(SEARCH_INPUT_IDS.has(e.target.id)){
+  imeComposing.add(e.target.id);clearTimeout(searchRefreshTimers.get(e.target.id));
+}},true);
+document.addEventListener('compositionend',e=>{if(SEARCH_INPUT_IDS.has(e.target.id)){
+  const id=e.target.id;imeComposing.delete(id);
+  // Synchronize the final assembled syllable with the existing list filter.
+  e.target.dispatchEvent(new Event('input',{bubbles:true}));
+}},true);
+
+document.querySelectorAll('.nav').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));$('#saveNow').addEventListener('click',()=>{if(save())alert('공동 DB 저장을 요청했습니다. 상단에 공동 DB 저장 완료가 나타나면 반영된 것입니다.')});$('#modalWrap').addEventListener('click',e=>{if(e.target===$('#modalWrap'))closeModal()});document.addEventListener('change',e=>{if(e.target.id==='planYear'){let y=Number(e.target.value);if(y>=2000&&y<=2100){planYear=y;render()}}if(e.target.id==='planMonth'){planMonth=Number(e.target.value);render()}if(['fCorp','fDept','fStatus'].includes(e.target.id)){filters[{fCorp:'corporation',fDept:'department',fStatus:'status'}[e.target.id]]=e.target.value;render()}});document.addEventListener('input',e=>{if(e.target.id==='recruitSearch'){recruitmentSearch=e.target.value;scheduleSearchRender('recruitSearch')}if(e.target.id==='employeeSearch'){search=e.target.value;scheduleSearchRender('employeeSearch')}});render();
 </script><script>/* Shared collaboration extension: GitHub Pages UI + authenticated Supabase REST.
    Public project key is not a secret. RLS restricts data to approved users. */
 (function(){
@@ -268,7 +297,7 @@ function leadersView(){
 }
 window.resetLeaderFilters=()=>{leaderCorp='';leaderDept='';leaderRole='';leaderSearch='';render()};
 document.addEventListener('change',ev=>{if(view!=='leaders')return;const ids={leaderCorp:'corp',leaderDept:'dept',leaderRole:'role'};if(!ids[ev.target.id])return;if(ev.target.id==='leaderCorp'){leaderCorp=ev.target.value;leaderDept=''}if(ev.target.id==='leaderDept')leaderDept=ev.target.value;if(ev.target.id==='leaderRole')leaderRole=ev.target.value;render()});
-document.addEventListener('input',ev=>{if(view!=='leaders'||ev.target.id!=='leaderSearch')return;leaderSearch=ev.target.value;render();const e=document.getElementById('leaderSearch');if(e){e.focus();e.setSelectionRange(leaderSearch.length,leaderSearch.length)}});
+document.addEventListener('input',ev=>{if(view!=='leaders'||ev.target.id!=='leaderSearch')return;leaderSearch=ev.target.value;scheduleSearchRender('leaderSearch')});
 const previousRender=render;
 render=function(){if(view==='leaders'){document.querySelector('#heading').textContent=names.leaders[0];document.querySelector('#subheading').textContent=names.leaders[1];document.querySelector('#content').innerHTML=leadersView();return;}previousRender();};
 const oldDashboard=dashboard;
@@ -326,7 +355,7 @@ window.applyBulkTransfer=function(){const ids=[...selection];if(!ids.length)retu
 window.resetBulk=()=>{selection.clear();render()};
 document.addEventListener('change',ev=>{if(ev.target.id==='fCorp'){filters.department='';render()}if(ev.target.id==='allBulk'){document.querySelectorAll('.bulkEmp').forEach(n=>n.checked=ev.target.checked)}if(ev.target.classList.contains('bulkCheck')){ev.target.checked?selection.add(ev.target.value):selection.delete(ev.target.value)}if(ev.target.id==='bulkCorp'){bulkCorp=ev.target.value;bulkHq='';render()}if(ev.target.id==='bulkHq'){bulkHq=ev.target.value;render()}});
 document.addEventListener('click',ev=>{if(ev.target.id==='bulkSelectAll'){candidates().forEach(e=>selection.add(String(e.id)));render()}if(ev.target.id==='bulkClear'){selection.clear();render()}});
-document.addEventListener('input',ev=>{if(ev.target.id==='bulkSearch'){bulkSearch=ev.target.value;render();const n=document.getElementById('bulkSearch');if(n){n.focus();n.setSelectionRange(n.value.length,n.value.length)}}});
+document.addEventListener('input',ev=>{if(ev.target.id==='bulkSearch'){bulkSearch=ev.target.value;scheduleSearchRender('bulkSearch')}});
 const oldSetView=setView;setView=function(v){if(v==='bulk'&&view==='employees'){document.querySelectorAll('.bulkEmp:checked').forEach(n=>selection.add(n.value))}oldSetView(v)};
 // Monthly historical dashboard: historical totals come ONLY from immutable saved monthly snapshots.
 const priorDashboardByMonth=dashboard;
