@@ -357,6 +357,74 @@ document.addEventListener('change',ev=>{if(ev.target.id==='fCorp'){filters.depar
 document.addEventListener('click',ev=>{if(ev.target.id==='bulkSelectAll'){candidates().forEach(e=>selection.add(String(e.id)));render()}if(ev.target.id==='bulkClear'){selection.clear();render()}});
 document.addEventListener('input',ev=>{if(ev.target.id==='bulkSearch'){bulkSearch=ev.target.value;scheduleSearchRender('bulkSearch')}});
 const oldSetView=setView;setView=function(v){if(v==='bulk'&&view==='employees'){document.querySelectorAll('.bulkEmp:checked').forEach(n=>selection.add(n.value))}oldSetView(v)};
+// Employee management: stable Korean IME search, extended filters, and safe mass edit.
+const EXTRA_KEYS=['position','grade','gender','decade','hireYear','education','union_status','field_leader_role'];
+const empExtra={};let empSelected=new Set();
+const cleanVal=v=>String(v??'').trim();
+function employeeMatches(e){
+ const txt=cleanVal(search).toLocaleLowerCase('ko');
+ if(txt&&![e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.position,e.grade].some(v=>cleanVal(v).toLocaleLowerCase('ko').includes(txt)))return false;
+ if(filters.corporation&&e.corporation!==filters.corporation)return false;
+ if(filters.department&&e.department!==filters.department)return false;
+ if(filters.status&&e.status!==filters.status)return false;
+ for(const k of EXTRA_KEYS){const wanted=empExtra[k];if(!wanted)continue;
+  const actual=k==='decade'?(Number.parseInt(displayAge(e),10)>=0?String(Math.floor(Number(displayAge(e))/10)*10):''):k==='hireYear'?String(e.hire_date||'').slice(0,4):cleanVal(e[k]|| (k==='union_status'?'미확인':k==='field_leader_role'?'미지정':''));
+  if(String(actual)!==String(wanted))return false;
+ }return true;
+}
+function filteredEmployees(){return db.employees.filter(employeeMatches).sort(cmp)}
+function employeeFilterSelect(id,label,options,value){return `<label class="emp-filter-label">${esc(label)}${select(id,options,value,'전체')}</label>`}
+function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role')return ['그룹장','파트장','라인장','미지정'];if(key==='gender')return ['남','여'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
+const empLabels={position:'직위',grade:'직급',gender:'성별',decade:'연령대',hireYear:'입사연도',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자'};
+employeesView=function(){
+ const matched=filteredEmployees(),shown=matched.slice(0,300),depts=deptFor(filters.corporation,'');
+ const optionsHtml=EXTRA_KEYS.map(k=>employeeFilterSelect('ef_'+k,empLabels[k],extraChoices(k),empExtra[k]||'')).join('');
+ const allVisible=shown.length&&shown.every(e=>empSelected.has(String(e.id)));
+ return `<section class="panel"><div class="toolbar"><input id="employeeSearch" placeholder="성명, 사번, 부서 검색" value="${esc(search)}" style="min-width:210px">${select('fCorp',CORPS.concat(unique('corporation').filter(c=>!CORPS.includes(c))),filters.corporation,'전체 법인')}${select('fDept',depts,filters.department,'전체 부서')}${select('fStatus',['재직','휴직','퇴사'],filters.status,'전체 상태')}<button class="btn" onclick="resetFilters()">필터 초기화</button><button class="btn primary" onclick="openEmployee()">+ 신규 인원 등록</button></div>
+ <div class="employee-filter-grid">${optionsHtml}</div>
+ <div class="summaryline" style="gap:12px;flex-wrap:wrap"><span class="muted">조회 <b>${fmt(matched.length)}</b>명 / 전체 ${fmt(db.employees.length)}명 · 체크 <b id="empCheckedCount">${empSelected.size}</b>명</span><div style="display:flex;flex-wrap:wrap;gap:6px"><button class="btn tiny" id="empSelectFiltered">조회 결과 전체 선택</button><button class="btn tiny" id="empClearSelection">선택 해제</button><button class="btn primary" id="empOpenMassEdit">선택 인원 일괄 수정</button></div></div>
+ <div class="tablewrap"><table><thead><tr><th><input type="checkbox" id="empSelectShown" ${allVisible?'checked':''} title="현재 표시된 최대 300명 선택"></th><th>사번</th><th>성명</th><th>법인</th><th>본부 / 부서</th><th>직위</th><th>직급</th><th>성별</th><th>연령</th><th>입사일</th><th>학력</th><th>노조</th><th>현장관리자</th><th>상태</th><th>관리</th></tr></thead><tbody>${shown.map(e=>`<tr><td><input type="checkbox" class="empRowCheck" value="${esc(e.id)}" ${empSelected.has(String(e.id))?'checked':''}></td><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(orgLabel(e.headquarters))}<br>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${esc(displayAge(e))}</td><td>${esc(e.hire_date)}</td><td>${esc(e.education)}</td><td>${esc(e.union_status||'미확인')}</td><td>${esc(e.field_leader_role||'미지정')}</td><td>${esc(e.status)}</td><td><button class="btn tiny" onclick="openEmployee(${e.id})">수정</button> <button class="btn tiny" onclick="openPersonal(${e.id})">연혁</button></td></tr>`).join('')||'<tr><td colspan="15" class="empty">조건에 해당하는 인원이 없습니다.</td></tr>'}</tbody></table></div>
+ ${matched.length>300?'<p class="hint">화면은 첫 300명만 표시합니다. 「조회 결과 전체 선택」은 필터에 해당하는 전체 인원을 선택합니다.</p>':''}<p class="hint">선택한 인원은 필터를 변경해도 유지됩니다. 일괄 수정 전 선택 인원과 변경 항목을 반드시 확인하세요.</p></section>`;
+};
+// Preserve selection and search composition: never replace an input during IME composition.
+function updateEmpChecked(){const el=document.getElementById('empCheckedCount');if(el)el.textContent=empSelected.size;}
+document.addEventListener('change',ev=>{
+ const id=ev.target.id;
+ if(id==='fCorp'){filters.corporation=ev.target.value;filters.department='';render();return}
+ if(id==='fDept'||id==='fStatus'){filters[id==='fDept'?'department':'status']=ev.target.value;render();return}
+ if(id.startsWith('ef_')){empExtra[id.slice(3)]=ev.target.value;render();return}
+ if(id==='empSelectShown'){document.querySelectorAll('.empRowCheck').forEach(el=>{el.checked=ev.target.checked;if(el.checked)empSelected.add(el.value);else empSelected.delete(el.value)});updateEmpChecked();return}
+ if(ev.target.classList.contains('empRowCheck')){ev.target.checked?empSelected.add(ev.target.value):empSelected.delete(ev.target.value);updateEmpChecked()}
+});
+document.addEventListener('click',ev=>{
+ if(ev.target.id==='empSelectFiltered'){filteredEmployees().forEach(e=>empSelected.add(String(e.id)));render()}
+ if(ev.target.id==='empClearSelection'){empSelected.clear();render()}
+ if(ev.target.id==='empOpenMassEdit')openEmployeeMassEdit();
+});
+const formerResetFilters=resetFilters;
+resetFilters=function(){for(const k of EXTRA_KEYS)delete empExtra[k];formerResetFilters()};
+const massAllowed={position:'직위',grade:'직급',status:'재직상태',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자',gender:'성별'};
+function openEmployeeMassEdit(){
+ const selected=db.employees.filter(e=>empSelected.has(String(e.id)));
+ if(!selected.length)return alert('변경할 직원을 먼저 체크해 주세요.');
+ const countByCorp={};selected.forEach(e=>countByCorp[e.corporation]=(countByCorp[e.corporation]||0)+1);
+ const fields=Object.entries(massAllowed).map(([key,label])=>{const opts={status:['재직','휴직','퇴사'],union_status:['가입','미가입','미확인'],field_leader_role:['그룹장','파트장','라인장','미지정'],gender:['남','여']}[key];return `<label>${esc(label)}${opts?select('mass_'+key,opts,'','변경 안 함'):`<input id="mass_${key}" placeholder="변경 안 함" list="mass-list-${key}"><datalist id="mass-list-${key}">${extraChoices(key).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`}</label>`}).join('');
+ modal('선택 인원 일괄 수정',`<div class="notice"><b>선택 인원 ${selected.length}명</b> · ${Object.entries(countByCorp).map(([a,b])=>`${esc(a)} ${b}명`).join(' / ')}<br>변경할 항목만 선택하세요. 비워 둔 항목은 변경되지 않습니다. 퇴사 처리 시 현재 TO가 자동 갱신됩니다.</div><div class="formgrid">${fields}</div><div class="hint">가입 여부는 확인된 정보만 변경하세요. 한 번에 변경한 결과는 공동 DB에 저장 요청되며, 변경 기록에 남습니다.</div><div class="modalactions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="applyEmployeeMassEdit()">${selected.length}명 일괄 변경</button></div>`);
+}
+window.applyEmployeeMassEdit=function(){
+ const selected=db.employees.filter(e=>empSelected.has(String(e.id))),changes=Object.keys(massAllowed).map(k=>[k,cleanVal(document.getElementById('mass_'+k)?.value)]).filter(([,v])=>v!=='');
+ if(!selected.length)return alert('선택 인원이 없습니다.');if(!changes.length)return alert('변경할 항목을 입력하거나 선택하세요.');
+ const diffs=selected.map(e=>({e,props:changes.filter(([k,v])=>cleanVal(e[k]||((k==='union_status')?'미확인':k==='field_leader_role'?'미지정':''))!==v)})).filter(x=>x.props.length);
+ if(!diffs.length)return alert('실제로 변경할 내용이 없습니다.');
+ const caption=changes.map(([k,v])=>`${massAllowed[k]} → ${v}`).join(' / ');
+ if(!confirm(`${diffs.length}명의 정보를 일괄 변경합니다.\n${caption}\n\n되돌리려면 별도 수정이 필요합니다. 계속할까요?`))return;
+ const now=today();
+ for(const {e,props} of diffs){const detail=props.map(([k,v])=>`${massAllowed[k]}: ${cleanVal(e[k])||'-'} → ${v}`);for(const [k,v] of props)e[k]=v;if(props.some(([k])=>k==='position'||k==='grade'||k==='status'||k==='field_leader_role'))db.history.unshift({employee_id:e.id,event_date:now,event_type:'일괄변경',title:'인사정보 일괄 변경',description:detail.join(' / '),department:e.department,grade:e.grade});}
+ empSelected.clear();closeModal();commit('인사정보 일괄 수정',`${diffs.length}명 / ${caption}`);alert(`${diffs.length}명 변경사항을 공동 DB에 저장 요청했습니다. 상단 저장 완료 표시를 확인하세요.`);
+};
+// Limited styling for additional filters.
+const empStyle=document.createElement('style');empStyle.textContent='.employee-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:9px;margin:12px 0 16px}.emp-filter-label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#64748b}.emp-filter-label select{width:100%;min-width:0}';document.head.appendChild(empStyle);
+
 // Monthly historical dashboard: historical totals come ONLY from immutable saved monthly snapshots.
 const priorDashboardByMonth=dashboard;
 function monthEndLabel(y,m){return `${y}-${String(m).padStart(2,'0')}-${String(new Date(y,m,0).getDate()).padStart(2,'0')}`}
