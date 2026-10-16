@@ -491,6 +491,36 @@ render=function(){if(view==='exits'){$('#heading').textContent=names.exits[0];$(
 document.addEventListener('change',ev=>{if(ev.target.id==='exitCorp'){exitCorp=ev.target.value;render()}});
 document.addEventListener('input',ev=>{if(ev.target.id==='exitSearch'){exitSearch=ev.target.value;scheduleSearchRender('exitSearch')}});
 
+// Current-calendar-month hires: use registered hire dates, never invent historical employee details.
+function currentMonthHires(){
+ const month=today().slice(0,7);
+ return db.employees.filter(e=>/^\d{4}-\d{2}-\d{2}$/.test(String(e.hire_date||''))&&String(e.hire_date).slice(0,7)===month)
+   .sort((a,b)=>String(a.hire_date).localeCompare(String(b.hire_date))||(typeof cmp==='function'?cmp(a,b):0));
+}
+function thisMonthHirePanel(){
+ const list=currentMonthHires();
+ return `<section class="panel"><h2>당월 입사자 <span class="muted">${fmt(list.length)}명 · ${today().slice(0,7)}</span></h2><div class="tablewrap"><table><thead><tr><th>이름</th><th>법인</th><th>부서</th><th>입사일</th></tr></thead><tbody>${list.map(e=>`<tr><td>${esc(e.name)}</td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.hire_date)}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">당월 입사자가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+}
+// Insert month-to-date hire KPI in the current dashboard without modifying the existing card calculations.
+const dashboardBeforeHires=dashboard;
+dashboard=function(){
+ let html=dashboardBeforeHires();
+ const current=Number(planYear)===new Date().getFullYear()&&Number(planMonth)===new Date().getMonth()+1;
+ if(!current)return html; // Historical snapshots deliberately do not contain individual hire lists.
+ const cardHtml=card('당월 입사자',currentMonthHires().length,'입사일 기준 · 재직상태 무관');
+ // Close the five-card summary, then append the new KPI within that same card grid.
+ const firstCards=html.indexOf('<div class="cards">');
+ if(firstCards>=0){
+   const next=html.indexOf('</div><', firstCards + 19);
+   // Locate the end of the cards container by balancing nested div elements.
+   const re=/<\/?div\b[^>]*>/g;re.lastIndex=firstCards;let depth=0, match;
+   while((match=re.exec(html))){depth+=match[0].startsWith('</')?-1:1;if(depth===0){html=html.slice(0,match.index)+cardHtml+html.slice(match.index);break;}}
+ }
+ const exitPanelStart=html.indexOf('<section class="panel"><h2>당월 퇴사자');
+ const hires=thisMonthHirePanel();
+ return exitPanelStart>=0?html.slice(0,exitPanelStart)+hires+html.slice(exitPanelStart):html+hires;
+};
+
 // Display top level organizational parent in all reports without altering TO keys.
 const oldOrg=organizationView;organizationView=function(){let html=oldOrg();return html.replaceAll('화스너생산실','제조본부 / 화스너생산실').replaceAll('생산운영실','제조본부 / 생산운영실').replaceAll('정밀부품생산실','제조본부 / 정밀부품생산실').replaceAll('생산기술실','제조본부 / 생산기술실')};
 })();
