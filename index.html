@@ -523,7 +523,42 @@ dashboard=function(){
 
 // Display top level organizational parent in all reports without altering TO keys.
 const oldOrg=organizationView;organizationView=function(){let html=oldOrg();return html.replaceAll('화스너생산실','제조본부 / 화스너생산실').replaceAll('생산운영실','제조본부 / 생산운영실').replaceAll('정밀부품생산실','제조본부 / 정밀부품생산실').replaceAll('생산기술실','제조본부 / 생산기술실')};
+
+/* Dashboard totals: net company-wide comparison, separate from department shortages. */
+  function globalToMetrics(y=planYear,m=planMonth,totalOverride=null){
+    const total=totalOverride===null?db.employees.filter(occupied).length:Number(totalOverride);
+    const target=plansFor(y).reduce((sum,p)=>sum+Number(monthTarget(p,m)||0),0);
+    const diff=total-target;
+    return {total,target,short:Math.max(0,-diff),surplus:Math.max(0,diff)};
+  }
+  // Keep the single net-surplus KPI produced by summaryCards / historicalDashboard.
+  // The former blanket text-based removal also deleted the new KPI itself.
+  function removeExcessKpi(html){ return html; }
+
+  summaryCards=function(){
+    const m=globalToMetrics();
+    const exits=typeof currentMonthExits==='function'?currentMonthExits().length:0;
+    const notice=m.surplus?'전체 인원이 계획 정원을 초과':'전체 인원이 계획 정원 이하';
+    return `<div class="cards">${card('현재 인원',m.total,'재직·휴직 포함')}${card('사업계획 정원',m.target,planYear+'년 '+planMonth+'월 계획 합계')}${card('초과 TO',m.surplus,notice,m.surplus?'warning':'positive')}${card('당월 퇴사자',exits,'해당 월 퇴사일 기준')}</div>`;
+  };
+  const previousHistorical=historicalDashboard;
+  historicalDashboard=function(s){
+    let html=previousHistorical(s);
+    const m=globalToMetrics(planYear,planMonth,Number(s.total||0));
+    const cards=`<div class="cards">${card('선택월 말 인원',m.total,'저장된 월말 인원')}${card('사업계획 정원',m.target,'선택 연·월의 계획')}${card('초과 TO',m.surplus,m.surplus?'전체 기준 계획 초과 인원':'전체 기준 초과 없음',m.surplus?'warning':'positive')}</div>`;
+    const start=html.indexOf('<div class="cards">');
+    if(start>=0){const tags=/<\/?div\b[^>]*>/g;tags.lastIndex=start;let depth=0,match;while((match=tags.exec(html))){depth+=match[0].startsWith('</')?-1:1;if(depth===0){html=html.slice(0,start)+cards+html.slice(tags.lastIndex);break;}}}
+    return html;
+  };
+  const precedingDashboard=dashboard;
+  dashboard=function(){
+    let html=precedingDashboard();
+    // Legacy explanatory copy describes gross department shortages; dashboard KPI is now net.
+    html=html.replace(/부족 TO는 <b>부서별 max\(사업계획 정원 − 운영 인원, 0\)<\/b>을 합산합니다\./g,'대시보드 초과 TO는 <b>전체 현재 인원 − 전체 사업계획 정원</b>이 양수일 때만 표시합니다. 부서별 부족 인원은 아래 상세표에서 별도로 확인합니다.');
+    return removeExcessKpi(html);
+  };
 })();
+
 </script><script>
 /* Union statistics: production workforce denominator, office members counted only in union membership. */
 (function(){
