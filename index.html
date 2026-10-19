@@ -378,14 +378,14 @@ function employeeFilterSelect(id,label,options,value){return `<label class="emp-
 function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role')return ['그룹장','파트장','라인장','미지정'];if(key==='gender')return ['남','여'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
 const empLabels={position:'직위',grade:'직급',gender:'성별',decade:'연령대',hireYear:'입사연도',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자'};
 employeesView=function(){
- const matched=filteredEmployees(),shown=matched.slice(0,300),depts=deptFor(filters.corporation,'');
+ const matched=filteredEmployees(),shown=matched,depts=deptFor(filters.corporation,'');
  const optionsHtml=EXTRA_KEYS.map(k=>employeeFilterSelect('ef_'+k,empLabels[k],extraChoices(k),empExtra[k]||'')).join('');
  const allVisible=shown.length&&shown.every(e=>empSelected.has(String(e.id)));
  return `<section class="panel"><div class="toolbar"><input id="employeeSearch" placeholder="성명, 사번, 부서 검색" value="${esc(search)}" style="min-width:210px">${select('fCorp',CORPS.concat(unique('corporation').filter(c=>!CORPS.includes(c))),filters.corporation,'전체 법인')}${select('fDept',depts,filters.department,'전체 부서')}${select('fStatus',['재직','휴직','퇴사'],filters.status,'전체 상태')}<button class="btn" onclick="resetFilters()">필터 초기화</button><button class="btn primary" onclick="openEmployee()">+ 신규 인원 등록</button></div>
  <div class="employee-filter-grid">${optionsHtml}</div>
  <div class="summaryline" style="gap:12px;flex-wrap:wrap"><span class="muted">조회 <b>${fmt(matched.length)}</b>명 / 전체 ${fmt(db.employees.length)}명 · 체크 <b id="empCheckedCount">${empSelected.size}</b>명</span><div style="display:flex;flex-wrap:wrap;gap:6px"><button class="btn tiny" id="empSelectFiltered">조회 결과 전체 선택</button><button class="btn tiny" id="empClearSelection">선택 해제</button><button class="btn primary" id="empOpenMassEdit">선택 인원 일괄 수정</button></div></div>
- <div class="tablewrap"><table><thead><tr><th><input type="checkbox" id="empSelectShown" ${allVisible?'checked':''} title="현재 표시된 최대 300명 선택"></th><th>사번</th><th>성명</th><th>법인</th><th>본부 / 부서</th><th>직위</th><th>직급</th><th>성별</th><th>연령</th><th>입사일</th><th>학력</th><th>노조</th><th>현장관리자</th><th>상태</th><th>관리</th></tr></thead><tbody>${shown.map(e=>`<tr><td><input type="checkbox" class="empRowCheck" value="${esc(e.id)}" ${empSelected.has(String(e.id))?'checked':''}></td><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(orgLabel(e.headquarters))}<br>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${esc(displayAge(e))}</td><td>${esc(e.hire_date)}</td><td>${esc(e.education)}</td><td>${esc(e.union_status||'미확인')}</td><td>${esc(e.field_leader_role||'미지정')}</td><td>${esc(e.status)}</td><td><button class="btn tiny" onclick="openEmployee(${e.id})">수정</button> <button class="btn tiny" onclick="openPersonal(${e.id})">연혁</button></td></tr>`).join('')||'<tr><td colspan="15" class="empty">조건에 해당하는 인원이 없습니다.</td></tr>'}</tbody></table></div>
- ${matched.length>300?'<p class="hint">화면은 첫 300명만 표시합니다. 「조회 결과 전체 선택」은 필터에 해당하는 전체 인원을 선택합니다.</p>':''}<p class="hint">선택한 인원은 필터를 변경해도 유지됩니다. 일괄 수정 전 선택 인원과 변경 항목을 반드시 확인하세요.</p></section>`;
+ <div class="tablewrap"><table><thead><tr><th><input type="checkbox" id="empSelectShown" ${allVisible?'checked':''} title="현재 조회된 인원 전체 선택"></th><th>사번</th><th>성명</th><th>법인</th><th>본부 / 부서</th><th>직위</th><th>직급</th><th>성별</th><th>연령</th><th>입사일</th><th>학력</th><th>노조</th><th>현장관리자</th><th>상태</th><th>관리</th></tr></thead><tbody>${shown.map(e=>`<tr><td><input type="checkbox" class="empRowCheck" value="${esc(e.id)}" ${empSelected.has(String(e.id))?'checked':''}></td><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(orgLabel(e.headquarters))}<br>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${esc(displayAge(e))}</td><td>${esc(e.hire_date)}</td><td>${esc(e.education)}</td><td>${esc(e.union_status||'미확인')}</td><td>${esc(e.field_leader_role||'미지정')}</td><td>${esc(e.status)}</td><td><button class="btn tiny" onclick="openEmployee(${e.id})">수정</button> <button class="btn tiny" onclick="openPersonal(${e.id})">연혁</button></td></tr>`).join('')||'<tr><td colspan="15" class="empty">조건에 해당하는 인원이 없습니다.</td></tr>'}</tbody></table></div>
+ <p class="hint">선택한 인원은 필터를 변경해도 유지됩니다. 일괄 수정 전 선택 인원과 변경 항목을 반드시 확인하세요.</p></section>`;
 };
 // Preserve selection and search composition: never replace an input during IME composition.
 function updateEmpChecked(){const el=document.getElementById('empCheckedCount');if(el)el.textContent=empSelected.size;}
@@ -697,23 +697,8 @@ const compareEmp=(a,b)=>{
 };
 function sortingControl(){const choices=[['corporation','법인·본부 순'],['employee_no','사번순'],['name','성명순'],['headquarters','본부순'],['department','부서순'],['position','직위순'],['grade','직급순'],['hire_date','입사일순'],['age','연령순']];return `<div class="toolbar" style="align-items:center"><label style="display:flex;gap:7px;align-items:center">정렬 기준 <select id="hrSort">${choices.map(([v,l])=>`<option value="${v}" ${empSort===v?'selected':''}>${l}</option>`).join('')}</select></label><label style="display:flex;gap:7px;align-items:center">정렬 방향 <select id="hrSortDirection"><option value="asc" ${empDirection==='asc'?'selected':''}>오름차순</option><option value="desc" ${empDirection==='desc'?'selected':''}>내림차순</option></select></label><span class="muted">한 페이지 50명 · 제목행 고정</span></div>`}
 // Extend the active employee list without replacing existing filter, search, or bulk-selection logic.
-const previousEmployees=employeesView;
-employeesView=function(){
- const html=previousEmployees();
- const matched=window.hrFilteredEmployees().slice().sort(compareEmp);
- const count=matched.length,maxPage=Math.max(1,Math.ceil(count/size)); empPage=Math.min(Math.max(1,empPage),maxPage);
- const shown=matched.slice((empPage-1)*size,empPage*size);
- const start=html.indexOf('<div class="tablewrap"><table>');
- const end=start>=0?html.indexOf('</table></div>',start):-1;
- if(start<0||end<0)return sortingControl()+html;
- const prefix=html.slice(0,start);const suffix=html.slice(end+'</table></div>'.length);
- const heads=['선택','사번','성명','법인','본부 / 부서','직위','직급','성별','연령','입사일','학력','노조','현장관리자','상태','관리'];
- const checkAll=shown.length>0&&shown.every(e=>empSelected.has(String(e.id)));
- const header='<thead><tr>'+heads.map((h,i)=>`<th>${i===0?`<input type="checkbox" id="empSelectShown" ${checkAll?'checked':''} title="이 페이지 50명 선택">`:esc(h)}</th>`).join('')+'</tr></thead>';
- const body=shown.map(e=>`<tr><td><input type="checkbox" class="empRowCheck" value="${esc(e.id)}" ${empSelected.has(String(e.id))?'checked':''}></td><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(typeof orgLabel==='function'?orgLabel(e.headquarters):e.headquarters)}<br>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${esc(displayAge(e))}</td><td>${esc(e.hire_date)}</td><td>${esc(e.education)}</td><td>${esc(e.union_status||'미확인')}</td><td>${esc(e.field_leader_role||'미지정')}</td><td>${esc(e.status)}</td><td><button class="btn tiny" onclick="openEmployee(${JSON.stringify(e.id)})">수정</button> <button class="btn tiny" onclick="openPersonal(${JSON.stringify(e.id)})">연혁</button></td></tr>`).join('');
- const pages=`<div class="hr-page-actions"><span class="muted">${fmt(count)}명 중 ${count?(empPage-1)*size+1:0}~${Math.min(empPage*size,count)}명 · ${empPage}/${maxPage}페이지</span><div style="display:flex;gap:6px"><button class="btn tiny" data-hr-page="first" ${empPage===1?'disabled':''}>처음</button><button class="btn tiny" data-hr-page="prev" ${empPage===1?'disabled':''}>이전</button><button class="btn tiny" data-hr-page="next" ${empPage===maxPage?'disabled':''}>다음</button><button class="btn tiny" data-hr-page="last" ${empPage===maxPage?'disabled':''}>마지막</button></div></div>`;
- return prefix+sortingControl()+`<div class="hr-fixed-scroll"><table>${header}<tbody>${body||'<tr><td colspan="15">조건에 해당하는 직원이 없습니다.</td></tr>'}</tbody></table></div>`+pages+suffix.replace(/화면은 첫 300명만 표시합니다[^<]*/g,'화면은 한 번에 50명씩 표시합니다. ');
-};
+// Restore the stable unpaginated employee list. Keep existing filters and bulk edits.
+// No cross-script filteredEmployees calls; do not replace the search field during typing.
 // Organization filter plus requested corporation and headquarters order.
 organizationView=function(){const map=new Map();db.employees.filter(occupied).forEach(e=>{if(orgCorp&&e.corporation!==orgCorp)return;const k=keyOf(e);if(!map.has(k))map.set(k,{corporation:e.corporation,headquarters:e.headquarters,department:e.department,total:0,male:0,female:0});const r=map.get(k);r.total++;if(e.gender==='남')r.male++;if(e.gender==='여')r.female++});const records=[...map.values()].sort(orgCompare);const options=[...CORP_RANK,...new Set(db.employees.map(e=>e.corporation).filter(x=>x&&!CORP_RANK.includes(x)))];return `<section class="panel"><div class="toolbar"><h2>부서별 · 성별 운영 인원</h2><label>법인 선택 <select id="hrOrgCorp"><option value="">전체 법인</option>${options.map(v=>`<option value="${esc(v)}" ${orgCorp===v?'selected':''}>${esc(v)}</option>`).join('')}</select></label></div><div class="tablewrap"><table><thead><tr><th>법인</th><th>본부 / 실</th><th>부서</th><th class="right">총인원</th><th class="right">남</th><th class="right">여</th><th>구성</th></tr></thead><tbody>${records.map(r=>`<tr><td>${esc(r.corporation)}</td><td>${esc(typeof orgLabel==='function'?orgLabel(r.headquarters):r.headquarters)}</td><td>${esc(r.department)}</td><td class="right"><b>${r.total}</b></td><td class="right">${r.male}</td><td class="right">${r.female}</td><td><div class="bar"><i style="width:${r.total?100*r.male/r.total:0}%"></i></div></td></tr>`).join('')||'<tr><td colspan="7">표시할 인원이 없습니다.</td></tr>'}</tbody></table></div></section>`};
 // For other rendered tables, use header labels to sort only organizational rows.
@@ -745,12 +730,9 @@ saveEmployee=function(id){
  if(change){save();render();}
 };
 document.addEventListener('change',ev=>{
- if(ev.target.id==='hrSort'){empSort=ev.target.value;empPage=1;render();}
- if(ev.target.id==='hrSortDirection'){empDirection=ev.target.value;empPage=1;render();}
  if(ev.target.id==='hrOrgCorp'){orgCorp=ev.target.value;render();}
- if(view==='employees'&&(ev.target.id==='fCorp'||ev.target.id==='fDept'||ev.target.id==='fStatus'||ev.target.id.startsWith('ef_')))empPage=1;
 });
-document.addEventListener('click',ev=>{const page=ev.target.closest('[data-hr-page]');if(!page)return;const pages=Math.max(1,Math.ceil(window.hrFilteredEmployees().length/size));const direction=page.dataset.hrPage;empPage=direction==='first'?1:direction==='last'?pages:direction==='next'?Math.min(pages,empPage+1):Math.max(1,empPage-1);render();});
+
 })();
 </script>
 </body></html>
