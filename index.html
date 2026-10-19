@@ -614,7 +614,7 @@ unionExportObserve.observe(mainContent,{childList:true});
   const wrap=document.createElement('div');
   wrap.id='employmentStatusDates';
   wrap.style.cssText='grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px';
-  wrap.innerHTML='<label id="exitDateLabel">퇴사일 <span style="color:#c2410c">*</span><input id="eExitDate" type="date" style="width:100%"></label><label id="leaveDateLabel">휴직 시작일 <span style="color:#c2410c">*</span><input id="eLeaveDate" type="date" style="width:100%"></label>';
+  wrap.innerHTML='<label id="exitDateLabel"><span><span style="color:#c2410c">* </span>퇴사일</span><input id="eExitDate" type="date" style="width:100%"></label><label id="leaveDateLabel">휴직 시작일 <span style="color:#c2410c">*</span><input id="eLeaveDate" type="date" style="width:100%"></label>';
   status.closest('label').insertAdjacentElement('afterend',wrap);
   document.getElementById('eExitDate').value=person?.exit_date||'';
   document.getElementById('eLeaveDate').value=person?.leave_date||'';
@@ -741,7 +741,20 @@ openEmployee=function(id=null,encoded=''){
   const reasonInput=document.getElementById('eExitReason');
   if(reasonInput){reasonInput.style.width='100%';reasonInput.style.maxWidth='100%';}
  }
- const status=document.getElementById('eStatus');const update=()=>{document.getElementById('hrExitReasonWrap').style.display=status?.value==='퇴사'?'flex':'none';};status?.addEventListener('change',update);update();
+ const status=document.getElementById('eStatus');
+ const update=()=>{
+  const isExit=status?.value==='퇴사';
+  const isLeave=status?.value==='휴직';
+  const exitLabel=document.getElementById('exitDateLabel');
+  const leaveLabel=document.getElementById('leaveDateLabel');
+  const reasonLabel=document.getElementById('hrExitReasonWrap');
+  const row=document.getElementById('employmentStatusDates');
+  if(exitLabel)exitLabel.style.display=isExit?'flex':'none';
+  if(leaveLabel)leaveLabel.style.display=isLeave?'flex':'none';
+  if(reasonLabel)reasonLabel.style.display=isExit?'flex':'none';
+  if(row)row.style.display=(isExit||isLeave)?'grid':'none';
+ };
+ status?.addEventListener('change',update);update();
  for(const id of ['eExitDate','eLeaveDate']){const node=document.getElementById(id);if(node){node.style.width='170px';node.style.maxWidth='100%';const label=node.closest('label');if(label){label.style.maxWidth='220px';label.style.width='auto';}}}
 };
 const oldSave=saveEmployee;
