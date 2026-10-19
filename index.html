@@ -375,13 +375,15 @@ function employeeMatches(e){
 }
 const EMP_CORP_ORDER=['진합','제이앤드에프','지노스','진우정공'];
 const EMP_HQ_ORDER=['화스너생산실','정밀부품생산실','생산운영실','생산기술실','품질본부','연구개발본부','통합구매실','사업개발실','상생안전본부','상생안전본부 부','노동조합','표면처리사업부','대화공장','옥천공장','U볼트사업부문'];
+const FASTENER_TEAM_ORDER=['생산1팀(단조)','생산1팀(전조)','생산2팀(열처리)','생산2팀(GEO)'];
+function fastenerTeamRank(e){return String(e.headquarters||'').trim()==='화스너생산실'?empRank(String(e.department||'').replace(/\s+/g,''),FASTENER_TEAM_ORDER):0;}
 function empRank(value,items){const n=items.indexOf(String(value||'').trim());return n<0?items.length:n;}
 function employeePrioritySort(a,b){
  return empRank(a.corporation,EMP_CORP_ORDER)-empRank(b.corporation,EMP_CORP_ORDER)
  ||empRank(a.headquarters,EMP_HQ_ORDER)-empRank(b.headquarters,EMP_HQ_ORDER)
  ||String(a.corporation||'').localeCompare(String(b.corporation||''),'ko')
  ||String(a.headquarters||'').localeCompare(String(b.headquarters||''),'ko')
- ||String(a.name||'').localeCompare(String(b.name||''),'ko',{sensitivity:'base'})
+ ||fastenerTeamRank(a)-fastenerTeamRank(b) ||String(a.name||'').localeCompare(String(b.name||''),'ko',{sensitivity:'base'})
  ||String(a.employee_no||'').localeCompare(String(b.employee_no||''),'ko',{numeric:true});
 }
 function filteredEmployees(){return db.employees.filter(employeeMatches).sort(employeePrioritySort)}
