@@ -381,7 +381,7 @@ function employeePrioritySort(a,b){
  ||empRank(a.headquarters,EMP_HQ_ORDER)-empRank(b.headquarters,EMP_HQ_ORDER)
  ||String(a.corporation||'').localeCompare(String(b.corporation||''),'ko')
  ||String(a.headquarters||'').localeCompare(String(b.headquarters||''),'ko')
- ||String(a.department||'').localeCompare(String(b.department||''),'ko')
+ ||String(a.name||'').localeCompare(String(b.name||''),'ko',{sensitivity:'base'})
  ||String(a.employee_no||'').localeCompare(String(b.employee_no||''),'ko',{numeric:true});
 }
 function filteredEmployees(){return db.employees.filter(employeeMatches).sort(employeePrioritySort)}
