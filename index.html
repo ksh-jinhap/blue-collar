@@ -667,4 +667,89 @@ unionExportObserve.observe(mainContent,{childList:true});
  const previousExcel=window.downloadExcel;window.downloadExcel=function(kind='all'){if(kind!=='정규직전환대상'&&kind!=='all')return previousExcel(kind);const rows=[['사번','성명','법인','본부','부서','직위','직급','입사일','계약 만료일','고용형태','전환일','현재상태'],...(db.employees||[]).filter(e=>e.status!=='퇴사'&&(employmentType(e)==='계약직'||e.employment_type==='정규직'&&e.conversion_date)).map(e=>[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.position,e.grade,e.hire_date,contractEnd(e.hire_date),employmentType(e),e.conversion_date||'',e.status])];const sheet={name:'정규직전환관리',rows};if(kind==='정규직전환대상')return window.__unionMakeXlsx('정규직전환관리',[sheet]);const section=(typeof unionSheets==='function'?unionSheets():window.__unionBaseSheets());if(!confirm('전체 Excel에는 개인별 인사정보가 포함됩니다. 접근이 제한된 곳에 저장하시겠습니까?'))return;window.__unionMakeXlsx('생산직_인사TO_전체',[...Object.values(section),sheet])};
 })();
 </script>
+
+<style>
+.hr-fixed-scroll{max-height:590px;overflow:auto;position:relative;border:1px solid #e2e8f0;border-radius:10px}
+.hr-fixed-scroll table{border-collapse:separate;border-spacing:0;min-width:1400px}
+.hr-fixed-scroll thead th{position:sticky;top:0;z-index:4;background:#f1f5f9;box-shadow:0 2px 3px rgba(15,23,42,.12);white-space:nowrap}
+.hr-page-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:12px 0}
+.hr-page-actions button:disabled{opacity:.4;cursor:not-allowed}
+</style>
+<script>
+/* Consistent workforce sorting, pagination, and additional employee attributes. */
+(function(){
+const CORP_RANK=['진합','제이앤드에프','지노스','진우정공'];
+const HQ_RANK=['화스너생산실','정밀부품생산실','생산운영실','생산기술실','품질본부','연구개발본부','통합구매실','사업개발실','상생안전본부','상생안전본부 부','노동조합','표면처리사업부','대화공장','옥천공장','U볼트사업부문'];
+const rank=(value,order)=>{const i=order.indexOf(String(value||'').trim());return i<0?order.length:i};
+const txt=(v)=>String(v??'');
+const natural=(a,b)=>txt(a).localeCompare(txt(b),'ko',{numeric:true,sensitivity:'base'});
+function orgCompare(a,b){return rank(a.corporation,CORP_RANK)-rank(b.corporation,CORP_RANK)|| (rank(a.headquarters,HQ_RANK)-rank(b.headquarters,HQ_RANK)) ||natural(a.corporation,b.corporation)||natural(a.headquarters,b.headquarters)||natural(a.department,b.department)||natural(a.employee_no,b.employee_no)}
+let empSort='corporation',empDirection='asc',empPage=1,orgCorp='';
+const size=50;
+const compareEmp=(a,b)=>{
+ let result=0;
+ if(empSort==='corporation')result=orgCompare(a,b);
+ else if(empSort==='headquarters')result=rank(a.headquarters,HQ_RANK)-rank(b.headquarters,HQ_RANK)||orgCompare(a,b);
+ else if(empSort==='age')result=Number(displayAge(a)||0)-Number(displayAge(b)||0);
+ else result=natural(a[empSort],b[empSort]);
+ return (empDirection==='desc'?-1:1)*result||orgCompare(a,b);
+};
+function sortingControl(){const choices=[['corporation','법인·본부 순'],['employee_no','사번순'],['name','성명순'],['headquarters','본부순'],['department','부서순'],['position','직위순'],['grade','직급순'],['hire_date','입사일순'],['age','연령순']];return `<div class="toolbar" style="align-items:center"><label style="display:flex;gap:7px;align-items:center">정렬 기준 <select id="hrSort">${choices.map(([v,l])=>`<option value="${v}" ${empSort===v?'selected':''}>${l}</option>`).join('')}</select></label><label style="display:flex;gap:7px;align-items:center">정렬 방향 <select id="hrSortDirection"><option value="asc" ${empDirection==='asc'?'selected':''}>오름차순</option><option value="desc" ${empDirection==='desc'?'selected':''}>내림차순</option></select></label><span class="muted">한 페이지 50명 · 제목행 고정</span></div>`}
+// Extend the active employee list without replacing existing filter, search, or bulk-selection logic.
+const previousEmployees=employeesView;
+employeesView=function(){
+ const html=previousEmployees();
+ const matched=filteredEmployees().slice().sort(compareEmp);
+ const count=matched.length,maxPage=Math.max(1,Math.ceil(count/size)); empPage=Math.min(Math.max(1,empPage),maxPage);
+ const shown=matched.slice((empPage-1)*size,empPage*size);
+ const start=html.indexOf('<div class="tablewrap"><table>');
+ const end=start>=0?html.indexOf('</table></div>',start):-1;
+ if(start<0||end<0)return sortingControl()+html;
+ const prefix=html.slice(0,start);const suffix=html.slice(end+'</table></div>'.length);
+ const heads=['선택','사번','성명','법인','본부 / 부서','직위','직급','성별','연령','입사일','학력','노조','현장관리자','상태','관리'];
+ const checkAll=shown.length>0&&shown.every(e=>empSelected.has(String(e.id)));
+ const header='<thead><tr>'+heads.map((h,i)=>`<th>${i===0?`<input type="checkbox" id="empSelectShown" ${checkAll?'checked':''} title="이 페이지 50명 선택">`:esc(h)}</th>`).join('')+'</tr></thead>';
+ const body=shown.map(e=>`<tr><td><input type="checkbox" class="empRowCheck" value="${esc(e.id)}" ${empSelected.has(String(e.id))?'checked':''}></td><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(typeof orgLabel==='function'?orgLabel(e.headquarters):e.headquarters)}<br>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${esc(displayAge(e))}</td><td>${esc(e.hire_date)}</td><td>${esc(e.education)}</td><td>${esc(e.union_status||'미확인')}</td><td>${esc(e.field_leader_role||'미지정')}</td><td>${esc(e.status)}</td><td><button class="btn tiny" onclick="openEmployee(${JSON.stringify(e.id)})">수정</button> <button class="btn tiny" onclick="openPersonal(${JSON.stringify(e.id)})">연혁</button></td></tr>`).join('');
+ const pages=`<div class="hr-page-actions"><span class="muted">${fmt(count)}명 중 ${count?(empPage-1)*size+1:0}~${Math.min(empPage*size,count)}명 · ${empPage}/${maxPage}페이지</span><div style="display:flex;gap:6px"><button class="btn tiny" data-hr-page="first" ${empPage===1?'disabled':''}>처음</button><button class="btn tiny" data-hr-page="prev" ${empPage===1?'disabled':''}>이전</button><button class="btn tiny" data-hr-page="next" ${empPage===maxPage?'disabled':''}>다음</button><button class="btn tiny" data-hr-page="last" ${empPage===maxPage?'disabled':''}>마지막</button></div></div>`;
+ return prefix+sortingControl()+`<div class="hr-fixed-scroll"><table>${header}<tbody>${body||'<tr><td colspan="15">조건에 해당하는 직원이 없습니다.</td></tr>'}</tbody></table></div>`+pages+suffix.replace(/화면은 첫 300명만 표시합니다[^<]*/g,'화면은 한 번에 50명씩 표시합니다. ');
+};
+// Organization filter plus requested corporation and headquarters order.
+organizationView=function(){const map=new Map();db.employees.filter(occupied).forEach(e=>{if(orgCorp&&e.corporation!==orgCorp)return;const k=keyOf(e);if(!map.has(k))map.set(k,{corporation:e.corporation,headquarters:e.headquarters,department:e.department,total:0,male:0,female:0});const r=map.get(k);r.total++;if(e.gender==='남')r.male++;if(e.gender==='여')r.female++});const records=[...map.values()].sort(orgCompare);const options=[...CORP_RANK,...new Set(db.employees.map(e=>e.corporation).filter(x=>x&&!CORP_RANK.includes(x)))];return `<section class="panel"><div class="toolbar"><h2>부서별 · 성별 운영 인원</h2><label>법인 선택 <select id="hrOrgCorp"><option value="">전체 법인</option>${options.map(v=>`<option value="${esc(v)}" ${orgCorp===v?'selected':''}>${esc(v)}</option>`).join('')}</select></label></div><div class="tablewrap"><table><thead><tr><th>법인</th><th>본부 / 실</th><th>부서</th><th class="right">총인원</th><th class="right">남</th><th class="right">여</th><th>구성</th></tr></thead><tbody>${records.map(r=>`<tr><td>${esc(r.corporation)}</td><td>${esc(typeof orgLabel==='function'?orgLabel(r.headquarters):r.headquarters)}</td><td>${esc(r.department)}</td><td class="right"><b>${r.total}</b></td><td class="right">${r.male}</td><td class="right">${r.female}</td><td><div class="bar"><i style="width:${r.total?100*r.male/r.total:0}%"></i></div></td></tr>`).join('')||'<tr><td colspan="7">표시할 인원이 없습니다.</td></tr>'}</tbody></table></div></section>`};
+// For other rendered tables, use header labels to sort only organizational rows.
+const oldRender=render;
+render=function(){oldRender(); if(view==='employees'||view==='organization')return; const parent=document.getElementById('content');if(!parent)return;parent.querySelectorAll('table').forEach(table=>{const th=[...table.querySelectorAll('thead th')].map(x=>x.textContent.trim());const ci=th.findIndex(x=>x==='법인'), hi=th.findIndex(x=>x==='본부'||x==='본부/실'||x==='본부 / 실');if(ci<0)return;const body=table.tBodies[0];if(!body||body.rows.length<2)return;const rows=[...body.rows];rows.sort((a,b)=>orgCompare({corporation:a.cells[ci]?.textContent||'',headquarters:hi>=0?a.cells[hi]?.textContent||'':'',department:''},{corporation:b.cells[ci]?.textContent||'',headquarters:hi>=0?b.cells[hi]?.textContent||'':'',department:''}));rows.forEach(r=>body.appendChild(r));});};
+// Keep the same Supabase JSON employee objects; only add optional fields.
+const oldOpen=openEmployee;
+openEmployee=function(id=null,encoded=''){
+ oldOpen(id,encoded);
+ const grid=document.querySelector('#modalBody .formgrid');if(!grid)return;
+ const person=id?db.employees.find(e=>String(e.id)===String(id)):null;
+ const wrap=document.createElement('div');wrap.style.cssText='grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px';
+ const salary=person?.salary_type||'';wrap.innerHTML=`<label>급여 형태 <select id="eSalaryType"><option value="">미지정</option><option value="월급" ${salary==='월급'?'selected':''}>월급</option><option value="시급" ${salary==='시급'?'selected':''}>시급</option></select></label><label id="hrExitReasonWrap" style="display:none">퇴사사유 <input type="text" id="eExitReason" maxlength="250" placeholder="퇴사사유 입력" value="${esc(person?.exit_reason||'')}"></label>`;
+ grid.appendChild(wrap);
+ const status=document.getElementById('eStatus');const update=()=>{document.getElementById('hrExitReasonWrap').style.display=status?.value==='퇴사'?'block':'none';};status?.addEventListener('change',update);update();
+ for(const id of ['eExitDate','eLeaveDate']){const node=document.getElementById(id);if(node){node.style.width='170px';node.style.maxWidth='100%';const label=node.closest('label');if(label){label.style.maxWidth='220px';label.style.width='auto';}}}
+};
+const oldSave=saveEmployee;
+saveEmployee=function(id){
+ const salary=document.getElementById('eSalaryType')?.value||'';const reason=document.getElementById('eExitReason')?.value.trim()||'';
+ const existing=id?db.employees.find(e=>String(e.id)===String(id)):null;
+ const priorSize=db.employees.length;
+ oldSave(id);
+ const target=id?db.employees.find(e=>String(e.id)===String(id)):(db.employees.length>priorSize?db.employees.at(-1):null);
+ if(!target)return;
+ let change=false;
+ if(target.salary_type!==salary){target.salary_type=salary;change=true;}
+ if(target.status==='퇴사'&&target.exit_reason!==reason){target.exit_reason=reason;change=true;}
+ if(change){save();render();}
+};
+document.addEventListener('change',ev=>{
+ if(ev.target.id==='hrSort'){empSort=ev.target.value;empPage=1;render();}
+ if(ev.target.id==='hrSortDirection'){empDirection=ev.target.value;empPage=1;render();}
+ if(ev.target.id==='hrOrgCorp'){orgCorp=ev.target.value;render();}
+ if(view==='employees'&&(ev.target.id==='fCorp'||ev.target.id==='fDept'||ev.target.id==='fStatus'||ev.target.id.startsWith('ef_')))empPage=1;
+});
+document.addEventListener('click',ev=>{const page=ev.target.closest('[data-hr-page]');if(!page)return;const pages=Math.max(1,Math.ceil(filteredEmployees().length/size));const direction=page.dataset.hrPage;empPage=direction==='first'?1:direction==='last'?pages:direction==='next'?Math.min(pages,empPage+1):Math.max(1,empPage-1);render();});
+})();
+</script>
 </body></html>
