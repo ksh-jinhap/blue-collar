@@ -373,7 +373,18 @@ function employeeMatches(e){
   if(String(actual)!==String(wanted))return false;
  }return true;
 }
-function filteredEmployees(){return db.employees.filter(employeeMatches).sort(cmp)}
+const EMP_CORP_ORDER=['진합','제이앤드에프','지노스','진우정공'];
+const EMP_HQ_ORDER=['화스너생산실','정밀부품생산실','생산운영실','생산기술실','품질본부','연구개발본부','통합구매실','사업개발실','상생안전본부','상생안전본부 부','노동조합','표면처리사업부','대화공장','옥천공장','U볼트사업부문'];
+function empRank(value,items){const n=items.indexOf(String(value||'').trim());return n<0?items.length:n;}
+function employeePrioritySort(a,b){
+ return empRank(a.corporation,EMP_CORP_ORDER)-empRank(b.corporation,EMP_CORP_ORDER)
+ ||empRank(a.headquarters,EMP_HQ_ORDER)-empRank(b.headquarters,EMP_HQ_ORDER)
+ ||String(a.corporation||'').localeCompare(String(b.corporation||''),'ko')
+ ||String(a.headquarters||'').localeCompare(String(b.headquarters||''),'ko')
+ ||String(a.department||'').localeCompare(String(b.department||''),'ko')
+ ||String(a.employee_no||'').localeCompare(String(b.employee_no||''),'ko',{numeric:true});
+}
+function filteredEmployees(){return db.employees.filter(employeeMatches).sort(employeePrioritySort)}
 function employeeFilterSelect(id,label,options,value){return `<label class="emp-filter-label">${esc(label)}${select(id,options,value,'전체')}</label>`}
 function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role')return ['그룹장','파트장','라인장','미지정'];if(key==='gender')return ['남','여'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
 const empLabels={position:'직위',grade:'직급',gender:'성별',decade:'연령대',hireYear:'입사연도',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자'};
@@ -713,6 +724,17 @@ openEmployee=function(id=null,encoded=''){
  const wrap=document.createElement('div');wrap.style.cssText='grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px';
  const salary=person?.salary_type||'';wrap.innerHTML=`<label>급여 형태 <select id="eSalaryType"><option value="">미지정</option><option value="월급" ${salary==='월급'?'selected':''}>월급</option><option value="시급" ${salary==='시급'?'selected':''}>시급</option></select></label><label id="hrExitReasonWrap" style="display:none">퇴사사유 <input type="text" id="eExitReason" maxlength="250" placeholder="퇴사사유 입력" value="${esc(person?.exit_reason||'')}"></label>`;
  grid.appendChild(wrap);
+ // Keep the exit reason directly next to the exit date in the same date row.
+ const dateRow=document.getElementById('employmentStatusDates');
+ const reasonField=document.getElementById('hrExitReasonWrap');
+ if(dateRow&&reasonField){
+  dateRow.appendChild(reasonField);
+  dateRow.style.gridTemplateColumns='minmax(170px,220px) minmax(210px,1fr)';
+  dateRow.style.alignItems='end';
+  reasonField.style.minWidth='0';
+  const reasonInput=document.getElementById('eExitReason');
+  if(reasonInput){reasonInput.style.width='100%';reasonInput.style.maxWidth='100%';}
+ }
  const status=document.getElementById('eStatus');const update=()=>{document.getElementById('hrExitReasonWrap').style.display=status?.value==='퇴사'?'block':'none';};status?.addEventListener('change',update);update();
  for(const id of ['eExitDate','eLeaveDate']){const node=document.getElementById(id);if(node){node.style.width='170px';node.style.maxWidth='100%';const label=node.closest('label');if(label){label.style.maxWidth='220px';label.style.width='auto';}}}
 };
