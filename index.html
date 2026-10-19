@@ -24,7 +24,7 @@ function auditView(){return `<section class="panel"><h2>최근 변경 기록 (${
 function backupView(){return `<div class="panel"><h2>저장과 복원</h2><p>저장 버튼을 누르면 <b>공동 Supabase DB</b>에 저장합니다. 상단에 공유 저장 완료가 표시되는지 확인하세요.</p><div class="notice">주의: 승인된 3명은 동일한 공동 DB를 이용합니다. 연결이 끊긴 동안의 수정은 저장된 것으로 간주하지 마세요. <b>정기적으로 JSON 백업 파일을 저장</b>해 주세요. 민감한 내용이 포함된 백업 파일의 접근을 제한하세요.</div><div class="toolbar"><button class="btn primary" onclick="save()">현재 내용 저장</button><button class="btn" onclick="downloadJSON()">JSON 전체 백업 내려받기</button><button class="btn" onclick="downloadCSV()">현재 인원 CSV 내려받기</button><button class="btn" onclick="$('#restoreFile').click()">JSON 백업 복원</button><input id="restoreFile" type="file" accept=".json,application/json" style="display:none" onchange="restoreJSON(event)"></div><div class="hint">전체 백업에는 사업계획, 직원 명단, 개인별 연혁, 변경 기록이 모두 포함됩니다. CSV는 인원 명단만 담습니다.</div><p style="margin-top:25px" class="muted">최종 저장: ${esc(db.lastSaved||'최초 실행 상태')}</p></div>`}
 function modal(title,body){$('#modalTitle').textContent=title;$('#modalBody').innerHTML=body;$('#modalWrap').classList.add('open')}function closeModal(){$('#modalWrap').classList.remove('open')}function field(label,id,value='',type='text',extra=''){return `<label>${label}<input id="${id}" type="${type}" value="${esc(value)}" ${extra}></label>`}function get(id){return $('#'+id)?.value.trim()||''}
 function legacyOpenEmployee(id=null,encoded=''){let e=db.employees.find(x=>x.id===id)||{};if(encoded){let [corporation,headquarters,department]=decodeURIComponent(encoded).split('␟');e={...e,corporation,headquarters,department}}modal(id?'인원 수정':'신규 생산직 등록',`<div class="formgrid">${field('사번 *','eNo',e.employee_no,'text','required')}${field('성명 *','eName',e.name,'text','required')}${field('법인 *','eCorp',e.corporation,'text','list="dl-corporation"')}${field('본부 / 실 *','eHQ',e.headquarters,'text','list="dl-headquarters"')}${field('부서 *','eDept',e.department,'text','list="dl-department"')}${field('직위','ePosition',e.position)}${field('직급','eGrade',e.grade)}<label>성별${select('eGender',['남','여'],e.gender,'선택')}</label>${field('연령','eAge',e.age||'','number','min="0" max="110"')}${field('입사일','eHire',e.hire_date||today(),'date')}<label>현재 상태${select('eStatus',['재직','휴직','퇴사'],e.status||'재직',null)}</label>${field('학력','eEducation',e.education||'')}${options('corporation')}${options('headquarters')}${options('department')}</div><div class="hint" style="margin-top:15px">부서명이 정원 계획과 완전히 동일해야 해당 TO에 반영됩니다. 상태를 '퇴사'로 변경하면 정원 대비 현재 인원에서 즉시 제외됩니다.</div><div class="modalactions">${id?`<button class="btn danger" onclick="deleteEmployee(${id})">완전 삭제</button>`:''}<button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveEmployee(${id||'null'})">저장</button></div>`)}
-function legacySaveEmployee(id){let no=get('eNo'),name=get('eName'),corp=get('eCorp'),hq=get('eHQ'),dept=get('eDept');if(!no||!name||!corp||!hq||!dept){alert('사번, 성명, 법인, 본부, 부서를 입력하세요.');return}if(db.employees.some(e=>e.employee_no===no&&e.id!==id)){alert('중복된 사번입니다.');return}let obj={employee_no:no,name,corporation:corp,headquarters:hq,department:dept,position:get('ePosition'),grade:get('eGrade'),gender:get('eGender'),age:get('eAge')?Number(get('eAge')):null,hire_date:get('eHire'),status:get('eStatus'),education:get('eEducation'),field_leader_role:get('eLeader')||'미지정'};if(id){let old=db.employees.find(e=>e.id===id);if(!old)return;let prev={...old};Object.assign(old,obj);if(prev.status!==obj.status){if(obj.status==='퇴사')old.exit_date=today();else if(prev.status==='퇴사')old.exit_date='';}if(prev.status!==obj.status)db.history.unshift({employee_id:id,event_date:today(),event_type:obj.status==='퇴사'?'퇴사':'상태변경',title:obj.status,description:'상태 변경: '+prev.status+' → '+obj.status,department:dept,grade:obj.grade});if(keyOf(prev)!==keyOf(obj))db.history.unshift({employee_id:id,event_date:today(),event_type:'발령',title:'소속 변경',description:prev.department+' → '+dept,department:dept,grade:obj.grade});commit('인원 수정',no+' '+name); }else{let newid=uid();db.employees.push({id:newid,...obj});db.history.unshift({employee_id:newid,event_date:obj.hire_date||today(),event_type:'입사',title:'입사',description:'인원 신규 등록',department:dept,grade:obj.grade});commit('인원 추가',no+' '+name+' / '+dept)}closeModal()}
+function legacySaveEmployee(id){let no=get('eNo'),name=get('eName'),corp=get('eCorp'),hq=get('eHQ'),dept=get('eDept');if(!no||!name||!corp||!hq||!dept){alert('사번, 성명, 법인, 본부, 부서를 입력하세요.');return}if(db.employees.some(e=>e.employee_no===no&&e.id!==id)){alert('중복된 사번입니다.');return}let obj={employee_no:no,name,corporation:corp,headquarters:hq,department:dept,position:get('ePosition'),grade:get('eGrade'),gender:get('eGender'),age:get('eAge')?Number(get('eAge')):null,hire_date:get('eHire'),status:get('eStatus'),education:get('eEducation'),field_leader_role:get('eLeader')||'미지정'};if(id){let old=db.employees.find(e=>e.id===id);if(!old)return;let prev={...old};Object.assign(old,obj);if(prev.status!==obj.status){if(obj.status==='퇴사')old.exit_date=get('eExitDate')||old.exit_date||today();else if(prev.status==='퇴사')old.exit_date='';if(obj.status==='휴직')old.leave_date=get('eLeaveDate')||old.leave_date||today();else if(prev.status==='휴직')old.leave_date='';}if(prev.status!==obj.status)db.history.unshift({employee_id:id,event_date:obj.status==='퇴사'?(get('eExitDate')||today()):obj.status==='휴직'?(get('eLeaveDate')||today()):today(),event_type:obj.status==='퇴사'?'퇴사':'상태변경',title:obj.status,description:'상태 변경: '+prev.status+' → '+obj.status,department:dept,grade:obj.grade});if(keyOf(prev)!==keyOf(obj))db.history.unshift({employee_id:id,event_date:today(),event_type:'발령',title:'소속 변경',description:prev.department+' → '+dept,department:dept,grade:obj.grade});commit('인원 수정',no+' '+name); }else{let newid=uid();db.employees.push({id:newid,...obj,...(obj.status==='퇴사'?{exit_date:get('eExitDate')||today()}:{}),...(obj.status==='휴직'?{leave_date:get('eLeaveDate')||today()}:{})});db.history.unshift({employee_id:newid,event_date:obj.hire_date||today(),event_type:'입사',title:'입사',description:'인원 신규 등록',department:dept,grade:obj.grade});commit('인원 추가',no+' '+name+' / '+dept)}closeModal()}
 function retire(id){let e=db.employees.find(e=>e.id===id);if(!e||!confirm(e.name+'님을 퇴사 처리하시겠습니까?\n개인 정보와 연혁은 보존되며 현재 인원에서는 제외됩니다.'))return;e.status='퇴사';e.exit_date=today();db.history.unshift({employee_id:id,event_date:today(),event_type:'퇴사',title:'퇴사',description:'퇴사 처리',department:e.department,grade:e.grade});commit('퇴사 처리',e.employee_no+' '+e.name)}function deleteEmployee(id){let e=db.employees.find(e=>e.id===id);if(!e||!confirm('완전 삭제 시 개인별 연혁도 사라집니다. 계속하시겠습니까?'))return;db.employees=db.employees.filter(x=>x.id!==id);db.history=db.history.filter(x=>x.employee_id!==id);closeModal();commit('인원 완전 삭제',e.employee_no+' '+e.name)}
 function openPlan(id=null){let p=db.plans.find(x=>x.id===id)||{year:planYear};modal(id?'사업계획 정원 수정':'사업계획 정원 등록',`<div class="formgrid">${field('연도 *','pYear',p.year,'number','min="2000" max="2100"')}${field('법인 *','pCorp',p.corporation,'text','list="dl-corporation"')}${field('본부 / 실 *','pHQ',p.headquarters,'text','list="dl-headquarters"')}${field('부서 *','pDept',p.department,'text','list="dl-department"')}${field('계획 정원 (명) *','pTarget',p.target??0,'number','min="0" step="1"')}${options('corporation')}${options('headquarters')}${options('department')}</div><div class="modalactions">${id?`<button class="btn danger" onclick="deletePlan(${id})">계획 삭제</button>`:''}<button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="savePlan(${id||'null'})">저장</button></div>`)}
 function savePlan(id){let yearValue=Number(get('pYear')),corporation=get('pCorp'),headquarters=get('pHQ'),department=get('pDept'),val=get('pTarget'),target=Number(val);if(!yearValue||!corporation||!headquarters||!department||val===''||!Number.isInteger(target)||target<0){alert('계획 정보를 정확히 입력해 주세요.');return}if(db.plans.some(p=>p.id!==id&&Number(p.year)===yearValue&&p.corporation===corporation&&p.headquarters===headquarters&&p.department===department)){alert('해당 연도·조직의 계획이 이미 존재합니다. 기존 항목을 수정하세요.');return}let o={year:yearValue,corporation,headquarters,department,target};if(id)Object.assign(db.plans.find(p=>p.id===id),o);else db.plans.push({id:uid(),...o});planYear=yearValue;closeModal();commit(id?'정원 수정':'정원 추가',yearValue+' / '+department+' / '+target+'명')}
@@ -476,7 +476,7 @@ function exitsView(){const all=db.employees.filter(e=>e.status==='퇴사').sort(
 const oldRetire=retire;
 retire=function(id){const e=db.employees.find(x=>String(x.id)===String(id));oldRetire(id);if(e&&e.status==='퇴사'&&!exitDate(e)) {e.exit_date=today();save()} };
 const oldSaveEmployeeExit=saveEmployee;
-saveEmployee=function(id){const e=db.employees.find(x=>String(x.id)===String(id)),before=e?.status;oldSaveEmployeeExit(id);if(e&&e.status!==before){if(e.status==='퇴사'){e.exit_date=today()}else if(before==='퇴사'){e.exit_date=''}save()}};
+saveEmployee=function(id){const e=db.employees.find(x=>String(x.id)===String(id)),before=e?.status;oldSaveEmployeeExit(id);if(e&&e.status!==before){if(e.status==='퇴사'){e.exit_date=get('eExitDate')||e.exit_date||today()}else if(before==='퇴사'){e.exit_date=''}save()}};
 const oldMassExit=window.applyEmployeeMassEdit;
 window.applyEmployeeMassEdit=function(){const choice=document.getElementById('mass_status')?.value;const selected=[...empSelected];const before=new Map(selected.map(id=>[id,db.employees.find(e=>String(e.id)===id)?.status]));oldMassExit();if(choice==='퇴사'||choice==='재직'||choice==='휴직'){let n=0;for(const id of selected){const e=db.employees.find(x=>String(x.id)===id);if(e&&before.get(id)!==e.status){if(e.status==='퇴사')e.exit_date=today();else if(before.get(id)==='퇴사')e.exit_date='';n++}}if(n)save()}};
 // Month-to-date departure metric reflects actual exit dates, not cumulative departures.
@@ -588,4 +588,51 @@ const mainContent=document.getElementById('content');
 const unionExportObserve=new MutationObserver(()=>{if(view!=='union'||!document.getElementById('exportExcelBar'))return;if(document.getElementById('unionStatExports'))return;const bar=document.createElement('div');bar.id='unionStatExports';bar.className='toolbar';bar.style.margin='0 0 16px';bar.innerHTML='<button class="btn" onclick="downloadExcel(\'노조법인별집계\')">법인별 Excel</button><button class="btn" onclick="downloadExcel(\'노조직위별집계\')">직위별 Excel</button><button class="btn" onclick="downloadExcel(\'노조총괄\')">노조 총괄 Excel</button>';document.getElementById('exportExcelBar').insertAdjacentElement('afterend',bar)});
 unionExportObserve.observe(mainContent,{childList:true});
 })();
-</script></body></html>
+</script>
+<script>
+/* Status effective dates: date-aware editing, with existing Supabase schema retained. */
+(function(){
+ const priorOpenEmployee=openEmployee;
+ openEmployee=function(id=null,encoded=''){
+  priorOpenEmployee(id,encoded);
+  const status=document.getElementById('eStatus');
+  const grid=document.querySelector('#modalBody .formgrid');
+  if(!status||!grid)return;
+  const person=id?db.employees.find(e=>String(e.id)===String(id)):null;
+  const wrap=document.createElement('div');
+  wrap.id='employmentStatusDates';
+  wrap.style.cssText='grid-column:1 / -1;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px';
+  wrap.innerHTML='<label id="exitDateLabel">퇴사일 <span style="color:#c2410c">*</span><input id="eExitDate" type="date" style="width:100%"></label><label id="leaveDateLabel">휴직 시작일 <span style="color:#c2410c">*</span><input id="eLeaveDate" type="date" style="width:100%"></label>';
+  status.closest('label').insertAdjacentElement('afterend',wrap);
+  document.getElementById('eExitDate').value=person?.exit_date||'';
+  document.getElementById('eLeaveDate').value=person?.leave_date||'';
+  const refresh=()=>{const st=status.value;document.getElementById('exitDateLabel').style.display=st==='퇴사'?'block':'none';document.getElementById('leaveDateLabel').style.display=st==='휴직'?'block':'none';};
+  status.addEventListener('change',refresh);refresh();
+ };
+ const priorSaveEmployee=saveEmployee;
+ saveEmployee=function(id){
+  const st=document.getElementById('eStatus')?.value;
+  const dateId=st==='퇴사'?'eExitDate':st==='휴직'?'eLeaveDate':null;
+  const effective=dateId?document.getElementById(dateId)?.value:'';
+  if(dateId&&!effective){alert(st==='퇴사'?'퇴사일을 선택한 후 저장해 주세요.':'휴직 시작일을 선택한 후 저장해 주세요.');document.getElementById(dateId)?.focus();return;}
+  const employee=id?db.employees.find(e=>String(e.id)===String(id)):null;
+  const oldStatus=employee?.status;
+  const oldDate=employee?(st==='퇴사'?employee.exit_date:st==='휴직'?employee.leave_date:''):'';
+  const before=db.employees.length;
+  priorSaveEmployee(id);
+  const target=id?db.employees.find(e=>String(e.id)===String(id)):(db.employees.length>before?db.employees.at(-1):null);
+  if(!target||!dateId)return;
+  const attr=st==='퇴사'?'exit_date':'leave_date';
+  const changed=target[attr]!==effective;
+  target[attr]=effective;
+  // Previous wrappers may already have persisted the record, so persist effective date explicitly.
+  if(changed){
+   const h=(db.history||[]).find(x=>String(x.employee_id)===String(target.id)&&((st==='퇴사'&&x.event_type==='퇴사')||(st==='휴직'&&x.title==='휴직')));
+   if(h&&oldStatus!==st)h.event_date=effective;
+   else if(oldStatus===st&&oldDate!==effective)db.history.unshift({employee_id:target.id,event_date:effective,event_type:'상태변경',title:st+'일자 정정',description:(oldDate||'미기록')+' → '+effective,department:target.department,grade:target.grade});
+   save();render();
+  }
+ };
+})();
+</script>
+</body></html>
