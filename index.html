@@ -386,6 +386,13 @@ function employeePrioritySort(a,b){
  ||fastenerTeamRank(a)-fastenerTeamRank(b) ||String(a.name||'').localeCompare(String(b.name||''),'ko',{sensitivity:'base'})
  ||String(a.employee_no||'').localeCompare(String(b.employee_no||''),'ko',{numeric:true});
 }
+// Date ascending; ties follow the existing corporation, headquarters, fastener team and name ranking.
+// Missing/invalid dates appear after dated records in the former-worker directory.
+function dateFirstEmployeeSort(a,b,kind){
+ const raw=x=>kind==='exit'?exitDate(x):String(x.hire_date||'');
+ const norm=x=>/^\d{4}-\d{2}-\d{2}$/.test(raw(x))?raw(x):'9999-99-99';
+ return norm(a).localeCompare(norm(b))||employeePrioritySort(a,b);
+}
 function filteredEmployees(){return db.employees.filter(employeeMatches).sort(employeePrioritySort)}
 function employeeFilterSelect(id,label,options,value){return `<label class="emp-filter-label">${esc(label)}${select(id,options,value,'전체')}</label>`}
 function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role')return ['그룹장','파트장','라인장','미지정'];if(key==='gender')return ['남','여'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
@@ -482,7 +489,7 @@ function exitDate(e){
 }
 function durationOf(e){const start=String(e.hire_date||''),end=exitDate(e);if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!end)return '확인 필요';let [a,b,c]=start.split('-').map(Number),[y,m,d]=end.split('-').map(Number);if(end<start)return '확인 필요';let years=y-a,months=m-b;if(d<c)months--;if(months<0){years--;months+=12}return `${years}년 ${months}개월`}
 let exitSearch='',exitCorp='';
-function exitsView(){const all=db.employees.filter(e=>e.status==='퇴사').sort((a,b)=>cmp(a,b));const listed=all.filter(e=>(!exitCorp||e.corporation===exitCorp)&&(!exitSearch||[e.name,e.employee_no,e.department].some(v=>String(v||'').toLocaleLowerCase('ko').includes(exitSearch.toLocaleLowerCase('ko')))));
+function exitsView(){const all=db.employees.filter(e=>e.status==='퇴사').sort((a,b)=>dateFirstEmployeeSort(a,b,'exit'));const listed=all.filter(e=>(!exitCorp||e.corporation===exitCorp)&&(!exitSearch||[e.name,e.employee_no,e.department].some(v=>String(v||'').toLocaleLowerCase('ko').includes(exitSearch.toLocaleLowerCase('ko')))));
  return `<section class="panel"><div class="toolbar"><input id="exitSearch" placeholder="퇴사자 성명·사번·부서 검색" value="${esc(exitSearch)}" style="min-width:240px">${select('exitCorp',CORPS,exitCorp,'전체 법인')}<button class="btn" onclick="exitSearch='';exitCorp='';render()">필터 초기화</button></div><div class="summaryline"><b>퇴사자 ${fmt(all.length)}명</b><span class="muted">검색 결과 ${fmt(listed.length)}명 · 기존 데이터 삭제 없음</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>이름</th><th>법인</th><th>부서</th><th>직위</th><th>직급</th><th>입사일</th><th>퇴사일</th><th>퇴사사유</th><th>근속기간</th><th>관리</th></tr></thead><tbody>${listed.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.hire_date)}</td><td>${esc(exitDate(e)||'미기록')}</td><td>${esc(e.exit_reason||'미기록')}</td><td>${esc(durationOf(e))}</td><td><button class="btn tiny" onclick="openEmployee(${e.id})">수정</button> <button class="btn tiny" onclick="openPersonal(${e.id})">연혁</button></td></tr>`).join('')||'<tr><td colspan="11" class="empty">퇴사자가 없습니다.</td></tr>'}</tbody></table></div></section>`;
 }
 // Keep exit dates accurate for direct termination, employee editing, and mass editing.
@@ -493,7 +500,7 @@ saveEmployee=function(id){const e=db.employees.find(x=>String(x.id)===String(id)
 const oldMassExit=window.applyEmployeeMassEdit;
 window.applyEmployeeMassEdit=function(){const choice=document.getElementById('mass_status')?.value;const selected=[...empSelected];const before=new Map(selected.map(id=>[id,db.employees.find(e=>String(e.id)===id)?.status]));oldMassExit();if(choice==='퇴사'||choice==='재직'||choice==='휴직'){let n=0;for(const id of selected){const e=db.employees.find(x=>String(x.id)===id);if(e&&before.get(id)!==e.status){if(e.status==='퇴사')e.exit_date=today();else if(before.get(id)==='퇴사')e.exit_date='';n++}}if(n)save()}};
 // Month-to-date departure metric reflects actual exit dates, not cumulative departures.
-function currentMonthExits(){const m=today().slice(0,7);return db.employees.filter(e=>e.status==='퇴사'&&exitDate(e).startsWith(m)).sort((a,b)=>cmp(a,b))}
+function currentMonthExits(){const m=today().slice(0,7);return db.employees.filter(e=>e.status==='퇴사'&&exitDate(e).startsWith(m)).sort((a,b)=>dateFirstEmployeeSort(a,b,'exit'))}
 function thisMonthExitPanel(){const list=currentMonthExits();return `<section class="panel"><h2>당월 퇴사자 <span class="muted">${list.length}명 · ${today().slice(0,7)}</span></h2><div class="tablewrap"><table><thead><tr><th>이름</th><th>부서</th><th>입사일</th><th>근속기간</th></tr></thead><tbody>${list.map(e=>`<tr><td>${esc(e.name)}</td><td>${esc(e.department)}</td><td>${esc(e.hire_date)}</td><td>${esc(durationOf(e))}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">당월 퇴사자가 없습니다.</td></tr>'}</tbody></table></div></section>`}
 const oldSummaryCardsExit=summaryCards;
 summaryCards=function(){return oldSummaryCardsExit().replace('현재 운영 인원','현재 인원').replace('퇴사 누계', '당월 퇴사자').replace('등록된 전체 퇴사 인원','해당 월 퇴사일 기준').replace(/(<div class="label">당월 퇴사자<\/div><div class="num[^>]*>)\s*[^<]*/, '$1'+fmt(currentMonthExits().length))};
@@ -508,7 +515,7 @@ document.addEventListener('input',ev=>{if(ev.target.id==='exitSearch'){exitSearc
 function currentMonthHires(){
  const month=today().slice(0,7);
  return db.employees.filter(e=>/^\d{4}-\d{2}-\d{2}$/.test(String(e.hire_date||''))&&String(e.hire_date).slice(0,7)===month)
-   .sort((a,b)=>String(a.hire_date).localeCompare(String(b.hire_date))||(typeof cmp==='function'?cmp(a,b):0));
+   .sort((a,b)=>dateFirstEmployeeSort(a,b,'hire'));
 }
 function thisMonthHirePanel(){
  const list=currentMonthHires();
