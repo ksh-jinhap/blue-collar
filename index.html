@@ -359,7 +359,7 @@ document.addEventListener('click',ev=>{if(ev.target.id==='bulkSelectAll'){candid
 document.addEventListener('input',ev=>{if(ev.target.id==='bulkSearch'){bulkSearch=ev.target.value;scheduleSearchRender('bulkSearch')}});
 const oldSetView=setView;setView=function(v){if(v==='bulk'&&view==='employees'){document.querySelectorAll('.bulkEmp:checked').forEach(n=>selection.add(n.value))}oldSetView(v)};
 // Employee management: stable Korean IME search, extended filters, and safe mass edit.
-const EXTRA_KEYS=['position','grade','gender','decade','hireYear','education','union_status','field_leader_role'];
+const EXTRA_KEYS=['position','grade','gender','decade','hireYear','education','union_status','field_leader_role','salary_type','employment_type'];
 const empExtra={};let empSelected=new Set();
 const cleanVal=v=>String(v??'').trim();
 function employeeMatches(e){
@@ -369,7 +369,7 @@ function employeeMatches(e){
  if(filters.department&&e.department!==filters.department)return false;
  if(filters.status&&e.status!==filters.status)return false;
  for(const k of EXTRA_KEYS){const wanted=empExtra[k];if(!wanted)continue;
-  const actual=k==='decade'?(Number.parseInt(displayAge(e),10)>=0?String(Math.floor(Number(displayAge(e))/10)*10):''):k==='hireYear'?String(e.hire_date||'').slice(0,4):cleanVal(e[k]|| (k==='union_status'?'미확인':k==='field_leader_role'?'미지정':''));
+  const actual=k==='decade'?(Number.parseInt(displayAge(e),10)>=0?String(Math.floor(Number(displayAge(e))/10)*10):''):k==='hireYear'?String(e.hire_date||'').slice(0,4):k==='employment_type'?String(e.employment_type||((e.position==='사원'||e.grade==='사원')?'계약직':'미확인')):k==='salary_type'?String(e.salary_type||'미지정'):cleanVal(e[k]|| (k==='union_status'?'미확인':k==='field_leader_role'?'미지정':''));
   if(String(actual)!==String(wanted))return false;
  }return true;
 }
@@ -395,8 +395,8 @@ function dateFirstEmployeeSort(a,b,kind){
 }
 function filteredEmployees(){return db.employees.filter(employeeMatches).sort(employeePrioritySort)}
 function employeeFilterSelect(id,label,options,value){return `<label class="emp-filter-label">${esc(label)}${select(id,options,value,'전체')}</label>`}
-function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role')return ['그룹장','파트장','라인장','미지정'];if(key==='gender')return ['남','여'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
-const empLabels={position:'직위',grade:'직급',gender:'성별',decade:'연령대',hireYear:'입사연도',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자'};
+function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role')return ['그룹장','파트장','라인장','미지정'];if(key==='gender')return ['남','여'];if(key==='salary_type')return ['월급','시급','미지정'];if(key==='employment_type')return ['정규직','계약직','미확인'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
+const empLabels={position:'직위',grade:'직급',gender:'성별',decade:'연령대',hireYear:'입사연도',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자',salary_type:'급여 형태',employment_type:'고용형태'};
 employeesView=function(){
  const matched=filteredEmployees(),shown=matched,depts=deptFor(filters.corporation,'');
  const optionsHtml=EXTRA_KEYS.map(k=>employeeFilterSelect('ef_'+k,empLabels[k],extraChoices(k),empExtra[k]||'')).join('');
@@ -444,7 +444,7 @@ window.applyEmployeeMassEdit=function(){
  empSelected.clear();closeModal();commit('인사정보 일괄 수정',`${diffs.length}명 / ${caption}`);alert(`${diffs.length}명 변경사항을 공동 DB에 저장 요청했습니다. 상단 저장 완료 표시를 확인하세요.`);
 };
 // Limited styling for additional filters.
-const empStyle=document.createElement('style');empStyle.textContent='.employee-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:9px;margin:12px 0 16px}.emp-filter-label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#64748b}.emp-filter-label select{width:100%;min-width:0}';document.head.appendChild(empStyle);
+const empStyle=document.createElement('style');empStyle.textContent='.employee-filter-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:7px;margin:10px 0 12px}.emp-filter-label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:#64748b}.emp-filter-label select{width:100%;min-width:0;padding:7px 8px;font-size:12px}';document.head.appendChild(empStyle);
 
 // Monthly historical dashboard: historical totals come ONLY from immutable saved monthly snapshots.
 const priorDashboardByMonth=dashboard;
@@ -684,7 +684,7 @@ unionExportObserve.observe(mainContent,{childList:true});
  window.saveConversion=function(id){const e=db.employees.find(x=>String(x.id)===String(id));if(!e)return;const type=document.getElementById('convType')?.value||'';const dt=document.getElementById('convDate')?.value||'';if(type==='정규직'&&!dateOnly(dt)){alert('정규직 전환일을 선택하세요.');return}if(type==='정규직'&&e.hire_date&&dt<e.hire_date){alert('전환일은 입사일보다 앞설 수 없습니다.');return}const oldType=employmentType(e),oldDate=e.conversion_date||'';if(type===oldType&&(type!=='정규직'||dt===oldDate)){closeModal();return}e.employment_type=type;e.conversion_date=type==='정규직'?dt:'';
  db.history=db.history||[];db.history.unshift({employee_id:e.id,event_date:type==='정규직'?dt:eventDate(),event_type:type==='정규직'?'정규직전환':'고용형태변경',title:type==='정규직'?'정규직 전환':'고용형태 변경',description:`${oldType}${oldDate?' ('+oldDate+')':''} → ${type}${type==='정규직'?' ('+dt+')':''}`,department:e.department,grade:e.grade});closeModal();commit('고용형태 변경',`${e.employee_no} / ${e.name} / ${oldType} → ${type}`)};
  const previousOpen=openEmployee;openEmployee=function(id=null,encoded=''){previousOpen(id,encoded);const container=document.querySelector('#modalBody .formgrid');if(!container)return;const e=db.employees.find(x=>String(x.id)===String(id))||{};const label=document.createElement('label');label.innerHTML=`고용형태<select id="eEmploymentType"><option value="미확인">미확인</option><option value="계약직">계약직</option><option value="정규직">정규직</option></select>`;container.appendChild(label);label.querySelector('select').value=employmentType(e);};
- const previousSave=saveEmployee;saveEmployee=function(id){const type=document.getElementById('eEmploymentType')?.value;const old=id?db.employees.find(e=>String(e.id)===String(id)):null;const oldType=old?employmentType(old):'';const previousCount=db.employees.length;previousSave(id);const e=id?db.employees.find(x=>String(x.id)===String(id)):(db.employees.length>previousCount?db.employees.at(-1):null);if(!e||!type)return;if(type==='정규직'&&!e.conversion_date){alert('정규직 전환일은 정규직 전환 대상자 탭에서 입력해 주세요. 기존 고용형태는 유지합니다.');return}if(e.employment_type!==type){e.employment_type=type;if(type!=='정규직')e.conversion_date='';if(oldType!==type){db.history.unshift({employee_id:e.id,event_date:eventDate(),event_type:'고용형태변경',title:'고용형태 변경',description:`${oldType||'미확인'} → ${type}`,department:e.department,grade:e.grade})}save();render();}};
+ const previousSave=saveEmployee;saveEmployee=function(id){const type=document.getElementById('eEmploymentType')?.value;const old=id?db.employees.find(e=>String(e.id)===String(id)):null;const oldType=old?employmentType(old):'';const previousCount=db.employees.length;previousSave(id);const e=id?db.employees.find(x=>String(x.id)===String(id)):(db.employees.length>previousCount?db.employees.at(-1):null);if(!e||!type)return;if(e.employment_type!==type){e.employment_type=type;if(type!=='정규직')e.conversion_date='';if(oldType!==type){db.history.unshift({employee_id:e.id,event_date:eventDate(),event_type:'고용형태변경',title:'고용형태 변경',description:`${oldType||'미확인'} → ${type}`,department:e.department,grade:e.grade})}save();render();}};
  const previousExcel=window.downloadExcel;window.downloadExcel=function(kind='all'){if(kind!=='정규직전환대상'&&kind!=='all')return previousExcel(kind);const rows=[['사번','성명','법인','본부','부서','직위','직급','입사일','계약 만료일','고용형태','전환일','현재상태'],...(db.employees||[]).filter(e=>e.status!=='퇴사'&&(employmentType(e)==='계약직'||e.employment_type==='정규직'&&e.conversion_date)).map(e=>[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.position,e.grade,e.hire_date,contractEnd(e.hire_date),employmentType(e),e.conversion_date||'',e.status])];const sheet={name:'정규직전환관리',rows};if(kind==='정규직전환대상')return window.__unionMakeXlsx('정규직전환관리',[sheet]);const section=(typeof unionSheets==='function'?unionSheets():window.__unionBaseSheets());if(!confirm('전체 Excel에는 개인별 인사정보가 포함됩니다. 접근이 제한된 곳에 저장하시겠습니까?'))return;window.__unionMakeXlsx('생산직_인사TO_전체',[...Object.values(section),sheet])};
 })();
 </script>
