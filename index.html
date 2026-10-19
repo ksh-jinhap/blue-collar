@@ -481,7 +481,7 @@ function exitDate(e){
 function durationOf(e){const start=String(e.hire_date||''),end=exitDate(e);if(!/^\d{4}-\d{2}-\d{2}$/.test(start)||!end)return '확인 필요';let [a,b,c]=start.split('-').map(Number),[y,m,d]=end.split('-').map(Number);if(end<start)return '확인 필요';let years=y-a,months=m-b;if(d<c)months--;if(months<0){years--;months+=12}return `${years}년 ${months}개월`}
 let exitSearch='',exitCorp='';
 function exitsView(){const all=db.employees.filter(e=>e.status==='퇴사').sort((a,b)=>cmp(a,b));const listed=all.filter(e=>(!exitCorp||e.corporation===exitCorp)&&(!exitSearch||[e.name,e.employee_no,e.department].some(v=>String(v||'').toLocaleLowerCase('ko').includes(exitSearch.toLocaleLowerCase('ko')))));
- return `<section class="panel"><div class="toolbar"><input id="exitSearch" placeholder="퇴사자 성명·사번·부서 검색" value="${esc(exitSearch)}" style="min-width:240px">${select('exitCorp',CORPS,exitCorp,'전체 법인')}<button class="btn" onclick="exitSearch='';exitCorp='';render()">필터 초기화</button></div><div class="summaryline"><b>퇴사자 ${fmt(all.length)}명</b><span class="muted">검색 결과 ${fmt(listed.length)}명 · 기존 데이터 삭제 없음</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>이름</th><th>법인</th><th>부서</th><th>직위</th><th>직급</th><th>입사일</th><th>퇴사일</th><th>근속기간</th><th>관리</th></tr></thead><tbody>${listed.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.hire_date)}</td><td>${esc(exitDate(e)||'미기록')}</td><td>${esc(durationOf(e))}</td><td><button class="btn tiny" onclick="openEmployee(${e.id})">수정</button> <button class="btn tiny" onclick="openPersonal(${e.id})">연혁</button></td></tr>`).join('')||'<tr><td colspan="10" class="empty">퇴사자가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+ return `<section class="panel"><div class="toolbar"><input id="exitSearch" placeholder="퇴사자 성명·사번·부서 검색" value="${esc(exitSearch)}" style="min-width:240px">${select('exitCorp',CORPS,exitCorp,'전체 법인')}<button class="btn" onclick="exitSearch='';exitCorp='';render()">필터 초기화</button></div><div class="summaryline"><b>퇴사자 ${fmt(all.length)}명</b><span class="muted">검색 결과 ${fmt(listed.length)}명 · 기존 데이터 삭제 없음</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>이름</th><th>법인</th><th>부서</th><th>직위</th><th>직급</th><th>입사일</th><th>퇴사일</th><th>퇴사사유</th><th>근속기간</th><th>관리</th></tr></thead><tbody>${listed.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.hire_date)}</td><td>${esc(exitDate(e)||'미기록')}</td><td>${esc(e.exit_reason||'미기록')}</td><td>${esc(durationOf(e))}</td><td><button class="btn tiny" onclick="openEmployee(${e.id})">수정</button> <button class="btn tiny" onclick="openPersonal(${e.id})">연혁</button></td></tr>`).join('')||'<tr><td colspan="11" class="empty">퇴사자가 없습니다.</td></tr>'}</tbody></table></div></section>`;
 }
 // Keep exit dates accurate for direct termination, employee editing, and mass editing.
 const oldRetire=retire;
@@ -618,7 +618,7 @@ unionExportObserve.observe(mainContent,{childList:true});
   status.closest('label').insertAdjacentElement('afterend',wrap);
   document.getElementById('eExitDate').value=person?.exit_date||'';
   document.getElementById('eLeaveDate').value=person?.leave_date||'';
-  const refresh=()=>{const st=status.value;document.getElementById('exitDateLabel').style.display=st==='퇴사'?'block':'none';document.getElementById('leaveDateLabel').style.display=st==='휴직'?'block':'none';};
+  const refresh=()=>{const st=status.value;document.getElementById('exitDateLabel').style.display=st==='퇴사'?'flex':'none';document.getElementById('leaveDateLabel').style.display=st==='휴직'?'block':'none';};
   status.addEventListener('change',refresh);refresh();
  };
  const priorSaveEmployee=saveEmployee;
@@ -681,7 +681,7 @@ unionExportObserve.observe(mainContent,{childList:true});
 </script>
 
 <style>
-.hr-fixed-scroll{max-height:590px;overflow:auto;position:relative;border:1px solid #e2e8f0;border-radius:10px}
+.hr-fixed-scroll{max-height:min(72vh,850px);overflow:auto;position:relative;border:1px solid #e2e8f0;border-radius:10px}
 .hr-fixed-scroll table{border-collapse:separate;border-spacing:0;min-width:1400px}
 .hr-fixed-scroll thead th{position:sticky;top:0;z-index:4;background:#f1f5f9;box-shadow:0 2px 3px rgba(15,23,42,.12);white-space:nowrap}
 .hr-page-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin:12px 0}
@@ -715,6 +715,9 @@ organizationView=function(){const map=new Map();db.employees.filter(occupied).fo
 // For other rendered tables, use header labels to sort only organizational rows.
 const oldRender=render;
 render=function(){oldRender(); if(view==='employees'||view==='organization')return; const parent=document.getElementById('content');if(!parent)return;parent.querySelectorAll('table').forEach(table=>{const th=[...table.querySelectorAll('thead th')].map(x=>x.textContent.trim());const ci=th.findIndex(x=>x==='법인'), hi=th.findIndex(x=>x==='본부'||x==='본부/실'||x==='본부 / 실');if(ci<0)return;const body=table.tBodies[0];if(!body||body.rows.length<2)return;const rows=[...body.rows];rows.sort((a,b)=>orgCompare({corporation:a.cells[ci]?.textContent||'',headquarters:hi>=0?a.cells[hi]?.textContent||'':'',department:''},{corporation:b.cells[ci]?.textContent||'',headquarters:hi>=0?b.cells[hi]?.textContent||'':'',department:''}));rows.forEach(r=>body.appendChild(r));});};
+// Keep the full, unpaginated employee list and pin its column headings while scrolling.
+const beforeStickyEmployees=employeesView;
+employeesView=function(){return beforeStickyEmployees().replace('<div class="tablewrap"><table><thead><tr><th><input type="checkbox" id="empSelectShown"','<div class="tablewrap hr-fixed-scroll"><table><thead><tr><th><input type="checkbox" id="empSelectShown"');};
 // Keep the same Supabase JSON employee objects; only add optional fields.
 const oldOpen=openEmployee;
 openEmployee=function(id=null,encoded=''){
@@ -730,12 +733,15 @@ openEmployee=function(id=null,encoded=''){
  if(dateRow&&reasonField){
   dateRow.appendChild(reasonField);
   dateRow.style.gridTemplateColumns='minmax(170px,220px) minmax(210px,1fr)';
-  dateRow.style.alignItems='end';
+  dateRow.style.alignItems='start';
+  const exitDateLabel=document.getElementById('exitDateLabel');
+  if(exitDateLabel){exitDateLabel.style.display='flex';exitDateLabel.style.flexDirection='column';exitDateLabel.style.alignItems='stretch';exitDateLabel.style.gap='7px';}
+  reasonField.style.display='flex';reasonField.style.flexDirection='column';reasonField.style.gap='7px';
   reasonField.style.minWidth='0';
   const reasonInput=document.getElementById('eExitReason');
   if(reasonInput){reasonInput.style.width='100%';reasonInput.style.maxWidth='100%';}
  }
- const status=document.getElementById('eStatus');const update=()=>{document.getElementById('hrExitReasonWrap').style.display=status?.value==='퇴사'?'block':'none';};status?.addEventListener('change',update);update();
+ const status=document.getElementById('eStatus');const update=()=>{document.getElementById('hrExitReasonWrap').style.display=status?.value==='퇴사'?'flex':'none';};status?.addEventListener('change',update);update();
  for(const id of ['eExitDate','eLeaveDate']){const node=document.getElementById(id);if(node){node.style.width='170px';node.style.maxWidth='100%';const label=node.closest('label');if(label){label.style.maxWidth='220px';label.style.width='auto';}}}
 };
 const oldSave=saveEmployee;
