@@ -557,6 +557,7 @@ const oldOrg=organizationView;organizationView=function(){let html=oldOrg();retu
     html=html.replace(/부족 TO는 <b>부서별 max\(사업계획 정원 − 운영 인원, 0\)<\/b>을 합산합니다\./g,'대시보드 초과 TO는 <b>전체 현재 인원 − 전체 사업계획 정원</b>이 양수일 때만 표시합니다. 부서별 부족 인원은 아래 상세표에서 별도로 확인합니다.');
     return removeExcessKpi(html);
   };
+  window.hrFilteredEmployees=filteredEmployees;
 })();
 
 </script><script>
@@ -699,7 +700,7 @@ function sortingControl(){const choices=[['corporation','법인·본부 순'],['
 const previousEmployees=employeesView;
 employeesView=function(){
  const html=previousEmployees();
- const matched=filteredEmployees().slice().sort(compareEmp);
+ const matched=window.hrFilteredEmployees().slice().sort(compareEmp);
  const count=matched.length,maxPage=Math.max(1,Math.ceil(count/size)); empPage=Math.min(Math.max(1,empPage),maxPage);
  const shown=matched.slice((empPage-1)*size,empPage*size);
  const start=html.indexOf('<div class="tablewrap"><table>');
@@ -749,7 +750,7 @@ document.addEventListener('change',ev=>{
  if(ev.target.id==='hrOrgCorp'){orgCorp=ev.target.value;render();}
  if(view==='employees'&&(ev.target.id==='fCorp'||ev.target.id==='fDept'||ev.target.id==='fStatus'||ev.target.id.startsWith('ef_')))empPage=1;
 });
-document.addEventListener('click',ev=>{const page=ev.target.closest('[data-hr-page]');if(!page)return;const pages=Math.max(1,Math.ceil(filteredEmployees().length/size));const direction=page.dataset.hrPage;empPage=direction==='first'?1:direction==='last'?pages:direction==='next'?Math.min(pages,empPage+1):Math.max(1,empPage-1);render();});
+document.addEventListener('click',ev=>{const page=ev.target.closest('[data-hr-page]');if(!page)return;const pages=Math.max(1,Math.ceil(window.hrFilteredEmployees().length/size));const direction=page.dataset.hrPage;empPage=direction==='first'?1:direction==='last'?pages:direction==='next'?Math.min(pages,empPage+1):Math.max(1,empPage-1);render();});
 })();
 </script>
 </body></html>
