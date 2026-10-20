@@ -51,6 +51,26 @@
   #content .tablewrap,#content .tablewrap.hr-fixed-scroll { overflow:visible!important; max-height:none!important; }
   #content .tablewrap thead th,#content .tablewrap.hr-fixed-scroll thead th { position:static!important; }
 }
+/* 면담기록지: 입력란을 카드 안에서 넓게 표시 */
+#modalBody textarea[id^="it_"] {
+  display:block;
+  width:100%;
+  max-width:100%;
+  min-width:0;
+  min-height:148px;
+  padding:12px 14px;
+  line-height:1.65;
+  box-sizing:border-box;
+  resize:vertical;
+}
+#modalBody textarea#it_other { min-height:130px; }
+#modalBody label:has(> textarea[id^="it_"]) {
+  display:flex !important;
+  flex-direction:column;
+  gap:8px;
+  width:100%;
+  min-width:0;
+}
 </style></head><body><div class="shell"><aside class="sidebar"><div class="brand">생산직 인사관리</div><div class="subtitle">WORKFORCE · TO CONTROL</div><div class="navs"><button class="nav active" data-view="dashboard">▣ 대시보드</button><button class="nav" data-view="employees">♙ 생산직 인원관리</button><button class="nav" data-view="plans">▤ 사업계획 정원 · TO</button><button class="nav" data-view="recruitment">▦ 채용 진행관리</button><button class="nav" data-view="executive">▣ 경영진 보고서</button><button class="nav" data-view="organization">◫ 부서별 · 성별</button><button class="nav" data-view="history">◷ 개인별 연혁</button><button class="nav" data-view="audit">≡ 변경 기록</button><button class="nav" data-view="backup">⇩ 저장 · 백업</button></div></aside><main class="main"><div class="top"><div><h1 id="heading">대시보드</h1><div class="desc" id="subheading">생산직 인력 운영 현황을 한눈에 확인하세요.</div></div><div class="actions"><span class="pill" id="saveBadge">저장 상태 확인 중</span><button class="btn primary" id="saveNow">현재 내용 저장</button></div></div><div id="content"></div></main></div><div class="modalwrap" id="modalWrap"><div class="modal"><h2 id="modalTitle"></h2><div id="modalBody"></div></div></div>
 <script>const SEED={employees:[],plans:[],history:[],audit:[],recruitment:[],snapshots:[],settings:{retirementAge:60}};
 const KEY='production-hr-single-html-v1';const today=()=>new Date().toISOString().slice(0,10);const year=()=>new Date().getFullYear();const $=s=>document.querySelector(s);const fmt=n=>Number(n||0).toLocaleString('ko-KR');const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const uid=()=>Math.floor(Date.now()*1000+Math.random()*1000);const occupied=e=>e.status!=='퇴사';const keyOf=x=>[x.corporation||'',x.headquarters||'',x.department||''].join('␟');
