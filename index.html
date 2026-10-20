@@ -907,4 +907,58 @@ document.addEventListener('change',ev=>{
  window.downloadExcel=function(kind='all'){if(kind!=='OJT계획이수'&&kind!=='all')return baseExcel(kind);const plans=[['법인','본부','부서','일정','시간','교육항목','세부 교육내용','교육목표','교육 방법','담당','공통 특이사항'],...planList().map(p=>[p.corporation,p.headquarters,p.department,p.schedule,p.hours,p.subject,p.content,p.goal,p.method,p.instructor,p.note])];const outcomes=[['사번','성명','부서','교육항목','이수 여부','이수일','특이사항'],...outcomeList().map(o=>{const e=getEmployee(o.employee_id)||{},p=planList().find(p=>String(p.id)===String(o.plan_id))||{};return [e.employee_no,e.name,e.department,p.subject,o.completed?'완료':'미이수',o.completed_date,o.note]})];const interviews=[['사번','성명','부서','멘토','멘토 부서','3일차 면담일','3일차 내용','1주일차 면담일','1주일차 내용','1개월차 면담일','1개월차 내용','그 외 특이사항'],...(db.employees||[]).filter(e=>e.mentoring||e.mentor_name).map(e=>[e.employee_no,e.name,e.department,e.mentor_name,e.mentor_department,e.mentoring?.day3?.date,e.mentoring?.day3?.note,e.mentoring?.week1?.date,e.mentoring?.week1?.note,e.mentoring?.month1?.date,e.mentoring?.month1?.note,e.mentoring?.other])];const sheets=[{name:'OJT교육계획',rows:plans},{name:'OJT이수현황',rows:outcomes},{name:'면담및멘토',rows:interviews}];if(kind==='OJT계획이수')return window.__unionMakeXlsx('OJT_계획및이수',sheets);const original=window.__unionMakeXlsx;try{window.__unionMakeXlsx=function(filename,existing){return original(filename,[...existing,...sheets])};return baseExcel('all')}finally{window.__unionMakeXlsx=original}};
 })();
 </script>
+<!-- parental-leave-period-extension v1 -->
+<script>
+/* Parental leave period is separate from general leave and exit dates. */
+(function(){
+ const previousOpen=openEmployee;
+ openEmployee=function(id=null,encoded=''){
+   previousOpen(id,encoded);
+   const status=document.getElementById('eStatus');
+   const dateRow=document.getElementById('employmentStatusDates');
+   if(!status||!dateRow)return;
+   let parental=document.getElementById('parentalLeavePeriod');
+   if(!parental){
+     parental=document.createElement('div');
+     parental.id='parentalLeavePeriod';
+     parental.style.cssText='grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%;min-width:0';
+     parental.innerHTML='<label style="display:flex;flex-direction:column;gap:6px;min-width:0"><span><span style="color:#c2410c">* </span>육아휴직 시작일</span><input type="date" id="eParentalStart" style="width:100%;min-width:0;box-sizing:border-box" /></label><label style="display:flex;flex-direction:column;gap:6px;min-width:0"><span><span style="color:#c2410c">* </span>육아휴직 종료일</span><input type="date" id="eParentalEnd" style="width:100%;min-width:0;box-sizing:border-box" /></label>';
+     dateRow.insertAdjacentElement('afterend',parental);
+   }
+   const person=id?(db.employees||[]).find(x=>String(x.id)===String(id)):null;
+   document.getElementById('eParentalStart').value=person?.parental_leave_start_date||'';
+   document.getElementById('eParentalEnd').value=person?.parental_leave_end_date||'';
+   function showPeriod(){
+     const isParental=status.value==='육아휴직';
+     parental.style.display=isParental?'grid':'none';
+     if(isParental)dateRow.style.display='none';
+   }
+   status.addEventListener('change',showPeriod);
+   showPeriod();
+ };
+ const previousSave=saveEmployee;
+ saveEmployee=function(id){
+   const st=document.getElementById('eStatus')?.value;
+   if(st!=='육아휴직')return previousSave(id);
+   const start=document.getElementById('eParentalStart')?.value||'';
+   const end=document.getElementById('eParentalEnd')?.value||'';
+   if(!start||!end){alert('육아휴직 시작일과 종료일을 모두 선택해 주세요.');return;}
+   if(start>end){alert('육아휴직 종료일은 시작일 이후여야 합니다.');return;}
+   const beforeCount=(db.employees||[]).length;
+   const old=id?(db.employees||[]).find(x=>String(x.id)===String(id)):null;
+   const oldStart=old?.parental_leave_start_date||'';
+   const oldEnd=old?.parental_leave_end_date||'';
+   previousSave(id);
+   const target=id?(db.employees||[]).find(x=>String(x.id)===String(id)):((db.employees||[]).length>beforeCount?db.employees.at(-1):null);
+   if(!target||target.status!=='육아휴직')return;
+   const changed=target.parental_leave_start_date!==start||target.parental_leave_end_date!==end;
+   target.parental_leave_start_date=start;
+   target.parental_leave_end_date=end;
+   if(changed){
+     if(Array.isArray(db.history))db.history.unshift({employee_id:target.id,event_date:start,event_type:'상태변경',title:'육아휴직 기간 '+(oldStart||oldEnd?'변경':'등록'),description:start+' ~ '+end,department:target.department,grade:target.grade});
+     save();render();
+   }
+ };
+})();
+</script>
 </body></html>
