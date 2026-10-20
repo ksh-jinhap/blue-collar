@@ -493,12 +493,12 @@ document.addEventListener('click',ev=>{
 });
 const formerResetFilters=resetFilters;
 resetFilters=function(){for(const k of EXTRA_KEYS)delete empExtra[k];formerResetFilters()};
-const massAllowed={position:'직위',grade:'직급',status:'재직상태',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자',gender:'성별'};
+const massAllowed={position:'직위',grade:'직급',status:'재직상태',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자',gender:'성별',salary_type:'급여 형태',employment_type:'고용형태'};
 function openEmployeeMassEdit(){
  const selected=db.employees.filter(e=>empSelected.has(String(e.id)));
  if(!selected.length)return alert('변경할 직원을 먼저 체크해 주세요.');
  const countByCorp={};selected.forEach(e=>countByCorp[e.corporation]=(countByCorp[e.corporation]||0)+1);
- const fields=Object.entries(massAllowed).map(([key,label])=>{const opts={status:['재직','휴직','파견','대기','산재','육아휴직','퇴사'],union_status:['가입','미가입','미확인'],field_leader_role:['그룹장','파트장','라인장','미지정'],gender:['남','여']}[key];return `<label>${esc(label)}${opts?select('mass_'+key,opts,'','변경 안 함'):`<input id="mass_${key}" placeholder="변경 안 함" list="mass-list-${key}"><datalist id="mass-list-${key}">${extraChoices(key).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`}</label>`}).join('');
+ const fields=Object.entries(massAllowed).map(([key,label])=>{const opts={status:['재직','휴직','파견','대기','산재','육아휴직','퇴사'],union_status:['가입','미가입','미확인'],field_leader_role:['그룹장','파트장','라인장','미지정'],gender:['남','여'],salary_type:['월급','시급'],employment_type:['정규직','계약직','미확인']}[key];return `<label>${esc(label)}${opts?select('mass_'+key,opts,'','변경 안 함'):`<input id="mass_${key}" placeholder="변경 안 함" list="mass-list-${key}"><datalist id="mass-list-${key}">${extraChoices(key).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`}</label>`}).join('');
  modal('선택 인원 일괄 수정',`<div class="notice"><b>선택 인원 ${selected.length}명</b> · ${Object.entries(countByCorp).map(([a,b])=>`${esc(a)} ${b}명`).join(' / ')}<br>변경할 항목만 선택하세요. 비워 둔 항목은 변경되지 않습니다. 퇴사 처리 시 현재 TO가 자동 갱신됩니다.</div><div class="formgrid">${fields}</div><div class="hint">가입 여부는 확인된 정보만 변경하세요. 한 번에 변경한 결과는 공동 DB에 저장 요청되며, 변경 기록에 남습니다.</div><div class="modalactions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="applyEmployeeMassEdit()">${selected.length}명 일괄 변경</button></div>`);
 }
 window.applyEmployeeMassEdit=function(){
