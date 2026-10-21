@@ -1050,11 +1050,16 @@ document.addEventListener('change',ev=>{
  const dateOf=x=>String(x||'').slice(0,10);
  const mkey=(y,m)=>String(y)+'-'+String(m).padStart(2,'0');
  const safe=x=>esc(String(x??''));
- const orgsort=(a,b)=>typeof orgCompare==='function'?orgCompare(a,b):String(a.corporation||'').localeCompare(String(b.corporation||''),'ko');
+ const ORDER_CORPS=['진합','제이앤드에프','지노스','진우정공'];
+ const ORDER_HQ=['화스너생산실','정밀부품생산실','생산운영실','생산기술실','품질본부','연구개발본부','통합구매실','사업개발실','상생안전본부','상생안전본부 부','노동조합','표면처리사업부','대화공장','옥천공장','U볼트사업부문'];
+ const orderIndex=(list,v)=>{const n=list.indexOf(String(v||'').trim());return n<0?list.length:n};
+ const koCmp=(a,b)=>String(a||'').localeCompare(String(b||''),'ko',{numeric:true});
+ const orgsort=(a,b)=>orderIndex(ORDER_CORPS,a.corporation)-orderIndex(ORDER_CORPS,b.corporation)||orderIndex(ORDER_HQ,a.headquarters)-orderIndex(ORDER_HQ,b.headquarters)||koCmp(a.department,b.department)||koCmp(a.name,b.name)||koCmp(a.employee_no,b.employee_no);
+ const monthlyExitDate=e=>{const d=dateOf(e.exit_date);if(/^\d{4}-\d{2}-\d{2}$/.test(d))return d;const history=(db.history||[]).filter(h=>String(h.employee_id)===String(e.id)&&(h.event_type==='퇴사'||h.title==='퇴사')).map(h=>dateOf(h.event_date)).filter(x=>/^\d{4}-\d{2}-\d{2}$/.test(x)).sort();return history.at(-1)||'';};
  const dateSort=(field)=>(a,b)=>dateOf(a[field]).localeCompare(dateOf(b[field]))||orgsort(a,b)||String(a.name||'').localeCompare(String(b.name||''),'ko');
  const rowsNow=()=>db.employees||[];
  function monthlySnapshot(){return (db.snapshots||[]).find(s=>Number(s.year)===Number(reportYear)&&Number(s.month)===Number(reportMonth))}
- function reportsToolbar(title){const years=[...new Set([new Date().getFullYear(),...((db.snapshots||[]).map(x=>Number(x.year))),...rowsNow().flatMap(e=>[Number(String(e.hire_date||'').slice(0,4)),Number(String(exitDate(e)||'').slice(0,4))])].filter(x=>x>=1990&&x<=2100))].sort((a,b)=>b-a);
+ function reportsToolbar(title){const years=[...new Set([new Date().getFullYear(),...((db.snapshots||[]).map(x=>Number(x.year))),...rowsNow().flatMap(e=>[Number(String(e.hire_date||'').slice(0,4)),Number(String(monthlyExitDate(e)||'').slice(0,4))])].filter(x=>x>=1990&&x<=2100))].sort((a,b)=>b-a);
   return `<div class="toolbar"><b>${safe(title)}</b><label>기준연도 <select id="monthReportYear">${years.map(y=>`<option value="${y}" ${y===reportYear?'selected':''}>${y}년</option>`).join('')}</select></label><label>기준월 <select id="monthReportMonth">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===reportMonth?'selected':''}>${i+1}월</option>`).join('')}</select></label>${view==='hires'?`<label>조회 <select id="monthReportMode"><option value="month" ${monthMode==='month'?'selected':''}>기준월 입사</option><option value="all" ${monthMode==='all'?'selected':''}>등록된 입사자 전체</option></select></label>`:''}</div>`;
  }
  function banner(s){return `<div class="notice">${s?.employee_details?`<b>${safe(mkey(reportYear,reportMonth))} 월말 확정 자료</b> · ${safe(s.captured||'')} 저장`:s?`<b>기존 월말 기록</b> · 총인원/조직 인원만 저장되어 개인별 명단 및 가입현황은 재구성할 수 없습니다.`:`<b>월말 상세기록 미등록</b> · ${safe(mkey(reportYear,reportMonth))} 기준 확정 자료가 없습니다.`} 현재월은 확정 전 실시간 참고 조회를 제공합니다.</div>`}
@@ -1063,9 +1068,9 @@ document.addEventListener('change',ev=>{
  }
  function noData(label){return `<section class="panel"><p class="empty">${safe(label)}: 해당 월의 상세 기록이 없습니다. 과거 인원을 현재 자료로 대신 표시하지 않습니다.</p></section>`}
  function monthPeople(kind){const c=ctx(),field=kind==='hires'?'hire_date':'exit_date';const source=monthMode==='all'&&kind==='hires'?rowsNow():c.records;
-  const list=source?source.filter(e=>kind==='hires'?!!dateOf(e.hire_date):e.status==='퇴사').filter(e=>monthMode==='all'&&kind==='hires'||dateOf(kind==='hires'?e.hire_date:(e.exit_date||(!c.s?exitDate(e):''))).startsWith(mkey(reportYear,reportMonth))).sort(dateSort(field)):null;
+  const list=source?source.filter(e=>kind==='hires'?!!dateOf(e.hire_date):e.status==='퇴사').filter(e=>monthMode==='all'&&kind==='hires'||dateOf(kind==='hires'?e.hire_date:(e.exit_date||(!c.s?monthlyExitDate(e):''))).startsWith(mkey(reportYear,reportMonth))).sort(dateSort(field)):null;
   const hdr=kind==='hires'?['사번','성명','법인','본부/실','부서','직위','입사일','현재상태']:['사번','성명','법인','본부/실','부서','입사일','퇴사일','퇴사사유'];
-  const row=e=>kind==='hires'?[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.position,e.hire_date,e.status]:[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.hire_date,e.exit_date||(!c.s?exitDate(e):''),e.exit_reason];
+  const row=e=>kind==='hires'?[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.position,e.hire_date,e.status]:[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.hire_date,e.exit_date||(!c.s?monthlyExitDate(e):''),e.exit_reason];
   return reportsToolbar(kind==='hires'?'입사자 명단':'퇴사자 명단')+banner(c.s)+(!list?noData('입·퇴사 명단'):`<section class="panel"><h2>${kind==='hires'?'입사자':'퇴사자'} ${list.length}명</h2><div class="tablewrap"><table><thead><tr>${hdr.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${list.map(e=>`<tr>${row(e).map(x=>`<td>${safe(x)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${hdr.length}" class="empty">해당하는 직원이 없습니다.</td></tr>`}</tbody></table></div></section>`);
  }
  function monthlyOrg(){const c=ctx();if(!c.records)return reportsToolbar('부서별 · 성별')+banner(c.s)+noData('조직별 성별');const map=new Map();
