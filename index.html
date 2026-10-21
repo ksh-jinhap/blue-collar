@@ -961,4 +961,76 @@ document.addEventListener('change',ev=>{
  };
 })();
 </script>
+<script>
+/* Cascading organization selectors: company -> headquarters -> department.
+   Uses existing employee / plan / recruitment organizations; no DB schema change. */
+(function(){
+ 'use strict';
+ const extra = [{corporation:'지노스',headquarters:'표면처리사업부',department:'(표면)연구개발팀'},
+                {corporation:'지노스',headquarters:'표면처리사업부',department:'생산/기술팀'}];
+ const corpOrder=['진합','제이앤드에프','지노스','진우정공'];
+ const hqOrder=['화스너생산실','정밀부품생산실','생산운영실','생산기술실','품질본부','연구개발본부','통합구매실','사업개발실','상생안전본부','상생안전본부 부','노동조합','표면처리사업부','대화공장','옥천공장','U볼트사업부문'];
+ const sortBy=(values,order)=>[...new Set(values.filter(Boolean))].sort((a,b)=>{
+   const ia=order.indexOf(a),ib=order.indexOf(b);
+   return (ia<0?999:ia)-(ib<0?999:ib)||String(a).localeCompare(String(b),'ko');
+ });
+ function orgRows(){
+   const rows=[...(db.employees||[]),...(db.plans||[]),...(db.recruitment||[]),...extra];
+   return rows.filter(r=>r&&r.corporation&&r.headquarters&&r.department);
+ }
+ function listCorps(){return sortBy(orgRows().map(x=>x.corporation),corpOrder)}
+ function listHq(c){if(c==='지노스')return ['표면처리사업부'];return sortBy(orgRows().filter(x=>x.corporation===c).map(x=>x.headquarters),hqOrder)}
+ function listDept(c,h){if(c==='지노스'&&h==='표면처리사업부')return ['(표면)연구개발팀','생산/기술팀'];return sortBy(orgRows().filter(x=>x.corporation===c&&x.headquarters===h).map(x=>x.department),[])}
+ function populate(el,choices,value,placeholder){
+   el.replaceChildren();
+   const opt=document.createElement('option');opt.value='';opt.textContent=placeholder;el.append(opt);
+   for(const choice of choices){const item=document.createElement('option');item.value=choice;item.textContent=choice;el.append(item)}
+   el.value=choices.includes(value)?value:'';
+ }
+ function linked(c,h,d,settings={}){
+   if(!c||!h||!d)return;
+   const original={c:c.value,h:h.value,d:d.value};
+   for(const el of [c,h,d]){
+     // datalist free text is replaced with exact organization selectors in recruitment only.
+     if(settings.convert && el.tagName==='INPUT'){
+       const replacement=document.createElement('select');replacement.id=el.id;
+       replacement.className=el.className;
+       replacement.required=true;
+       el.replaceWith(replacement);
+       if(el===c)c=replacement;else if(el===h)h=replacement;else d=replacement;
+     }
+   }
+   const corp=()=>c.value;
+   const head=()=>h.value;
+   function updateHQ(reset){populate(h,listHq(corp()),reset?'':original.h,'본부/실 선택');updateDept(reset)}
+   function updateDept(reset){populate(d,listDept(corp(),head()),reset?'':original.d,'부서 선택')}
+   populate(c,listCorps(),original.c,'법인 선택');
+   updateHQ(false);
+   c.addEventListener('change',()=>{original.h='';original.d='';updateHQ(true)});
+   h.addEventListener('change',()=>{original.d='';updateDept(true)});
+   return {valid:()=>!!corp()&&listHq(corp()).includes(head())&&listDept(corp(),head()).includes(d.value)};
+ }
+ const originalOpen=window.openRecruitment;
+ if(typeof originalOpen==='function'){
+   window.openRecruitment=function(...args){
+     originalOpen(...args);
+     const c=document.getElementById('rCorp'),h=document.getElementById('rHQ'),d=document.getElementById('rDept');
+     if(!c||!h||!d)return;
+     window.__recruitOrgCascade=linked(c,h,d,{convert:true});
+   };
+ }
+ const originalSave=window.saveRecruitment;
+ if(typeof originalSave==='function'){
+   window.saveRecruitment=function(...args){
+     if(window.__recruitOrgCascade&&!window.__recruitOrgCascade.valid()){
+       alert('선택한 법인에 속한 본부/실과 부서를 순서대로 선택하세요.');return;
+     }
+     return originalSave(...args);
+   };
+ }
+ // Other linked filters should follow the same corporation -> organizational hierarchy.
+ // Existing employee and bulk transfer filters already scope their options by corporation.
+ window.__hrOrgOptions={corporations:listCorps,headquarters:listHq,departments:listDept};
+})();
+</script>
 </body></html>
