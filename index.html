@@ -209,6 +209,8 @@ const FIXED_KEY='sb_publishable_c3IK8Hmk71y6pI9y04m3Gg_SV5FmOaZ';
 let cfg={url:FIXED_URL,key:FIXED_KEY,user:''};
 try{const saved=JSON.parse(localStorage.getItem(CONFIG_KEY)||'{}');cfg.user=saved.user||'';}catch(e){}
 let session=null,rev=null,writing=false,queued=false,dirty=false,conflict=false,polling=false;
+// Expose a read-only authenticated state for later UI extension scripts.
+window.__hrCloudConnected=()=>Boolean(session&&rev!==null);
 view='cloud';
 let syncTimer=null,refreshTimer=null,lastCloudError='';
 const originalSave=save;
@@ -1076,7 +1078,7 @@ document.addEventListener('change',ev=>{
   return reportsToolbar('노조 명부')+banner(c.s)+`<div class="cards">${card('대상 생산직',active.length,'퇴사 제외')}${card('생산직 가입',members.length,'월말 기록 기준')}${card('사무직 가입',office,'생산직 총인원 제외')}${card('전체 가입',members.length+office,'생산직+사무직')}</div>${build('corporation','법인별 가입 현황')}${build('position','직위별 가입 현황')}`;
  }
  const priorRender=render;
- render=function(){if(!session){return priorRender()}if(view==='hires'||view==='exits'||view==='organization'||view==='union'){
+ render=function(){if(!window.__hrCloudConnected?.()){return priorRender()}if(view==='hires'||view==='exits'||view==='organization'||view==='union'){
   const name=names[view]||[view,''];$('#heading').textContent=name[0];$('#subheading').textContent=name[1];$('#content').innerHTML=view==='hires'?monthPeople('hires'):view==='exits'?monthPeople('exits'):view==='organization'?monthlyOrg():monthlyUnion();return;
  }return priorRender()};
  document.addEventListener('change',ev=>{const id=ev.target.id;if(!['monthReportYear','monthReportMonth','monthReportMode','monthlyCorp'].includes(id))return;
