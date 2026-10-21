@@ -1033,4 +1033,55 @@ document.addEventListener('change',ev=>{
  window.__hrOrgOptions={corporations:listCorps,headquarters:listHq,departments:listDept};
 })();
 </script>
+<script>
+/* Monthly reports v1: historical views only read server-captured immutable snapshots. */
+(function(){
+ const nav=document.querySelector('.navs');
+ const exitButton=nav.querySelector('[data-view="exits"]');
+ if(exitButton&&!nav.querySelector('[data-view="hires"]')){
+  const btn=document.createElement('button');btn.className='nav';btn.dataset.view='hires';btn.textContent='↳ 입사자 명단';
+  exitButton.insertAdjacentElement('beforebegin',btn);btn.addEventListener('click',()=>setView('hires'));
+ }
+ names.hires=['입사자 명단','입사월별 명단 및 월말 확정 기록을 조회합니다.'];
+ let reportYear=new Date().getFullYear(), reportMonth=new Date().getMonth()+1;
+ let monthMode='month';
+ const dateOf=x=>String(x||'').slice(0,10);
+ const mkey=(y,m)=>String(y)+'-'+String(m).padStart(2,'0');
+ const safe=x=>esc(String(x??''));
+ const orgsort=(a,b)=>typeof orgCompare==='function'?orgCompare(a,b):String(a.corporation||'').localeCompare(String(b.corporation||''),'ko');
+ const dateSort=(field)=>(a,b)=>dateOf(a[field]).localeCompare(dateOf(b[field]))||orgsort(a,b)||String(a.name||'').localeCompare(String(b.name||''),'ko');
+ const rowsNow=()=>db.employees||[];
+ function monthlySnapshot(){return (db.snapshots||[]).find(s=>Number(s.year)===Number(reportYear)&&Number(s.month)===Number(reportMonth))}
+ function reportsToolbar(title){const years=[...new Set([new Date().getFullYear(),...((db.snapshots||[]).map(x=>Number(x.year))),...rowsNow().flatMap(e=>[Number(String(e.hire_date||'').slice(0,4)),Number(String(exitDate(e)||'').slice(0,4))])].filter(x=>x>=1990&&x<=2100))].sort((a,b)=>b-a);
+  return `<div class="toolbar"><b>${safe(title)}</b><label>기준연도 <select id="monthReportYear">${years.map(y=>`<option value="${y}" ${y===reportYear?'selected':''}>${y}년</option>`).join('')}</select></label><label>기준월 <select id="monthReportMonth">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${i+1===reportMonth?'selected':''}>${i+1}월</option>`).join('')}</select></label>${view==='hires'?`<label>조회 <select id="monthReportMode"><option value="month" ${monthMode==='month'?'selected':''}>기준월 입사</option><option value="all" ${monthMode==='all'?'selected':''}>등록된 입사자 전체</option></select></label>`:''}</div>`;
+ }
+ function banner(s){return `<div class="notice">${s?.employee_details?`<b>${safe(mkey(reportYear,reportMonth))} 월말 확정 자료</b> · ${safe(s.captured||'')} 저장`:s?`<b>기존 월말 기록</b> · 총인원/조직 인원만 저장되어 개인별 명단 및 가입현황은 재구성할 수 없습니다.`:`<b>월말 상세기록 미등록</b> · ${safe(mkey(reportYear,reportMonth))} 기준 확정 자료가 없습니다.`} 현재월은 확정 전 실시간 참고 조회를 제공합니다.</div>`}
+ function ctx(){const s=monthlySnapshot(),now=mkey(new Date().getFullYear(),new Date().getMonth()+1)===mkey(reportYear,reportMonth);
+  return {s,now,records:s?.employee_details|| (now?rowsNow():null),office:s?.office_union_count??(now?(db.office_union_members||[]).length:0)};
+ }
+ function noData(label){return `<section class="panel"><p class="empty">${safe(label)}: 해당 월의 상세 기록이 없습니다. 과거 인원을 현재 자료로 대신 표시하지 않습니다.</p></section>`}
+ function monthPeople(kind){const c=ctx(),field=kind==='hires'?'hire_date':'exit_date';const source=monthMode==='all'&&kind==='hires'?rowsNow():c.records;
+  const list=source?source.filter(e=>kind==='hires'?!!dateOf(e.hire_date):e.status==='퇴사').filter(e=>monthMode==='all'&&kind==='hires'||dateOf(kind==='hires'?e.hire_date:(e.exit_date||(!c.s?exitDate(e):''))).startsWith(mkey(reportYear,reportMonth))).sort(dateSort(field)):null;
+  const hdr=kind==='hires'?['사번','성명','법인','본부/실','부서','직위','입사일','현재상태']:['사번','성명','법인','본부/실','부서','입사일','퇴사일','퇴사사유'];
+  const row=e=>kind==='hires'?[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.position,e.hire_date,e.status]:[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.hire_date,e.exit_date||(!c.s?exitDate(e):''),e.exit_reason];
+  return reportsToolbar(kind==='hires'?'입사자 명단':'퇴사자 명단')+banner(c.s)+(!list?noData('입·퇴사 명단'):`<section class="panel"><h2>${kind==='hires'?'입사자':'퇴사자'} ${list.length}명</h2><div class="tablewrap"><table><thead><tr>${hdr.map(x=>`<th>${x}</th>`).join('')}</tr></thead><tbody>${list.map(e=>`<tr>${row(e).map(x=>`<td>${safe(x)}</td>`).join('')}</tr>`).join('')||`<tr><td colspan="${hdr.length}" class="empty">해당하는 직원이 없습니다.</td></tr>`}</tbody></table></div></section>`);
+ }
+ function monthlyOrg(){const c=ctx();if(!c.records)return reportsToolbar('부서별 · 성별')+banner(c.s)+noData('조직별 성별');const map=new Map();
+  c.records.filter(e=>e.status!=='퇴사').forEach(e=>{const k=[e.corporation,e.headquarters,e.department].join('|');const o=map.get(k)||{corporation:e.corporation,headquarters:e.headquarters,department:e.department,total:0,male:0,female:0};o.total++;if(e.gender==='남')o.male++;if(e.gender==='여')o.female++;map.set(k,o)});
+  const corp=window.__monthlyCorp||'';const vals=[...map.values()].filter(x=>!corp||x.corporation===corp).sort(orgsort);
+  return reportsToolbar('부서별 · 성별')+banner(c.s)+`<section class="panel"><div class="toolbar"><label>법인 <select id="monthlyCorp"><option value="">전체 법인</option>${['진합','제이앤드에프','지노스','진우정공'].map(v=>`<option ${corp===v?'selected':''}>${v}</option>`).join('')}</select></label></div><div class="tablewrap"><table><thead><tr><th>법인</th><th>본부/실</th><th>부서</th><th>총인원</th><th>남</th><th>여</th></tr></thead><tbody>${vals.map(x=>`<tr>${[x.corporation,x.headquarters,x.department,x.total,x.male,x.female].map(v=>`<td>${safe(v)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="6">해당 인원 없음</td></tr>'}</tbody></table></div></section>`;
+ }
+ function monthlyUnion(){const c=ctx();if(!c.records)return reportsToolbar('노조 명부')+banner(c.s)+noData('노조 현황');const active=c.records.filter(e=>e.status!=='퇴사'),members=active.filter(e=>e.union_status==='가입');const office=c.office;
+  const build=(field,title)=>{const keys=[...new Set(active.map(e=>e[field]||'미지정'))].sort((a,b)=>field==='corporation'?['진합','제이앤드에프','지노스','진우정공'].indexOf(a)-['진합','제이앤드에프','지노스','진우정공'].indexOf(b):String(a).localeCompare(String(b),'ko'));return `<section class="panel"><h2>${title}</h2><div class="tablewrap"><table><thead><tr><th>구분</th><th>대상 근로자</th><th>가입 조합원</th><th>가입률</th></tr></thead><tbody>${keys.map(k=>{const all=active.filter(e=>(e[field]||'미지정')===k),joined=all.filter(e=>e.union_status==='가입').length;return `<tr><td>${safe(k)}</td><td>${all.length}</td><td>${joined}</td><td>${all.length?(100*joined/all.length).toFixed(1)+'%':'-'}</td></tr>`}).join('')}</tbody></table></div></section>`};
+  return reportsToolbar('노조 명부')+banner(c.s)+`<div class="cards">${card('대상 생산직',active.length,'퇴사 제외')}${card('생산직 가입',members.length,'월말 기록 기준')}${card('사무직 가입',office,'생산직 총인원 제외')}${card('전체 가입',members.length+office,'생산직+사무직')}</div>${build('corporation','법인별 가입 현황')}${build('position','직위별 가입 현황')}`;
+ }
+ const priorRender=render;
+ render=function(){if(!session){return priorRender()}if(view==='hires'||view==='exits'||view==='organization'||view==='union'){
+  const name=names[view]||[view,''];$('#heading').textContent=name[0];$('#subheading').textContent=name[1];$('#content').innerHTML=view==='hires'?monthPeople('hires'):view==='exits'?monthPeople('exits'):view==='organization'?monthlyOrg():monthlyUnion();return;
+ }return priorRender()};
+ document.addEventListener('change',ev=>{const id=ev.target.id;if(!['monthReportYear','monthReportMonth','monthReportMode','monthlyCorp'].includes(id))return;
+  if(id==='monthReportYear')reportYear=Number(ev.target.value);if(id==='monthReportMonth')reportMonth=Number(ev.target.value);if(id==='monthReportMode')monthMode=ev.target.value;if(id==='monthlyCorp')window.__monthlyCorp=ev.target.value;render();
+ });
+})();
+</script>
 </body></html>
