@@ -255,6 +255,8 @@ setView=function(next){if(!session&&next!=='cloud'){alert('공동 DB 로그인 �
 render=function(){if(!session)view='cloud';if(view==='cloud'){
  el('#heading').textContent='공유 설정';el('#subheading').textContent='3명 공동 편집 및 안전한 변경 저장';el('#content').innerHTML=panel();
  el('#cloudLogin').addEventListener('click',login);
+ // Enter in account/password submits the same login action as the button.
+ for(const field of ['#cloudUser','#cloudPassword']){el(field)?.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.isComposing&&ev.keyCode!==229){ev.preventDefault();login();}});}
  el('#cloudReload').addEventListener('click',()=>fetchLatest(true));
  el('#cloudLogout').addEventListener('click',logout);
  }else{oldRender();}status();};
@@ -1103,12 +1105,17 @@ document.addEventListener('change',ev=>{
  }
  function monthlyUnion(){const c=ctx();if(!c.records)return reportsToolbar('노조 명부')+banner(c.s)+noData('노조 현황');const active=c.records.filter(e=>e.status!=='퇴사'),members=active.filter(e=>e.union_status==='가입');const office=c.office;
   const build=(field,title)=>{const keys=[...new Set(active.map(e=>e[field]||'미지정'))].sort((a,b)=>field==='corporation'?['진합','제이앤드에프','지노스','진우정공'].indexOf(a)-['진합','제이앤드에프','지노스','진우정공'].indexOf(b):String(a).localeCompare(String(b),'ko'));return `<section class="panel"><h2>${title}</h2><div class="tablewrap"><table><thead><tr><th>구분</th><th>대상 근로자</th><th>가입 조합원</th><th>가입률</th></tr></thead><tbody>${keys.map(k=>{const all=active.filter(e=>(e[field]||'미지정')===k),joined=all.filter(e=>e.union_status==='가입').length;return `<tr><td>${safe(k)}</td><td>${all.length}</td><td>${joined}</td><td>${all.length?(100*joined/all.length).toFixed(1)+'%':'-'}</td></tr>`}).join('')}</tbody></table></div></section>`};
-  return reportsToolbar('노조 명부')+banner(c.s)+`<div class="cards">${card('대상 생산직',active.length,'퇴사 제외')}${card('생산직 가입',members.length,'월말 기록 기준')}${card('사무직 가입',office,'생산직 총인원 제외')}${card('전체 가입',members.length+office,'생산직+사무직')}</div>${build('corporation','법인별 가입 현황')}${build('position','직위별 가입 현황')}`;
+  const roster=members.slice().sort(orgsort);
+  const officeMembers=c.now?(db.office_union_members||[]):(Array.isArray(c.s?.office_union_members)?c.s.office_union_members:[]);
+  const memberTable=`<section class="panel"><h2>생산직 조합원 명단 · ${roster.length}명</h2><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서</th><th>직위</th><th>가입상태</th><th>관리</th></tr></thead><tbody>${roster.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.corporation)}</td><td>${safe(e.headquarters)}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>가입</td><td>${c.now?`<button class="btn tiny" data-union-edit="${safe(e.id)}">수정</button>`:'월말 기록'}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">해당 월의 생산직 조합원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+  const officeTable=officeMembers.length?`<section class="panel"><h2>사무직 조합원 명단 · ${officeMembers.length}명</h2><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>부서</th><th>직위</th><th>직급</th></tr></thead><tbody>${officeMembers.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>${safe(e.grade)}</td></tr>`).join('')}</tbody></table></div></section>`:'';
+  return reportsToolbar('노조 명부')+banner(c.s)+`<div class="cards">${card('대상 생산직',active.length,'퇴사 제외')}${card('생산직 가입',members.length,'월말 기록 기준')}${card('사무직 가입',office,'생산직 총인원 제외')}${card('전체 가입',members.length+office,'생산직+사무직')}</div>${build('corporation','법인별 가입 현황')}${build('position','직위별 가입 현황')}${memberTable}${officeTable}`;
  }
  const priorRender=render;
  render=function(){if(!window.__hrCloudConnected?.()){return priorRender()}if(view==='hires'||view==='exits'||view==='organization'||view==='union'){
   const name=names[view]||[view,''];$('#heading').textContent=name[0];$('#subheading').textContent=name[1];$('#content').innerHTML=view==='hires'?monthPeople('hires'):view==='exits'?monthPeople('exits'):view==='organization'?monthlyOrg():monthlyUnion();return;
  }return priorRender()};
+ document.addEventListener('click',ev=>{const btn=ev.target.closest('[data-union-edit]');if(!btn)return;const item=(db.employees||[]).find(e=>String(e.id)===btn.dataset.unionEdit);if(item)openEmployee(item.id);});
  document.addEventListener('change',ev=>{const id=ev.target.id;if(!['monthReportYear','monthReportMonth','monthReportMode','monthlyCorp'].includes(id))return;
   if(id==='monthReportYear')reportYear=Number(ev.target.value);if(id==='monthReportMonth')reportMonth=Number(ev.target.value);if(id==='monthReportMode')monthMode=ev.target.value;if(id==='monthlyCorp')window.__monthlyCorp=ev.target.value;render();
  });
