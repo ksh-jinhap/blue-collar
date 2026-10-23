@@ -395,8 +395,8 @@ const MFG=new Set(['화스너생산실','생산운영실','정밀부품생산실
 const order=(c)=>{let i=CORPS.indexOf(c||'');return i<0?99:i};
 const cmp=(a,b)=>order(a.corporation)-order(b.corporation)||String(a.headquarters||'').localeCompare(String(b.headquarters||''),'ko')||String(a.department||'').localeCompare(String(b.department||''),'ko')||String(a.employee_no||a.name||'').localeCompare(String(b.employee_no||b.name||''),'ko');
 const orgLabel=h=>MFG.has(h)?'제조본부 / '+h:(h||'');
-const hqFor=(corp)=>[...new Set([...db.employees,...db.plans,...(db.recruitment||[])].filter(e=>e.corporation===corp).map(e=>e.headquarters).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ko'));
-const deptFor=(corp,hq)=>[...new Set([...db.employees,...db.plans,...(db.recruitment||[])].filter(e=>(!corp||e.corporation===corp)&&(!hq||e.headquarters===hq)).map(e=>e.department).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ko'));
+const hqFor=(corp)=>[...new Set([...db.employees,...db.plans,...(db.recruitment||[])].filter(e=>e.corporation===corp).map(e=>e.headquarters).filter(Boolean).concat(window.__hrMasterCandidates?.('headquarters',corp)||[]))].sort((a,b)=>String(a).localeCompare(String(b),'ko'));
+const deptFor=(corp,hq)=>[...new Set([...db.employees,...db.plans,...(db.recruitment||[])].filter(e=>(!corp||e.corporation===corp)&&(!hq||e.headquarters===hq)).map(e=>e.department).filter(Boolean).concat(window.__hrMasterCandidates?.('department',corp,hq)||[]))].sort((a,b)=>String(a).localeCompare(String(b),'ko'));
 const oldRender=render;
 render=function(){for(const k of ['employees','plans','recruitment'])if(Array.isArray(db[k]))db[k].sort(cmp);oldRender();};
 const oldEmployees=employeesView;
@@ -899,7 +899,7 @@ document.addEventListener('change',ev=>{
  document.addEventListener('change',ev=>{if(ev.target.id==='interviewCorp'){interviewCorp=ev.target.value;render()}});
 
  let ojtCorp='전체',ojtDept='전체',ojtEmployee='';
- function orgs(){return [...new Map((db.employees||[]).filter(x=>x.corporation&&x.department).map(e=>[e.corporation+'|'+(e.headquarters||'')+'|'+e.department,{corporation:e.corporation,headquarters:e.headquarters||'',department:e.department}])).values()].sort((a,b)=>{const ranks=['진합','제이앤드에프','지노스','진우정공'];return (ranks.indexOf(a.corporation)<0?99:ranks.indexOf(a.corporation))-(ranks.indexOf(b.corporation)<0?99:ranks.indexOf(b.corporation))||a.department.localeCompare(b.department,'ko')})}
+ function orgs(){const pool=[...(db.employees||[]),...(db.plans||[]),...(db.recruitment||[])];for(const r of db.reference_master||[])if(r.type==='department'&&r.active!==false&&r.corporation&&r.headquarters)pool.push({corporation:r.corporation,headquarters:r.headquarters,department:r.value});return [...new Map(pool.filter(x=>x.corporation&&x.department).map(e=>[e.corporation+'|'+(e.headquarters||'')+'|'+e.department,{corporation:e.corporation,headquarters:e.headquarters||'',department:e.department}])).values()].sort((a,b)=>a.corporation.localeCompare(b.corporation,'ko')||a.department.localeCompare(b.department,'ko'))}
  const planList=()=>db.ojt_plans||(db.ojt_plans=[]);
  const outcomeList=()=>db.ojt_outcomes||(db.ojt_outcomes=[]);
  function openInterview(id){const e=getEmployee(id);if(!e)return;const rec=e.mentoring||{};const fields=stages.map(([k,label])=>`<div class="panel" style="margin:10px 0;padding:12px"><b>${label} 면담</b><div class="formgrid" style="margin-top:8px"><label>면담일<input type="date" id="it_${k}_date" value="${safe(rec[k]?.date)}"></label><label>면담 담당<input id="it_${k}_by" value="${safe(rec[k]?.by)}" placeholder="면담 담당자"></label></div><label style="display:block;margin-top:8px">면담 내용<textarea id="it_${k}_note" rows="3" placeholder="면담 내용">${safe(rec[k]?.note)}</textarea></label></div>`).join('');modal(e.name+' · 면담기록지',`<div class="notice">사번 ${safe(e.employee_no)} · ${safe(e.department)} · 입사일 ${safe(e.hire_date)}<br>정규직 전환 후에도 기존 면담기록은 보존됩니다.</div><div class="formgrid"><label>멘토 성명<input id="it_mentor" value="${safe(e.mentor_name)}" placeholder="멘토 이름"></label><label>멘토 부서 / 비고<input id="it_mentor_dept" value="${safe(e.mentor_department)}" placeholder="선택 입력"></label></div>${fields}<label style="display:block">그 외 특이사항<textarea id="it_other" rows="3" placeholder="특이사항">${safe(rec.other)}</textarea></label><div class="modalactions"><button class="btn" onclick="closeModal()">닫기</button><button class="btn primary" onclick="saveInterview(${idArg(id)})">기록 저장</button></div>`)}
@@ -1003,11 +1003,12 @@ document.addEventListener('change',ev=>{
  });
  function orgRows(){
    const rows=[...(db.employees||[]),...(db.plans||[]),...(db.recruitment||[]),...extra];
+   for(const r of (db.reference_master||[])){if(r.active===false)continue;if(r.type==='department'&&r.corporation&&r.headquarters)rows.push({corporation:r.corporation,headquarters:r.headquarters,department:r.value});}
    return rows.filter(r=>r&&r.corporation&&r.headquarters&&r.department);
  }
- function listCorps(){return sortBy(orgRows().map(x=>x.corporation),corpOrder)}
- function listHq(c){if(c==='지노스')return ['표면처리사업부'];return sortBy(orgRows().filter(x=>x.corporation===c).map(x=>x.headquarters),hqOrder)}
- function listDept(c,h){if(c==='지노스'&&h==='표면처리사업부')return ['(표면)연구개발팀','생산/기술팀'];return sortBy(orgRows().filter(x=>x.corporation===c&&x.headquarters===h).map(x=>x.department),[])}
+ function listCorps(){return sortBy([...orgRows().map(x=>x.corporation),...(window.__hrMasterCandidates?.('corporation')||[])],corpOrder)}
+ function listHq(c){return sortBy([...orgRows().filter(x=>x.corporation===c).map(x=>x.headquarters),...(window.__hrMasterCandidates?.('headquarters',c)||[])],hqOrder)}
+ function listDept(c,h){return sortBy([...orgRows().filter(x=>x.corporation===c&&x.headquarters===h).map(x=>x.department),...(window.__hrMasterCandidates?.('department',c,h)||[])],[])}
  function populate(el,choices,value,placeholder){
    el.replaceChildren();
    const opt=document.createElement('option');opt.value='';opt.textContent=placeholder;el.append(opt);
@@ -1218,6 +1219,8 @@ document.addEventListener('change',e=>{if(e.target.id==='masterType'){filterType
 document.addEventListener('input',e=>{if(e.target.id==='masterSearch'){filterText=e.target.value;const selection=e.target.selectionStart;render();const el=document.getElementById('masterSearch');el?.focus();el?.setSelectionRange(selection,selection);}});
 document.addEventListener('click',e=>{if(view!=='master')return;const add=e.target.closest('#masterAdd');if(add){editor();return;}const edit=e.target.closest('[data-master-edit]');if(edit){editor(visible()[Number(edit.dataset.masterEdit)]);return;}const toggle=e.target.closest('[data-master-toggle]');if(toggle){if(!window.__hrCloudConnected?.()){alert('공유 데이터 로그인 후 변경하세요.');return;}const r=visible()[Number(toggle.dataset.masterToggle)];if(!r)return;const use=actualUses(r);if(r.active!==false&&use>0&&!confirm(`현재 ${use}건에서 사용 중입니다. 기존 자료는 유지하고 신규 입력 후보에서만 제외할까요?`))return;const arr=master(),item=arr.find(x=>key(x)===key(r));if(item)item.active=r.active===false;else arr.push({...r,active:false});commit('기준정보 상태변경',`${TYPES[r.type]} / ${r.value}`);}});
 // Extend existing datalist inputs without replacing employee fields or historical values.
+window.__hrMasterCandidates=candidates;
+window.__hrMasterRows=rows;
 const oldOptions=options;options=function(type){if(!(type in TYPES))return oldOptions(type);return `<datalist id="dl-${type}">${candidates(type).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`;};
 const oldUnique=unique;unique=function(type){return type in TYPES?candidates(type):oldUnique(type);};
 const oldOpenEmployee=openEmployee;openEmployee=function(...args){oldOpenEmployee(...args);for(const [id,type] of [['ePosition','position'],['eGrade','grade'],['eEducation','education']]){const el=document.getElementById(id);if(!el)continue;el.setAttribute('list','dl-'+type);if(!document.getElementById('dl-'+type))document.getElementById('modalBody')?.insertAdjacentHTML('beforeend',options(type));} };
