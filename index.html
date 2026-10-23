@@ -1135,8 +1135,28 @@ document.addEventListener('change',ev=>{
  render=function(){prevRender();if(view==='exits'&&window.__hrCloudConnected?.()){const root=document.getElementById('content');if(root){root.insertAdjacentHTML('afterbegin',pendingPanel());}}};
  function selector(){
   const people=(db.employees||[]).filter(e=>e.status!=='퇴사').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
-  modal('퇴사 예정자 등록',`<div class="formgrid"><label class="wide">대상 직원 선택<select id="scheduledEmployee"><option value="">직원을 선택하세요</option>${people.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.employee_no)}) · ${esc(e.corporation)} / ${esc(e.department)}</option>`).join('')}</select></label></div><p class="hint">선택한 직원의 정보 수정 화면에서 신규인원 등록과 동일한 인사 항목을 확인하고 예정일을 입력할 수 있습니다.</p><div class="modalactions"><button type="button" class="btn" id="scheduledCreateNew">신규 직원 먼저 등록</button><button type="button" class="btn" onclick="closeModal()">취소</button><button type="button" class="btn primary" id="scheduledNext">다음</button></div>`);
-  document.getElementById('scheduledNext').onclick=()=>{const id=document.getElementById('scheduledEmployee').value;if(!id){alert('퇴사 예정 직원을 선택하세요.');return;}scheduleEditor(id)};
+  modal('퇴사 예정자 등록',`<div class="formgrid"><label class="wide">대상 직원 검색 (성명 또는 사번)<input type="search" id="scheduledEmployeeSearch" autocomplete="off" placeholder="성명 또는 사번을 입력하세요" aria-controls="scheduledEmployeeResults"></label><input type="hidden" id="scheduledEmployee" value=""><div class="wide" id="scheduledEmployeeSelected" style="color:#475569;font-size:13px">선택된 직원이 없습니다.</div><div class="wide" id="scheduledEmployeeResults" role="listbox" style="max-height:250px;overflow-y:auto;border:1px solid #cbd5e1;border-radius:9px;padding:4px"></div></div><p class="hint">검색 결과에서 직원을 선택하세요. 이후 정보 수정 화면에서 퇴사 예정일을 입력할 수 있습니다.</p><div class="modalactions"><button type="button" class="btn" id="scheduledCreateNew">신규 직원 먼저 등록</button><button type="button" class="btn" onclick="closeModal()">취소</button><button type="button" class="btn primary" id="scheduledNext">다음</button></div>`);
+  const search=document.getElementById('scheduledEmployeeSearch');
+  const result=document.getElementById('scheduledEmployeeResults');
+  const selected=document.getElementById('scheduledEmployeeSelected');
+  const hidden=document.getElementById('scheduledEmployee');
+  const caption=e=>`${e.name||''} (${e.employee_no||''}) · ${e.corporation||''} / ${e.department||''}`;
+  function showResults(){
+   const query=search.value.trim().toLocaleLowerCase('ko');
+   const found=people.filter(e=>String(e.name||'').toLocaleLowerCase('ko').includes(query)||String(e.employee_no||'').toLowerCase().includes(query)).slice(0,20);
+   result.replaceChildren();
+   for(const e of found){
+    const btn=document.createElement('button');btn.type='button';btn.setAttribute('role','option');
+    btn.style.cssText='display:block;width:100%;padding:10px 12px;text-align:left;border:0;border-bottom:1px solid #e2e8f0;background:transparent;cursor:pointer;color:#0f172a';
+    btn.textContent=caption(e);btn.addEventListener('click',()=>{hidden.value=String(e.id);selected.textContent='선택 직원: '+caption(e);search.value=String(e.name||'');result.replaceChildren();});result.appendChild(btn);
+   }
+   if(!found.length){const msg=document.createElement('div');msg.textContent='검색 결과가 없습니다.';msg.style.padding='10px';result.appendChild(msg);}
+  }
+  search.addEventListener('input',()=>{hidden.value='';selected.textContent='선택된 직원이 없습니다.';if(!search.isComposing)showResults();});
+  search.addEventListener('compositionend',showResults);
+  search.addEventListener('keydown',ev=>{if(ev.key==='Enter'&&!ev.isComposing){ev.preventDefault();const first=result.querySelector('button');if(first)first.click();}});
+  showResults();search.focus();
+  document.getElementById('scheduledNext').onclick=()=>{const id=hidden.value;if(!id){alert('검색 결과에서 퇴사 예정 직원을 선택하세요.');search.focus();return;}scheduleEditor(id)};
   document.getElementById('scheduledCreateNew').onclick=()=>{closeModal();openEmployee();alert('신규 직원 저장 후 퇴사자 명단에서 [퇴사 예정 등록]을 다시 선택해 주세요.');};
  }
  function scheduleEditor(id){const e=(db.employees||[]).find(x=>String(x.id)===String(id));if(!e)return alert('직원을 찾지 못했습니다.');openEmployee(e.id);const content=document.querySelector('#modalBody .formgrid');if(!content)return;const section=document.createElement('div');section.style.cssText='grid-column:1/-1;border:1px solid #cbd5e1;border-radius:10px;padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px';section.innerHTML=`<label>퇴사 예정일 *<input id="scheduledExitDate" type="date" value="${esc(e.scheduled_exit_date||'')}" min="${localDay()}" required></label><label>퇴사사유<input id="scheduledExitReason" type="text" value="${esc(e.scheduled_exit_reason||e.exit_reason||'')}" placeholder="퇴사사유 입력"></label><div class="hint" style="grid-column:1/-1">퇴사 예정일 당일에는 재직 상태를 유지하고, 다음 날 자동으로 퇴사 처리합니다.</div>`;content.appendChild(section);
