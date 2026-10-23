@@ -1121,4 +1121,49 @@ document.addEventListener('change',ev=>{
  });
 })();
 </script>
+<script>
+/* Scheduled departures: preserve employee records; do not double-register people. */
+(function(){
+ const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
+ const localDay=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+ const pending=()=>((db.employees||[]).filter(e=>e.status!=='퇴사'&&validDate(e.scheduled_exit_date)&&e.scheduled_exit_date>=localDay())).sort((a,b)=>a.scheduled_exit_date.localeCompare(b.scheduled_exit_date)||String(a.name||'').localeCompare(String(b.name||''),'ko'));
+ const prevRender=render;
+ function pendingPanel(){
+  const list=pending();
+  return `<section class="panel"><div class="report-head" style="flex-wrap:wrap"><h2>퇴사 예정자 · ${list.length}명</h2><div class="toolbar"><button class="btn primary" id="newExitSchedule">+ 퇴사 예정 등록</button></div></div><p class="hint">기존 직원 선택 후 퇴사 예정일을 설정합니다. 예정일 당일까지는 현재 인원에 포함되고, 다음 날부터 퇴사자로 처리됩니다.</p><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서</th><th>입사일</th><th>퇴사 예정일</th><th>퇴사사유</th><th>관리</th></tr></thead><tbody>${list.map(e=>`<tr><td>${esc(e.employee_no)}</td><td>${esc(e.name)}</td><td>${esc(e.corporation)}</td><td>${esc(e.headquarters)}</td><td>${esc(e.department)}</td><td>${esc(e.hire_date)}</td><td>${esc(e.scheduled_exit_date)}</td><td>${esc(e.scheduled_exit_reason||'')}</td><td><button type="button" class="btn tiny" data-schedule-edit="${esc(e.id)}">예정 수정</button> <button type="button" class="btn tiny" data-schedule-cancel="${esc(e.id)}">예정 취소</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">등록된 퇴사 예정자가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+ }
+ render=function(){prevRender();if(view==='exits'&&window.__hrCloudConnected?.()){const root=document.getElementById('content');if(root){root.insertAdjacentHTML('afterbegin',pendingPanel());}}};
+ function selector(){
+  const people=(db.employees||[]).filter(e=>e.status!=='퇴사').sort((a,b)=>String(a.name||'').localeCompare(String(b.name||''),'ko'));
+  modal('퇴사 예정자 등록',`<div class="formgrid"><label class="wide">대상 직원 선택<select id="scheduledEmployee"><option value="">직원을 선택하세요</option>${people.map(e=>`<option value="${esc(e.id)}">${esc(e.name)} (${esc(e.employee_no)}) · ${esc(e.corporation)} / ${esc(e.department)}</option>`).join('')}</select></label></div><p class="hint">선택한 직원의 정보 수정 화면에서 신규인원 등록과 동일한 인사 항목을 확인하고 예정일을 입력할 수 있습니다.</p><div class="modalactions"><button type="button" class="btn" id="scheduledCreateNew">신규 직원 먼저 등록</button><button type="button" class="btn" onclick="closeModal()">취소</button><button type="button" class="btn primary" id="scheduledNext">다음</button></div>`);
+  document.getElementById('scheduledNext').onclick=()=>{const id=document.getElementById('scheduledEmployee').value;if(!id){alert('퇴사 예정 직원을 선택하세요.');return;}scheduleEditor(id)};
+  document.getElementById('scheduledCreateNew').onclick=()=>{closeModal();openEmployee();alert('신규 직원 저장 후 퇴사자 명단에서 [퇴사 예정 등록]을 다시 선택해 주세요.');};
+ }
+ function scheduleEditor(id){const e=(db.employees||[]).find(x=>String(x.id)===String(id));if(!e)return alert('직원을 찾지 못했습니다.');openEmployee(e.id);const content=document.querySelector('#modalBody .formgrid');if(!content)return;const section=document.createElement('div');section.style.cssText='grid-column:1/-1;border:1px solid #cbd5e1;border-radius:10px;padding:14px;display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px';section.innerHTML=`<label>퇴사 예정일 *<input id="scheduledExitDate" type="date" value="${esc(e.scheduled_exit_date||'')}" min="${localDay()}" required></label><label>퇴사사유<input id="scheduledExitReason" type="text" value="${esc(e.scheduled_exit_reason||e.exit_reason||'')}" placeholder="퇴사사유 입력"></label><div class="hint" style="grid-column:1/-1">퇴사 예정일 당일에는 재직 상태를 유지하고, 다음 날 자동으로 퇴사 처리합니다.</div>`;content.appendChild(section);
+  const st=document.getElementById('eStatus');if(st){st.value=e.status;st.disabled=true;}
+  window.__scheduledEditingId=String(e.id);
+ }
+ const prevSave=saveEmployee;
+ saveEmployee=function(id){const scheduled=document.getElementById('scheduledExitDate');if(!scheduled)return prevSave(id);
+  const date=scheduled.value,reason=document.getElementById('scheduledExitReason')?.value.trim()||'';
+  if(!validDate(date)||date<localDay()){alert('오늘 이후의 퇴사 예정일을 입력하세요.');scheduled.focus();return;}
+  const e=(db.employees||[]).find(x=>String(x.id)===String(id));if(!e)return alert('기존 직원을 선택해 주세요.');
+  const n=document.getElementById('eNo')?.value.trim();if(!n||!document.getElementById('eName')?.value.trim()){alert('사번과 성명을 확인하세요.');return;}
+  // Save schedule along with normal employee fields, using the current shared DB data structure.
+  const oldDate=e.scheduled_exit_date||'';const oldReason=e.scheduled_exit_reason||'';
+  e.scheduled_exit_date=date;e.scheduled_exit_reason=reason;
+  const event=db.history||[];
+  if(oldDate!==date||oldReason!==reason)event.unshift({employee_id:e.id,event_date:localDay(),event_type:'퇴사예정',title:'퇴사 예정 '+(oldDate?'변경':'등록'),description:`${date} / ${reason||'사유 미입력'}`,department:e.department,grade:e.grade});
+  const oldModal=document.getElementById('modalWrap')?.classList.contains('open');
+  prevSave(id);
+  // Earlier employee-save layers may produce their own asynchronous shared saves.
+  // Make the scheduled values explicit in a final synced revision.
+  if(oldModal&&!document.getElementById('modalWrap')?.classList.contains('open')){save();render();}
+ };
+ document.addEventListener('click',ev=>{const add=ev.target.closest('#newExitSchedule');if(add){selector();return;}
+  const edit=ev.target.closest('[data-schedule-edit]');if(edit){scheduleEditor(edit.dataset.scheduleEdit);return;}
+  const cancel=ev.target.closest('[data-schedule-cancel]');if(cancel){const e=(db.employees||[]).find(x=>String(x.id)===cancel.dataset.scheduleCancel);if(!e)return;if(!confirm(`${e.name}님의 퇴사 예정 등록을 취소하시겠습니까?`))return;delete e.scheduled_exit_date;delete e.scheduled_exit_reason;commit('퇴사 예정 취소',e.employee_no+' '+e.name);}
+ });
+})();
+</script>
 </body></html>
