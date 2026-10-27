@@ -1387,4 +1387,44 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  },true);
 })();
 </script>
+<script>
+/* 생년월일 기반 만 나이 자동 계산 (기존 연령은 생년월일이 없는 직원에게만 사용) */
+(function(){
+ function calcAge(birth){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(birth||'')))return null;
+  const [y,m,d]=birth.split('-').map(Number);
+  const dob=new Date(y,m-1,d);
+  if(dob.getFullYear()!==y||dob.getMonth()!==m-1||dob.getDate()!==d)return null;
+  const now=new Date();
+  let age=now.getFullYear()-y;
+  if(now.getMonth()+1<m||(now.getMonth()+1===m&&now.getDate()<d))age--;
+  return age>=0&&age<=125?age:null;
+ }
+ const previousDisplayAge=displayAge;
+ displayAge=function(employee){
+  const age=calcAge(employeeBirthDate(employee));
+  return age===null?previousDisplayAge(employee):age;
+ };
+ function syncAge(){
+  const birth=document.getElementById('eBirth');
+  const age=document.getElementById('eAge');
+  if(!birth||!age)return;
+  const computed=calcAge(birth.value);
+  if(computed!==null){age.value=String(computed);age.readOnly=true;age.title='생년월일을 기준으로 자동 계산된 만 나이';}
+  else{age.readOnly=false;age.title='생년월일이 없는 경우 직접 입력할 수 있습니다.';}
+ }
+ const previousOpenEmployee=openEmployee;
+ openEmployee=function(...args){
+  const result=previousOpenEmployee(...args);
+  syncAge();
+  const hint=document.querySelector('#modalBody .hint');
+  if(hint)hint.innerHTML=hint.innerHTML.replace(/연령은 입력한 해를 기준으로 매년 1월 1일 \+1세 표시됩니다\. 생일 기준 만 나이는 아닙니다\./g,'생년월일이 있으면 오늘 날짜 기준 만 나이를 자동 계산합니다.');
+  return result;
+ };
+ document.addEventListener('input',function(event){if(event.target&&event.target.id==='eBirth')syncAge();});
+ document.addEventListener('change',function(event){if(event.target&&event.target.id==='eBirth')syncAge();});
+ const previousSaveEmployee=saveEmployee;
+ saveEmployee=function(...args){syncAge();return previousSaveEmployee(...args);};
+})();
+</script>
 </body></html>
