@@ -1449,13 +1449,25 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
   dates.style.cssText='grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;width:100%;min-width:0';
   dates.innerHTML=`<label id="hrLeaveEndWrap" style="display:none;flex-direction:column;gap:6px;min-width:0">휴직 종료일 <span style="font-size:12px;color:#c2410c">*</span><input type="date" id="eLeaveEnd" style="width:100%;min-width:0;box-sizing:border-box"></label><label id="hrAccidentStartWrap" style="display:none;flex-direction:column;gap:6px;min-width:0">산재 시작일 <span style="font-size:12px;color:#c2410c">*</span><input type="date" id="eAccidentStart" style="width:100%;min-width:0;box-sizing:border-box"></label><label id="hrAccidentEndWrap" style="display:none;flex-direction:column;gap:6px;min-width:0">산재 종료일 <span style="font-size:12px;color:#c2410c">*</span><input type="date" id="eAccidentEnd" style="width:100%;min-width:0;box-sizing:border-box"></label>`;
   row.insertAdjacentElement('afterend',dates);
+  // Keep the general leave start and end dates side-by-side in the same grid.
+  const leaveEndWrap=document.getElementById('hrLeaveEndWrap');
+  if(leaveLabel && leaveEndWrap){
+   leaveLabel.insertAdjacentElement('afterend',leaveEndWrap);
+   row.style.gridTemplateColumns='repeat(2,minmax(0,1fr))';
+   for(const field of [leaveLabel,leaveEndWrap]){
+    field.style.minWidth='0';field.style.width='100%';field.style.maxWidth='none';
+    field.style.display='flex';field.style.flexDirection='column';field.style.gap='7px';
+    const input=field.querySelector('input');
+    if(input){input.style.width='100%';input.style.maxWidth='100%';input.style.boxSizing='border-box';}
+   }
+  }
   document.getElementById('eLeaveEnd').value=emp?.leave_end_date||'';
   document.getElementById('eAccidentStart').value=emp?.industrial_accident_start_date||'';
   document.getElementById('eAccidentEnd').value=emp?.industrial_accident_end_date||'';
   if(leaveStart && emp?.leave_start_date && !leaveStart.value)leaveStart.value=emp.leave_start_date;
   function refresh(){
    const st=status.value;
-   dates.style.display=(st==='휴직'||st==='산재')?'grid':'none';
+   dates.style.display=st==='산재'?'grid':'none';
    for(const [label,on] of [['hrLeaveEndWrap',st==='휴직'],['hrAccidentStartWrap',st==='산재'],['hrAccidentEndWrap',st==='산재']]){
     const el=document.getElementById(label);if(el)el.style.display=on?'flex':'none';
    }
