@@ -515,7 +515,7 @@ employeesView=function(){
  return `<section class="panel"><div class="toolbar"><input id="employeeSearch" placeholder="성명, 사번, 부서 검색" value="${esc(search)}" style="min-width:210px">${select('fCorp',CORPS.concat(unique('corporation').filter(c=>!CORPS.includes(c))),filters.corporation,'전체 법인')}${select('fDept',depts,filters.department,'전체 부서')}${select('fStatus',['재직','휴직','파견','대기','산재','육아휴직','퇴사'],filters.status,'전체 상태')}<button class="btn" onclick="resetFilters()">필터 초기화</button><button class="btn primary" onclick="openEmployee()">+ 신규 인원 등록</button></div>
  <div class="employee-filter-grid">${optionsHtml}</div>
  <div class="summaryline" style="gap:12px;flex-wrap:wrap"><span class="muted">조회 <b>${fmt(matched.length)}</b>명 / 전체 ${fmt(db.employees.length)}명 · 체크 <b id="empCheckedCount">${empSelected.size}</b>명</span><div style="display:flex;flex-wrap:wrap;gap:6px"><button class="btn tiny" id="empSelectFiltered">조회 결과 전체 선택</button><button class="btn tiny" id="empClearSelection">선택 해제</button><button class="btn primary" id="empOpenMassEdit">선택 인원 일괄 수정</button></div></div>
- <div class="tablewrap"><table><thead><tr><th><input type="checkbox" id="empSelectShown" ${allVisible?'checked':''} title="현재 조회된 인원 전체 선택"></th><th>사번</th><th>성명</th><th>생년월일</th><th>법인</th><th>본부 / 부서</th><th>직위</th><th>직급</th><th>성별</th><th>연령</th><th>입사일</th><th>학력</th><th>노조</th><th>현장관리자</th><th>상태</th><th>관리</th></tr></thead><tbody>${shown.map(e=>`<tr><td><input type="checkbox" class="empRowCheck" value="${esc(e.id)}" ${empSelected.has(String(e.id))?'checked':''}></td><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td class="employee-birth-date">${esc(employeeBirthDate(e))}</td><td>${esc(e.corporation)}</td><td>${esc(orgLabel(e.headquarters))}<br>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${esc(displayAge(e))}</td><td>${esc(e.hire_date)}</td><td>${esc(e.education)}</td><td>${esc(e.union_status||'미확인')}</td><td>${esc(e.field_leader_role||'미지정')}</td><td>${esc(e.status)}</td><td><button type="button" class="btn tiny" data-employee-edit="${esc(String(e.id))}">수정</button> <button class="btn tiny" onclick="openPersonal(${hrEmployeeIdArg(e.id)})">연혁</button></td></tr>`).join('')||'<tr><td colspan="16" class="empty">조건에 해당하는 인원이 없습니다.</td></tr>'}</tbody></table></div>
+ <div class="tablewrap"><table><thead><tr><th><input type="checkbox" id="empSelectShown" ${allVisible?'checked':''} title="현재 조회된 인원 전체 선택"></th><th>사번</th><th>성명</th><th>생년월일</th><th>법인</th><th>본부 / 부서</th><th>직위</th><th>직급</th><th>성별</th><th>연령</th><th>입사일</th><th>학력</th><th>노조</th><th>현장관리자</th><th>상태</th><th>관리</th></tr></thead><tbody>${shown.map(e=>`<tr><td><input type="checkbox" class="empRowCheck" value="${esc(e.id)}" ${empSelected.has(String(e.id))?'checked':''}></td><td>${esc(e.employee_no)}</td><td><button type="button" class="hr-name-link" data-employee-detail="${esc(String(e.id))}" title="직원 상세정보 보기">${esc(e.name)}</button></td><td class="employee-birth-date">${esc(employeeBirthDate(e))}</td><td>${esc(e.corporation)}</td><td>${esc(orgLabel(e.headquarters))}<br>${esc(e.department)}</td><td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${esc(displayAge(e))}</td><td>${esc(e.hire_date)}</td><td>${esc(e.education)}</td><td>${esc(e.union_status||'미확인')}</td><td>${esc(e.field_leader_role||'미지정')}</td><td>${esc(e.status)}</td><td><button type="button" class="btn tiny" data-employee-edit="${esc(String(e.id))}">수정</button> <button class="btn tiny" onclick="openPersonal(${hrEmployeeIdArg(e.id)})">연혁</button></td></tr>`).join('')||'<tr><td colspan="16" class="empty">조건에 해당하는 인원이 없습니다.</td></tr>'}</tbody></table></div>
  <p class="hint">선택한 인원은 필터를 변경해도 유지됩니다. 일괄 수정 전 선택 인원과 변경 항목을 반드시 확인하세요.</p></section>`;
 };
 // Preserve selection and search composition: never replace an input during IME composition.
@@ -1508,6 +1508,72 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
   }
   return result;
  };
+})();
+</script>
+<style>
+.hr-name-link{border:0;background:transparent;padding:3px 1px;font:inherit;font-weight:700;color:#1559a6;cursor:pointer;text-decoration:underline;text-underline-offset:3px;text-decoration-color:#a8bed9}
+.hr-name-link:hover,.hr-name-link:focus-visible{color:#0b3e80;text-decoration-color:currentColor;outline-offset:3px}
+.hr-detail-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:0 0 18px}
+.hr-detail-stat{padding:13px;border:1px solid #dae3ee;border-radius:10px;background:#f7faff}
+.hr-detail-stat small{display:block;color:#64748b;margin-bottom:5px}.hr-detail-stat strong{font-size:16px;overflow-wrap:anywhere}
+.hr-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.hr-detail-cell{border-bottom:1px solid #e8edf3;padding:8px 3px;min-width:0}
+.hr-detail-cell small{display:block;color:#64748b;margin-bottom:5px}.hr-detail-cell span{font-weight:600;overflow-wrap:anywhere}
+@media(max-width:580px){.hr-detail-summary{grid-template-columns:1fr}.hr-detail-grid{grid-template-columns:1fr}}
+</style>
+<script>
+/* 직원 이름 클릭: 기존 수정 함수와 완전히 분리된 읽기 전용 조회 */
+(function(){
+ 'use strict';
+ function safe(v){return typeof esc==='function'?esc(v==null||v===''?'—':String(v)):String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+ function tenure(start,ref){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(start||'')))return '입사일 미등록';
+  const [y,m,d]=start.split('-').map(Number);
+  const first=new Date(y,m-1,d);
+  if(first.getFullYear()!==y||first.getMonth()!==m-1||first.getDate()!==d)return '입사일 확인 필요';
+  const end=ref||new Date();
+  if(first>end)return '입사 예정';
+  let months=(end.getFullYear()-y)*12+(end.getMonth()+1-m);
+  if(end.getDate()<d)months--;
+  months=Math.max(0,months);
+  return Math.floor(months/12)+'년 '+months%12+'개월';
+ }
+ function openDetail(id){
+  const e=(db.employees||[]).find(person=>String(person.id)===String(id));
+  if(!e){alert('직원 정보를 찾을 수 없습니다. 새로고침 후 다시 시도해 주세요.');return;}
+  const exit=e.status==='퇴사';
+  // 재직자는 현재일 기준. 퇴사자는 퇴사일을 사용하여 근속기간이 늘어나지 않도록 처리
+  const exitValue=String(e.exit_date||e.retirement_date||'');
+  const ref=exit&&/^\d{4}-\d{2}-\d{2}$/.test(exitValue)?new Date(exitValue+'T12:00:00'):new Date();
+  const items=[
+   ['사번',e.employee_no],['성명',e.name],['법인',e.corporation],['본부 / 실',e.headquarters],
+   ['부서 / 팀',e.department],['직위',e.position],['직급',e.grade],['성별',e.gender],
+   ['생년월일',typeof employeeBirthDate==='function'?employeeBirthDate(e):e.birth_date],
+   ['연령',typeof displayAge==='function'?displayAge(e):e.age],['입사일',e.hire_date],['현재 상태',e.status],
+   ['학력',e.education],['고용형태',e.employment_type],['급여 형태',e.salary_type],
+   ['현장관리자 직책',e.field_leader_role],
+   ['휴직 시작일',e.leave_start_date||e.leave_date],['휴직 종료일',e.leave_end_date],
+   ['산재 시작일',e.industrial_accident_start_date],['산재 종료일',e.industrial_accident_end_date],
+   ['육아휴직 시작일',e.parental_leave_start_date],['육아휴직 종료일',e.parental_leave_end_date],
+   ['퇴사일',exitValue],['퇴사 사유',e.exit_reason]
+  ];
+  const body='<div class="hr-detail-summary">'+
+   '<div class="hr-detail-stat"><small>성명</small><strong>'+safe(e.name)+'</strong></div>'+
+   '<div class="hr-detail-stat"><small>근속기간'+(exit?' (퇴사일 기준)':' (오늘 기준)')+'</small><strong>'+safe(tenure(e.hire_date,ref))+'</strong></div>'+
+   '<div class="hr-detail-stat"><small>현재 상태</small><strong>'+safe(e.status)+'</strong></div></div>'+
+   '<div class="hr-detail-grid">'+items.map(([label,value])=>'<div class="hr-detail-cell"><small>'+safe(label)+'</small><span>'+safe(value)+'</span></div>').join('')+'</div>'+
+   '<p class="hint" style="margin-top:16px">조회 전용 화면입니다. 정보 수정은 명부 오른쪽의 ‘수정’ 버튼을 이용하세요. 주민등록번호는 표시하지 않습니다.</p>'+
+   '<div class="modalactions"><button type="button" class="btn primary" id="hrCloseDetail">닫기</button></div>';
+  modal('직원 상세정보 · 조회 전용',body);
+  document.getElementById('hrCloseDetail')?.addEventListener('click',closeModal);
+ }
+ document.addEventListener('click',function(event){
+  const node=event.target.closest('[data-employee-detail]');
+  if(!node)return;
+  event.preventDefault();
+  try{openDetail(node.getAttribute('data-employee-detail'));}
+  catch(error){console.error('직원 상세정보 조회 오류',error);alert('직원 상세정보를 표시하지 못했습니다: '+(error.message||error));}
+ });
 })();
 </script>
 </body></html>
