@@ -1671,4 +1671,80 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  document.addEventListener('click',ev=>{if(ev.target.closest('#returnToDashboard')){ev.preventDefault();setView('dashboard');}});
 })();
 </script>
+
+<style id="navFoldersStyle">
+.sidebar .navs{display:flex;flex-direction:column;align-items:stretch;gap:3px}
+.sidebar .nav-folder{width:100%;flex:none;min-width:0}
+.sidebar .folder-head{width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:transparent;color:#bdcde8;border:0;border-radius:9px;padding:12px 13px;font:inherit;font-weight:700;text-align:left;cursor:pointer}
+.sidebar .folder-head:hover,.sidebar .folder-head[aria-expanded="true"]{background:#203556;color:#fff}
+.sidebar .folder-head .folder-chevron{font-size:12px;transition:transform .15s;opacity:.8}
+.sidebar .folder-head[aria-expanded="true"] .folder-chevron{transform:rotate(90deg)}
+.sidebar .folder-items{padding:2px 0 6px 12px;display:flex;flex-direction:column;gap:1px}
+.sidebar .folder-items[hidden]{display:none!important}
+.sidebar .folder-items .nav{padding:10px 10px 10px 14px;font-size:13px;margin:1px 0;white-space:normal;line-height:1.3;flex-shrink:0}
+.sidebar .folder-items .nav.active{box-shadow:inset 3px 0 0 #80acff}
+.sidebar .navs>.nav{flex-shrink:0}
+@media(max-width:720px){.sidebar .navs{display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;max-height:65vh}.sidebar .folder-items{padding-left:10px}.sidebar .folder-items .nav{white-space:normal}.sidebar .folder-head{white-space:normal}}
+</style>
+<script id="navFoldersScript">
+/* Sidebar folder organization. Reuses existing menu buttons and their handlers; no data changes. */
+(function(){
+ 'use strict';
+ const sidebar=document.querySelector('.sidebar');
+ const navs=sidebar?.querySelector('.navs');
+ if(!sidebar||!navs||navs.dataset.folderized==='yes')return;
+ const plan=[
+  {title:'인원관리',icon:'▣',items:[['employees','생산직'],['recruitment','채용진행관리'],['forecast','정년예정자'],['bulk','일괄 인사발령'],['history','개인별 연혁']]},
+  {title:'명부/현황',icon:'▣',items:[['organization','부서별 · 성별'],['hires','입사자'],['exits','퇴사자'],['conversion','정규직 전환 대상자'],['union','노동조합'],['leaders','현장관리자']]},
+  {title:'OJT 관리',icon:'▣',items:[['interviews','면담기록'],['ojt','OJT 계획 및 이수']]},
+  {title:'사업계획인원',icon:'▣',items:[['plans','사업계획 정원 · TO'],['master','기준정보 관리']]},
+  {title:'시스템 관리',icon:'▣',items:[['audit','변경 기록'],['backup','저장 · 백업'],['cloud','3인 공유 설정']]}
+ ];
+ // Some versions used a different internal name for the same page.
+ const aliases={leaders:['leader','supervisors','managers','siteleaders'],conversion:['conversions'],interviews:['interview'],hires:['hiresList']};
+ const allButtons=Array.from(sidebar.querySelectorAll('button.nav[data-view]'));
+ const byView=new Map(allButtons.map(b=>[b.dataset.view,b]));
+ const dashboard=byView.get('dashboard');
+ if(!dashboard)return;
+ navs.dataset.folderized='yes';
+ dashboard.textContent='▣ 대시보드';
+ navs.appendChild(dashboard);
+ for(const item of plan){
+   const group=document.createElement('div');group.className='nav-folder';
+   const head=document.createElement('button');head.type='button';head.className='folder-head';
+   head.setAttribute('aria-expanded','false');head.innerHTML='<span>'+item.icon+' '+item.title+'</span><span class="folder-chevron" aria-hidden="true">▸</span>';
+   const contents=document.createElement('div');contents.className='folder-items';contents.hidden=true;
+   for(const [id,label] of item.items){
+     const btn=byView.get(id)||aliases[id]?.map(k=>byView.get(k)).find(Boolean);
+     if(!btn)continue;
+     btn.textContent=label;contents.appendChild(btn);
+   }
+   if(!contents.children.length)continue;
+   group.append(head,contents);navs.appendChild(group);
+   head.addEventListener('click',()=>{
+     const opening=contents.hidden;
+     for(const other of navs.querySelectorAll('.folder-items'))other.hidden=true;
+     for(const other of navs.querySelectorAll('.folder-head'))other.setAttribute('aria-expanded','false');
+     contents.hidden=!opening;head.setAttribute('aria-expanded',String(opening));
+   });
+ }
+ // Retain any menus from older/newer builds, rather than silently hiding them.
+ const left=allButtons.filter(b=>b!==dashboard&&!b.closest('.folder-items'));
+ if(left.length){
+   const sys=Array.from(navs.querySelectorAll('.nav-folder')).find(g=>g.querySelector('.folder-head')?.textContent.includes('시스템 관리'));
+   const target=sys?.querySelector('.folder-items');
+   for(const b of left)(target||navs).appendChild(b);
+ }
+ // Expand the active group and keep selected items visible.
+ function sync(){
+   let active=navs.querySelector('.folder-items .nav.active');
+   if(!active&&typeof view!=='undefined')active=navs.querySelector('.folder-items .nav[data-view="'+String(view).replace(/[^a-z-]/g,'')+'"]');
+   if(!active)return;
+   const container=active.closest('.folder-items');
+   if(container){container.hidden=false;container.parentElement.querySelector('.folder-head')?.setAttribute('aria-expanded','true');}
+ }
+ navs.addEventListener('click',ev=>{if(ev.target.closest('button.nav'))queueMicrotask(sync)});
+ sync();
+})();
+</script>
 </body></html>
