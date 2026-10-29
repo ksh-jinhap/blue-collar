@@ -703,7 +703,8 @@ function unionStats(){
  const isMember=e=>e.union_status==='가입';
  const rows=(key,values)=>values.map(v=>{const es=active.filter(e=>String(e[key]||'미지정')===v);const n=es.filter(isMember).length;return {label:v,total:es.length,members:n,rate:es.length? (n/es.length*100).toFixed(1)+'%':'-'}});
  const corps=[...UNION_CORPS,...new Set(active.map(e=>e.corporation||'미지정').filter(x=>!UNION_CORPS.includes(x)))];
- const positions=[...new Set(active.map(e=>e.position||'미지정'))].sort((a,b)=>a.localeCompare(b,'ko'));
+ const positionOrder=['직장','부직장','주임','사원(생산)','사원','촉탁직','외국인','계약직'];
+ const positions=[...new Set(active.map(e=>e.position||'미지정'))].sort((a,b)=>{const ai=positionOrder.indexOf(a),bi=positionOrder.indexOf(b);return (ai<0?positionOrder.length:ai)-(bi<0?positionOrder.length:bi)||String(a).localeCompare(String(b),'ko');});
  return {active,corp:rows('corporation',corps),position:rows('position',positions),prodMember:active.filter(isMember).length,officeCount,total:active.length};
 }
 function unionStatTable(title,rows){const all=rows.reduce((a,r)=>({total:a.total+r.total,members:a.members+r.members}),{total:0,members:0});return `<section class="panel"><h2>${title}</h2><div class="tablewrap"><table><thead><tr><th>구분</th><th class="right">대상 근로자</th><th class="right">가입 조합원</th><th class="right">가입률</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${esc(r.label)}</td><td class="right">${fmt(r.total)}</td><td class="right">${fmt(r.members)}</td><td class="right">${r.rate}</td></tr>`).join('')}<tr style="font-weight:700;background:#f1f5f9"><td>생산직 합계</td><td class="right">${fmt(all.total)}</td><td class="right">${fmt(all.members)}</td><td class="right">${all.total?(100*all.members/all.total).toFixed(1)+'%':'-'}</td></tr></tbody></table></div></section>`}
@@ -1166,7 +1167,7 @@ document.addEventListener('change',ev=>{
   return reportsToolbar('부서별 · 성별')+banner(c.s)+`<section class="panel"><div class="toolbar"><label>법인 <select id="monthlyCorp"><option value="">전체 법인</option>${['진합','제이앤드에프','지노스','진우정공'].map(v=>`<option ${corp===v?'selected':''}>${v}</option>`).join('')}</select></label></div><div class="tablewrap"><table><thead><tr><th>법인</th><th>본부/실</th><th>부서</th><th>총인원</th><th>남</th><th>여</th></tr></thead><tbody>${vals.map(x=>`<tr>${[x.corporation,x.headquarters,x.department,x.total,x.male,x.female].map(v=>`<td>${safe(v)}</td>`).join('')}</tr>`).join('')||'<tr><td colspan="6">해당 인원 없음</td></tr>'}</tbody></table></div></section>`;
  }
  function monthlyUnion(){const c=ctx();if(!c.records)return reportsToolbar('노조 명부')+banner(c.s)+noData('노조 현황');const active=c.records.filter(e=>e.status!=='퇴사'),members=active.filter(e=>e.union_status==='가입');const office=c.office;
-  const build=(field,title)=>{const keys=[...new Set(active.map(e=>e[field]||'미지정'))].sort((a,b)=>field==='corporation'?['진합','제이앤드에프','지노스','진우정공'].indexOf(a)-['진합','제이앤드에프','지노스','진우정공'].indexOf(b):String(a).localeCompare(String(b),'ko'));return `<section class="panel"><h2>${title}</h2><div class="tablewrap"><table><thead><tr><th>구분</th><th>대상 근로자</th><th>가입 조합원</th><th>가입률</th></tr></thead><tbody>${keys.map(k=>{const all=active.filter(e=>(e[field]||'미지정')===k),joined=all.filter(e=>e.union_status==='가입').length;return `<tr><td>${safe(k)}</td><td>${all.length}</td><td>${joined}</td><td>${all.length?(100*joined/all.length).toFixed(1)+'%':'-'}</td></tr>`}).join('')}</tbody></table></div></section>`};
+  const build=(field,title)=>{const keys=[...new Set(active.map(e=>e[field]||'미지정'))].sort((a,b)=>field==='corporation'?['진합','제이앤드에프','지노스','진우정공'].indexOf(a)-['진합','제이앤드에프','지노스','진우정공'].indexOf(b):field==='position'?((v)=>{const order=['직장','부직장','주임','사원(생산)','사원','촉탁직','외국인','계약직'];const ai=order.indexOf(a),bi=order.indexOf(b);return (ai<0?order.length:ai)-(bi<0?order.length:bi)||String(a).localeCompare(String(b),'ko');})():String(a).localeCompare(String(b),'ko'));return `<section class="panel"><h2>${title}</h2><div class="tablewrap"><table><thead><tr><th>구분</th><th>대상 근로자</th><th>가입 조합원</th><th>가입률</th></tr></thead><tbody>${keys.map(k=>{const all=active.filter(e=>(e[field]||'미지정')===k),joined=all.filter(e=>e.union_status==='가입').length;return `<tr><td>${safe(k)}</td><td>${all.length}</td><td>${joined}</td><td>${all.length?(100*joined/all.length).toFixed(1)+'%':'-'}</td></tr>`}).join('')}</tbody></table></div></section>`};
   const roster=members.slice().sort(orgsort);
   const officeMembers=c.now?(db.office_union_members||[]):(Array.isArray(c.s?.office_union_members)?c.s.office_union_members:[]);
   const memberTable=`<section class="panel"><h2>생산직 조합원 명단 · ${roster.length}명</h2><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서</th><th>직위</th><th>가입상태</th><th>관리</th></tr></thead><tbody>${roster.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.corporation)}</td><td>${safe(e.headquarters)}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>가입</td><td>${c.now?`<button class="btn tiny" data-union-edit="${safe(e.id)}">수정</button>`:'월말 기록'}</td></tr>`).join('')||'<tr><td colspan="8" class="empty">해당 월의 생산직 조합원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
@@ -1762,12 +1763,12 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  function counts(rows){
   const out={regular:0,contract:0,unknown:0,total:0};
   for(const e of rows){if(!active(e))continue;out.total++;
-   let type='';try{type=typeof employmentType==='function'?employmentType(e):e.employment_type;}catch(_){type=e.employment_type;}
-   if(type==='정규직')out.regular++;else if(type==='계약직')out.contract++;else out.unknown++;
+   const isContract=String(e.position??'').trim()==='계약직';
+   if(isContract)out.contract++;else out.regular++;
   }
   return out;
  }
- function badges(c){return '<div class="employment-split" aria-label="고용형태별 인원">'+
+ function badges(c){return '<div class="employment-split" aria-label="직위 기준 정규직·계약직 인원">'+
   '<span>정규직 '+c.regular.toLocaleString('ko-KR')+'명</span>'+
   '<span>계약직 '+c.contract.toLocaleString('ko-KR')+'명</span>'+
   (c.unknown?'<span class="unknown">미확인 '+c.unknown.toLocaleString('ko-KR')+'명</span>':'')+'</div>';}
