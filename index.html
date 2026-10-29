@@ -1748,4 +1748,57 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  sync();
 })();
 </script>
+
+<style id="employmentBreakdownStyle">
+.employment-split{display:flex;gap:7px;flex-wrap:wrap;margin-top:7px;font-size:12px;font-weight:600;line-height:1.7}
+.employment-split span{padding:2px 7px;border-radius:6px;background:rgba(36,99,235,.07);color:inherit}
+.employment-split .unknown{background:rgba(120,120,120,.11)}
+</style>
+<script id="employmentBreakdownScript">
+/* Read-only headcount breakdown. Never modifies or saves employee records. */
+(function(){
+ 'use strict';
+ function active(e){return e&&e.status!=='퇴사';}
+ function counts(rows){
+  const out={regular:0,contract:0,unknown:0,total:0};
+  for(const e of rows){if(!active(e))continue;out.total++;
+   let type='';try{type=typeof employmentType==='function'?employmentType(e):e.employment_type;}catch(_){type=e.employment_type;}
+   if(type==='정규직')out.regular++;else if(type==='계약직')out.contract++;else out.unknown++;
+  }
+  return out;
+ }
+ function badges(c){return '<div class="employment-split" aria-label="고용형태별 인원">'+
+  '<span>정규직 '+c.regular.toLocaleString('ko-KR')+'명</span>'+
+  '<span>계약직 '+c.contract.toLocaleString('ko-KR')+'명</span>'+
+  (c.unknown?'<span class="unknown">미확인 '+c.unknown.toLocaleString('ko-KR')+'명</span>':'')+'</div>';}
+ function annotateCard(html,labels,c){
+  if(!c)return html;
+  return html.replace(/<div class="card">[\s\S]*?<\/div>\s*<\/div>/g,block=>{
+    if(!labels.some(label=>block.includes('<div class="label">'+label+'</div>')))return block;
+    return block.replace(/(<div class="note">[\s\S]*?<\/div>)(\s*<\/div>)$/,(_,note,end)=>note+badges(c)+end);
+  });
+ }
+ function allEmployees(){return Array.isArray(db?.employees)?db.employees:[];}
+ function plannedEmployees(){
+  if(typeof plansFor!=='function'||typeof keyOf!=='function')return [];
+  const keys=new Set(plansFor(planYear).map(keyOf));
+  return allEmployees().filter(e=>keys.has(keyOf(e)));
+ }
+ const originalDashboard=dashboard;
+ dashboard=function(){const html=originalDashboard.apply(this,arguments);const now=new Date();const historical=typeof snapshotMonth==='function'&&typeof planMonth!=='undefined'&&(Number(planYear)!==now.getFullYear()||Number(planMonth)!==now.getMonth()+1)&&snapshotMonth(planYear,planMonth);if(historical)return html;return annotateCard(html,['현재 인원','현재 운영 인원','현재 운영인원'],counts(allEmployees()));};
+ const originalPlans=plansView;
+ plansView=function(){const html=originalPlans.apply(this,arguments);return annotateCard(html,['현재 운영 인원','현재 인원'],counts(plannedEmployees()));};
+ if(typeof executiveView==='function'){
+  const originalExecutive=executiveView;
+  executiveView=function(){
+   const html=originalExecutive.apply(this,arguments);
+   const now=new Date(),isCurrent=Number(planYear)===now.getFullYear()&&Number(planMonth)===now.getMonth()+1;
+   const snapshot=typeof snapshotMonth==='function'?snapshotMonth(planYear,planMonth):null;
+   // Historical headcount cannot reliably be separated without saved employment-type details.
+   if(!isCurrent||snapshot?.units)return html;
+   return annotateCard(html,['현재 운영인원','현재 운영','현재 인원'],counts(plannedEmployees()));
+  };
+ }
+})();
+</script>
 </body></html>
