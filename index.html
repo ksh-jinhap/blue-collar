@@ -1576,4 +1576,99 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  });
 })();
 </script>
+
+<style>
+.exec-section{margin-top:18px}.exec-section h2{margin-bottom:12px}.exec-kicker{font-size:12px;color:#64748b;margin:0 0 8px}.exec-report-actions{display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap}.exec-report-table th,.exec-report-table td{white-space:nowrap}.exec-report-table td:first-child{white-space:normal;min-width:130px}.exec-report-note{font-size:12px;color:#64748b;margin-top:10px}
+@media print{.sidebar,.top,.no-print{display:none!important}.main{padding:0!important}.exec-section{break-inside:avoid}}
+</style>
+<script>
+/* Executive report v2: a summary-only report linked from dashboard. No shared database migration. */
+(function(){
+ 'use strict';
+ const nav=document.querySelector('.navs [data-view="executive"]');
+ if(nav)nav.remove();
+ const previousDashboard=dashboard;
+ dashboard=function(){
+   const action='<div class="panel no-print" style="margin-bottom:16px"><div class="exec-report-actions"><div><b>경영진 보고서</b><div class="hint">인력 요약 · 공정별 정/현원 · 입퇴사 · 향후 계획 · 현장관리자 · 노동조합</div></div><button type="button" class="btn primary" id="openExecutiveFromDashboard">경영진 보고서 보기</button></div></div>';
+   return action+previousDashboard();
+ };
+ document.addEventListener('click',function(ev){
+   const button=ev.target.closest('#openExecutiveFromDashboard');
+   if(button){ev.preventDefault();setView('executive');}
+ });
+ names.executive=['경영진 보고서','생산직 인력 운영 핵심 현황을 6개 항목으로 요약합니다.'];
+ const safe=x=>esc(String(x??''));
+ const n=x=>{const v=typeof x==='number'?x:Number(String(x??'').replace(/,/g,'').trim());return Number.isFinite(v)?v:0};
+ const val=x=>Number.isFinite(x)?fmt(x):'—';
+ const rate=(a,b)=>b>0?(a/b*100).toFixed(1)+'%':'미산정';
+ const metric=(label,value,note,cl='')=>'<div class="card"><div class="label">'+safe(label)+'</div><div class="num '+cl+'">'+safe(value)+'</div><div class="note">'+safe(note)+'</div></div>';
+ const plansOf=y=>plansFor(y);
+ const monthly=(p,m)=>{
+   const raw=p?.months?.[m-1];
+   return n(raw===undefined||raw===null||raw===''?p.target:raw);
+ };
+ const monthsIn=(y,m)=>plansOf(y).reduce((sum,p)=>sum+monthly(p,m),0);
+ const table=(heads,rows,empty)=>'<div class="tablewrap"><table class="exec-report-table"><thead><tr>'+heads.map((h,i)=>'<th'+(i?' class="right"':'')+'>'+safe(h)+'</th>').join('')+'</tr></thead><tbody>'+(rows.length?rows.map(row=>'<tr>'+row.map((c,i)=>'<td'+(i?' class="right"':'')+'>'+safe(c)+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+heads.length+'" class="empty">'+safe(empty||'조회 자료 없음')+'</td></tr>')+'</tbody></table></div>';
+ const section=(title,body,note='')=>'<section class="panel exec-section"><h2>'+title+'</h2>'+body+(note?'<div class="exec-report-note">'+safe(note)+'</div>':'')+'</section>';
+ executiveView=function(){
+   const y=Number(planYear),m=Number(planMonth),current=new Date(),monthKey=String(y)+'-'+String(m).padStart(2,'0');
+   const nowKey=current.getFullYear()+'-'+String(current.getMonth()+1).padStart(2,'0');
+   const isCurrent=monthKey===nowKey;
+   const snap=typeof snapshotMonth==='function'?snapshotMonth(y,m):null;
+   const planRows=plansOf(y),target=monthsIn(y,m);
+   const active=(db.employees||[]).filter(e=>e.status!=='퇴사');
+   const recorded=snap&&snap.units&&typeof snap.units==='object'?snap.units:null;
+   const actualFor=p=>recorded?n(recorded[keyOf(p)]):isCurrent?unitCount(p):null;
+   const actual=recorded?planRows.reduce((s,p)=>s+actualFor(p),0):isCurrent?planRows.reduce((s,p)=>s+unitCount(p),0):null;
+   const shortage=actual===null?null:planRows.reduce((s,p)=>s+Math.max(0,monthly(p,m)-actualFor(p)),0);
+   const groups=new Map();
+   for(const p of planRows){
+     const key=[p.corporation||'미지정',p.headquarters||'미지정',p.department||'미지정'].join(' / ');
+     const k=key, g=groups.get(k)||{name:key,target:0,actual:actual===null?null:0};
+     g.target+=monthly(p,m);
+     if(actual!==null)g.actual+=actualFor(p);
+     groups.set(k,g);
+   }
+   const groupRows=[...groups.values()].sort((a,b)=>(b.target-(b.actual||0))-(a.target-(a.actual||0))).map(g=>[g.name,val(g.target),g.actual===null?'미기록':val(g.actual),g.actual===null?'—':val(g.target-g.actual),g.actual===null?'—':rate(g.actual,g.target)]);
+   const nextMonth=m===12?1:m+1,nextMonthYear=m===12?y+1:y,nextYear=y+1;
+   const nextMonthPlans=plansOf(nextMonthYear),nextYearPlans=plansOf(nextYear);
+   const annualBudget=nextYearPlans.length?nextYearPlans.reduce((s,p)=>s+n(p.target),0):null;
+   const planRowsFuture=[['다음 달',nextMonthYear+'년 '+nextMonth+'월',nextMonthPlans.length?val(monthsIn(nextMonthYear,nextMonth))+'명':'계획 미등록'],['다음 연도',nextYear+'년',annualBudget===null?'계획 미등록':val(annualBudget)+'명']];
+   const all=(db.employees||[]),hireInMonth=all.filter(e=>String(e.hire_date||'').slice(0,7)===monthKey).length;
+   const isExited=e=>e.status==='퇴사';
+   const exited=all.filter(isExited);
+   const exitOn=e=>String(e.exit_date||e.retirement_date||'').slice(0,10);
+   const monthExits=exited.filter(e=>exitOn(e).slice(0,7)===monthKey).length;
+   const yearExits=exited.filter(e=>exitOn(e).slice(0,4)===String(y)&&exitOn(e).slice(0,7)<=monthKey).length;
+   const historicalDetails=Array.isArray(snap?.employee_details)?snap.employee_details:null;
+   const historicalMonthHires=typeof snap?.hire_count==='number'?snap.hire_count:null;
+   const historicalMonthExits=typeof snap?.exit_count==='number'?snap.exit_count:null;
+   const hiresDisplay=isCurrent?hireInMonth:historicalMonthHires;
+   const exitsDisplay=isCurrent?monthExits:historicalMonthExits;
+   const hiresText=hiresDisplay===null?'미기록':val(hiresDisplay)+'명';
+   const exitsText=exitsDisplay===null?'미기록':val(exitsDisplay)+'명';
+   const yearlyText=isCurrent?val(yearExits)+'명':'기록 확인 필요';
+   const leaderNames=['그룹장','파트장','라인장'];
+   const leaderSource=isCurrent?active:historicalDetails?.filter(e=>e.status!=='퇴사');
+   const leaderCounts=leaderSource?leaderNames.map(role=>leaderSource.filter(e=>e.field_leader_role===role).length):null;
+   const membersSource=isCurrent?active:historicalDetails?.filter(e=>e.status!=='퇴사');
+   const enrolled=membersSource?membersSource.filter(e=>e.union_status==='가입').length:null;
+   const eligible=membersSource?membersSource.length:null;
+   const office=isCurrent?(Array.isArray(db.office_union_members)?db.office_union_members.length:0):n(snap?.office_union_count);
+   const officeKnown=isCurrent||snap?.office_union_count!=null;
+   const header='<div class="report-head panel"><div><div class="smallcaps">WORKFORCE · EXECUTIVE SUMMARY</div><h2>'+safe(y+'년 '+m+'월 인력 운영 보고')+'</h2><span class="muted">작성일 '+safe(today())+' · '+(recorded?'월말 확정 인원':isCurrent?'현재 운영인원':'월말 기록 없음')+'</span></div><div class="no-print"><button type="button" class="btn" id="returnToDashboard">대시보드로 돌아가기</button> <button type="button" class="btn primary" onclick="window.print()">인쇄 / PDF 저장</button></div></div>';
+   const summary='<div class="cards" style="grid-template-columns:repeat(4,minmax(0,1fr))">'+metric('계획 정원',val(target),'선택월 사업계획')+metric('현재 운영인원',actual===null?'미기록':val(actual),recorded?'월말 확정':isCurrent?'계획 등록 조직 기준':'월말 기록 없음')+metric('부족 TO',shortage===null?'미기록':val(shortage),'조직별 부족 합계','negative')+metric('충족률',actual===null?'미산정':rate(actual,target),'현재 운영 ÷ 계획 정원')+'</div>';
+   const body=[
+     section('01 · 인력 현황 요약',summary,'계획 미등록 조직의 운영 인원은 정원 충족률에 포함되지 않습니다. 계획 정원이 0명일 경우 충족률은 미산정으로 표시합니다.'),
+     section('02 · 공정별 정/현원 및 변동현황',table(['법인 / 본부 / 부서','계획 정원','운영인원','차이(계획-운영)','충족률'],groupRows,'해당 연도에 등록된 사업계획이 없습니다.'),'조직별 계획과 실제 운영을 비교합니다. 양수 차이는 부족, 음수 차이는 초과입니다.'),
+     section('03 · 입퇴사 현황','<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+metric('당월 입사자',hiresText,'입사일 기준')+metric('당월 퇴사자',exitsText,'퇴사일 기준')+metric('당해년도 누적 퇴사자',yearlyText,'연초~선택월 누적')+'</div>',isCurrent?'퇴사 예정자는 실제 퇴사 상태로 전환된 후 집계됩니다.':'과거 월은 확정된 입퇴사 건수가 확인되지 않으면 미기록으로 표시합니다.'),
+     section('04 · 향후 인력 운영 계획',table(['구분','기준 기간','사업계획 정원'],planRowsFuture),'다음 달은 해당 월의 등록 정원, 다음 연도는 다음 연도에 등록된 연간 기본 정원을 사용합니다. 실제 예상 인원을 임의로 추정하지 않습니다.'),
+     section('05 · 현장관리자 인원 현황',table(['직책','운영 인원'],leaderNames.map((r,i)=>[r,leaderCounts?val(leaderCounts[i])+'명':'미기록']).concat([['현장관리자 합계',leaderCounts?val(leaderCounts.reduce((s,v)=>s+v,0))+'명':'미기록']])),'그룹장·파트장·라인장 중 등록된 직책을 기준으로 중복 없이 집계합니다.'),
+     section('06 · 노동조합 인원 현황',table(['구분','인원'],[['생산직 노조 가입자',enrolled===null?'미기록':val(enrolled)+'명'],['생산직 운영 인원',eligible===null?'미기록':val(eligible)+'명'],['생산직 가입률',enrolled===null?'미산정':rate(enrolled,eligible)],['사무직 조합원',officeKnown?val(office)+'명':'미기록'],['전체 조합원',enrolled===null||!officeKnown?'미기록':val(enrolled+office)+'명']]),'노동조합 집계는 명단을 포함하지 않으며, 생산직은 가입 상태가 확인된 인원만 조합원으로 계산합니다.')
+   ];
+   return yearPicker()+header+body.join('');
+ };
+ document.addEventListener('click',ev=>{if(ev.target.closest('#returnToDashboard')){ev.preventDefault();setView('dashboard');}});
+})();
+</script>
 </body></html>
