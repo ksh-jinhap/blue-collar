@@ -294,7 +294,7 @@ async function login(){
  cfg={url:FIXED_URL,key:FIXED_KEY,user};try{localStorage.setItem(CONFIG_KEY,JSON.stringify({user}))}catch(e){}
  try{const r=await fetch(cfg.url+'/auth/v1/token?grant_type=password',{method:'POST',headers:{apikey:cfg.key,'Content-Type':'application/json'},body:JSON.stringify({email:user,password})});
  const data=await r.json();if(!r.ok||!data.access_token)throw Error(data.msg||data.error_description||'로그인 실패');
- session=data;conflict=false;dirty=false;await fetchLatest(true);if(rev===null)throw Error('공유 데이터 조회 권한을 확인하지 못했습니다.');start();view='dashboard';render();status();alert('공유 데이터에 연결했습니다.');
+ session=data;conflict=false;dirty=false;await fetchLatest(true);if(rev===null)throw Error('공유 데이터 조회 권한을 확인하지 못했습니다.');start();setView('dashboard');status();alert('공유 데이터에 연결했습니다.');
  }catch(e){session=null;rev=null;db=structuredClone(SEED);view='cloud';lastCloudError=e.message;render();alert('연결 실패: '+e.message)}
 }
 async function refreshAuth(){if(!session?.refresh_token)return;
@@ -1697,8 +1697,8 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
   {title:'인원관리',icon:'▣',items:[['employees','생산직'],['recruitment','채용진행관리'],['forecast','정년예정자'],['bulk','일괄 인사발령'],['history','개인별 연혁']]},
   {title:'명부/현황',icon:'▣',items:[['organization','부서별 · 성별'],['hires','입사자'],['exits','퇴사자'],['conversion','정규직 전환 대상자'],['union','노동조합'],['leaders','현장관리자']]},
   {title:'OJT 관리',icon:'▣',items:[['interviews','면담기록'],['ojt','OJT 계획 및 이수']]},
-  {title:'사업계획인원',icon:'▣',items:[['plans','사업계획 정원 · TO'],['master','기준정보 관리']]},
-  {title:'시스템 관리',icon:'▣',items:[['audit','변경 기록'],['backup','저장 · 백업'],['cloud','3인 공유 설정']]}
+  {title:'사업계획인원',icon:'▣',items:[['plans','사업계획 정원 · TO']]},
+  {title:'시스템 관리',icon:'▣',items:[['master','기준정보 관리'],['audit','변경 기록'],['backup','저장 · 백업'],['cloud','3인 공유 설정']]}
  ];
  // Some versions used a different internal name for the same page.
  const aliases={leaders:['leader','supervisors','managers','siteleaders'],conversion:['conversions'],interviews:['interview'],hires:['hiresList']};
@@ -1708,6 +1708,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  if(!dashboard)return;
  navs.dataset.folderized='yes';
  dashboard.textContent='▣ 대시보드';
+ dashboard.style.fontWeight='800';
  navs.appendChild(dashboard);
  for(const item of plan){
    const group=document.createElement('div');group.className='nav-folder';
