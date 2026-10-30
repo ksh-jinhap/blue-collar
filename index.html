@@ -1815,4 +1815,59 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  }
 })();
 </script>
+<script id="currentYearRetirementRoster">
+/* Current-year retirement candidate roster. Read-only; does not alter saved HR data. */
+(function(){
+ 'use strict';
+ const previousForecastView=forecastView;
+ function currentSeoulYear(){
+   return Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',year:'numeric'}).format(new Date()));
+ }
+ function retirementCandidate(e, yearValue, ageLimit){
+   if(!occupied(e))return null;
+   const birthday=typeof employeeBirthDate==='function'?employeeBirthDate(e):'';
+   const m=String(birthday||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+   if(m){
+     const y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
+     const at= y+ageLimit;
+     if(at!==yearValue)return null;
+     return {employee:e,date:`${at}-${m[2]}-${m[3]}`,basis:'생년월일 기준'};
+   }
+   const fromAge=retirementYear(e);
+   if(fromAge!==yearValue)return null;
+   return {employee:e,date:'확인 필요',basis:'연령자료 기준 추정'};
+ }
+ forecastView=function(){
+   const base=previousForecastView.apply(this,arguments);
+   const yearValue=currentSeoulYear();
+   const ageLimit=Number(db.settings?.retirementAge??60);
+   const limit=Number.isInteger(ageLimit)?ageLimit:60;
+   const list=(Array.isArray(db.employees)?db.employees:[])
+      .map(e=>retirementCandidate(e,yearValue,limit)).filter(Boolean)
+      .sort((a,b)=>((a.date==='확인 필요'?'9999':a.date).localeCompare(b.date==='확인 필요'?'9999':b.date))||
+        String(a.employee.corporation||'').localeCompare(String(b.employee.corporation||''),'ko')||
+        String(a.employee.name||'').localeCompare(String(b.employee.name||''),'ko'));
+   const rows=list.map(({employee:e,date,basis})=>`<tr>
+     <td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td>
+     <td>${esc(e.corporation)}</td><td>${esc(e.headquarters)}</td><td>${esc(e.department)}</td>
+     <td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(employeeBirthDate(e))}</td>
+     <td>${esc(date)}</td><td>${esc(basis)}</td>
+   </tr>`).join('');
+   const section=`<section class="panel" id="currentYearRetirementList">
+     <div class="toolbar" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
+       <h2 style="margin:0">${yearValue}년 정년 도래 예상자 명단</h2>
+       <span class="pill good">총 ${fmt(list.length)}명</span>
+     </div>
+     <div class="notice">기준: 현재 퇴사하지 않은 직원 중 만 ${limit}세 도달 연도가 ${yearValue}년인 직원. 생년월일이 있으면 만 ${limit}세 생일을 <b>예상 도래일</b>로 표시하고, 생년월일이 없는 경우 기존 연령 자료로 연도만 추정합니다. 실제 정년퇴직일은 취업규칙과 인사발령에 따라 다를 수 있습니다.</div>
+     <div class="tablewrap" style="max-height:460px;overflow:auto"><table><thead><tr>
+       <th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서/팀</th><th>직위</th><th>직급</th><th>생년월일</th><th>정년 도래 예상일</th><th>산정 기준</th>
+     </tr></thead><tbody>${rows||'<tr><td colspan="10" class="empty">올해 정년 도래 예상자가 없습니다.</td></tr>'}</tbody></table></div>
+   </section>`;
+   // The list is displayed immediately after the existing year picker / KPI cards.
+   const marker='<section class="panel">';
+   const idx=base.indexOf(marker);
+   return idx>=0?base.slice(0,idx)+section+base.slice(idx):section+base;
+ };
+})();
+</script>
 </body></html>
