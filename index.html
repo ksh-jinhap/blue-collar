@@ -1278,7 +1278,7 @@ const record=(type,value,corporation='',headquarters='',active=true)=>({type,val
 function derived(){const out=[];for(const [type,vals] of Object.entries(BASE)){for(const v of vals)out.push(record(type,v));}for(const x of coll()){
  for(const type of Object.keys(TYPES)){const v=String(x[type]||'').trim();if(!v)continue;out.push(record(type,v,type==='headquarters'||type==='department'?x.corporation||'':'',type==='department'?x.headquarters||'':''));}
 }return out;}
-function rows(){const actual=Array.isArray(db.reference_master)?db.reference_master:[];const explicit=new Map(actual.map(x=>[key(x),x]));const combined=new Map();for(const x of derived())if(!combined.has(key(x)))combined.set(key(x),x);for(const x of actual)combined.set(key(x),x);return [...combined.values()].filter(x=>x.deleted!==true);}
+function rows(){const actual=Array.isArray(db.reference_master)?db.reference_master:[];const combined=new Map();for(const x of derived())if(!combined.has(key(x)))combined.set(key(x),x);for(const x of actual){const k=key(x),prior=combined.get(k);if(prior?.deleted===true&&x.deleted!==true)continue;combined.set(k,x);}return [...combined.values()].filter(x=>x.deleted!==true);}
 function master(){if(!Array.isArray(db.reference_master))db.reference_master=[];return db.reference_master;}
 function candidates(type,corporation='',headquarters=''){const list=rows().filter(x=>x.type===type&&x.active!==false&&(!corporation||!['headquarters','department'].includes(type)||!x.corporation||x.corporation===corporation)&&(!headquarters||type!=='department'||!x.headquarters||x.headquarters===headquarters)).map(x=>x.value);return [...new Set(list)].sort((a,b)=>a.localeCompare(b,'ko'));}
 function actualUses(r){return coll().filter(x=>String(x[r.type]||'')===r.value&&(!r.corporation||x.corporation===r.corporation)&&(!r.headquarters||x.headquarters===r.headquarters)).length;}
@@ -1346,9 +1346,10 @@ document.addEventListener('click',e=>{if(view!=='master')return;const add=e.targ
  if(dependents.length){alert(`이 항목을 참조하는 하위 기준정보가 ${dependents.length}개 있어 삭제할 수 없습니다. 하위 항목을 먼저 정리하세요.`);return;}
  if(!confirm(`[${TYPES[r.type]}] ${r.value} 항목을 삭제하시겠습니까?\n삭제 후에도 기존 직원 및 과거 이력은 유지됩니다.`))return;
  // Tombstone: prevents entries derived from defaults or old records from reappearing.
- const arr=master(),idx=arr.findIndex(x=>key(x)===key(r));
- const deleted={...r,deleted:true,active:false};
- if(idx>=0)arr[idx]=deleted;else arr.push(deleted);
+ const arr=master(),deleted={...r,deleted:true,active:false},k=key(r);
+ // Consolidate duplicates: a later active copy must never resurrect a deleted item.
+ for(let i=arr.length-1;i>=0;i--)if(key(arr[i])===k)arr.splice(i,1);
+ arr.push(deleted);
  commit('기준정보 삭제',`${TYPES[r.type]} / ${r.value}`);return;
  }const toggle=e.target.closest('[data-master-toggle]');if(toggle){if(!window.__hrCloudConnected?.()){alert('공유 데이터 로그인 후 변경하세요.');return;}const r=visible()[Number(toggle.dataset.masterToggle)];if(!r)return;const use=actualUses(r);if(r.active!==false&&use>0&&!confirm(`현재 ${use}건에서 사용 중입니다. 기존 자료는 유지하고 신규 입력 후보에서만 제외할까요?`))return;const arr=master(),item=arr.find(x=>key(x)===key(r));if(item)item.active=r.active===false;else arr.push({...r,active:false});commit('기준정보 상태변경',`${TYPES[r.type]} / ${r.value}`);}});
 // Extend existing datalist inputs without replacing employee fields or historical values.
