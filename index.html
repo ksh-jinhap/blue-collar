@@ -1282,14 +1282,52 @@ function rows(){const actual=Array.isArray(db.reference_master)?db.reference_mas
 function master(){if(!Array.isArray(db.reference_master))db.reference_master=[];return db.reference_master;}
 function candidates(type,corporation='',headquarters=''){const list=rows().filter(x=>x.type===type&&x.active!==false&&(!corporation||!['headquarters','department'].includes(type)||!x.corporation||x.corporation===corporation)&&(!headquarters||type!=='department'||!x.headquarters||x.headquarters===headquarters)).map(x=>x.value);return [...new Set(list)].sort((a,b)=>a.localeCompare(b,'ko'));}
 function actualUses(r){return coll().filter(x=>String(x[r.type]||'')===r.value&&(!r.corporation||x.corporation===r.corporation)&&(!r.headquarters||x.headquarters===r.headquarters)).length;}
+// A reference rename is an organizational label correction, not a personnel transfer.
+// Preserve historical monthly snapshots and dated individual personnel events.
+function renameReferences(before,after){
+ const counts={employees:0,plans:0,recruitment:0,reference_master:0};
+ const sameScope=x=> (!before.corporation||x.corporation===before.corporation)&&(!before.headquarters||x.headquarters===before.headquarters);
+ for(const bucket of ['employees','plans','recruitment'])for(const x of (db[bucket]||[])){
+   if(String(x[before.type]||'')!==before.value||!sameScope(x))continue;
+   x[before.type]=after.value;counts[bucket]++;
+ }
+ // Cascade parent names to dependent reference entries, in matching company scope.
+ for(const x of master()){
+   if(x.deleted===true)continue;
+   if(before.type==='corporation'&&['headquarters','department'].includes(x.type)&&x.corporation===before.value){x.corporation=after.value;counts.reference_master++;}
+   if(before.type==='headquarters'&&x.type==='department'&&x.headquarters===before.value&&(!before.corporation||x.corporation===before.corporation)){x.headquarters=after.value;counts.reference_master++;}
+ }
+ return counts;
+}
+
 let filterType='department',filterText='';
 function viewMaster(){const data=rows().filter(x=>x.type===filterType&&(!filterText||[x.value,x.corporation,x.headquarters].some(y=>String(y||'').toLowerCase().includes(filterText.toLowerCase())))).sort((a,b)=>String(a.corporation).localeCompare(String(b.corporation),'ko')||String(a.headquarters).localeCompare(String(b.headquarters),'ko')||String(a.value).localeCompare(String(b.value),'ko'));
- return `<section class="panel"><div class="report-head" style="flex-wrap:wrap;gap:12px"><div><h2>기준정보 관리</h2><div class="hint">등록된 직원·사업계획·채용 자료의 항목도 함께 표시합니다. 신규 항목은 세 사용자에게 공동 적용됩니다.</div></div><button class="btn primary" id="masterAdd">+ 기준정보 추가</button></div><div class="toolbar" style="margin-top:18px"><label>관리 항목 <select id="masterType">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${filterType===k?'selected':''}>${esc(v)}</option>`).join('')}</select></label><input id="masterSearch" placeholder="명칭 또는 소속 검색" value="${esc(filterText)}" style="min-width:200px"><span class="pill">${data.length}개 항목</span></div><div class="notice">이미 사용 중인 항목은 기존 직원의 소속이나 이력을 자동 변경하지 않습니다. 명칭 변경이 필요하면 새 명칭을 추가하고 직원 정보를 별도로 발령 처리하세요. 사용 중지는 새 입력 후보에서 제외하는 기능입니다. 삭제는 사용 기록 및 하위 기준정보가 없는 항목만 가능하며, 삭제해도 과거 이력은 변경되지 않습니다.</div><div class="tablewrap"><table><thead><tr><th>명칭</th><th>법인</th><th>본부 / 실</th><th>사용 건수</th><th>상태</th><th>관리</th></tr></thead><tbody>${data.map((r,i)=>`<tr><td><b>${esc(r.value)}</b></td><td>${esc(r.corporation||'-')}</td><td>${esc(r.headquarters||'-')}</td><td>${actualUses(r)}건</td><td>${r.active===false?'<span class="pill warn">사용 중지</span>':'<span class="pill good">사용</span>'}</td><td><button class="btn tiny" data-master-edit="${i}">수정</button> <button class="btn tiny" data-master-toggle="${i}">${r.active===false?'사용 재개':'사용 중지'}</button> <button class="btn tiny" data-master-delete="${i}" style="color:#b42318;border-color:#f1b4b0">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">등록된 항목이 없습니다.</td></tr>'}</tbody></table></div></section>`;}
+ return `<section class="panel"><div class="report-head" style="flex-wrap:wrap;gap:12px"><div><h2>기준정보 관리</h2><div class="hint">등록된 직원·사업계획·채용 자료의 항목도 함께 표시합니다. 신규 항목은 세 사용자에게 공동 적용됩니다.</div></div><button class="btn primary" id="masterAdd">+ 기준정보 추가</button></div><div class="toolbar" style="margin-top:18px"><label>관리 항목 <select id="masterType">${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${filterType===k?'selected':''}>${esc(v)}</option>`).join('')}</select></label><input id="masterSearch" placeholder="명칭 또는 소속 검색" value="${esc(filterText)}" style="min-width:200px"><span class="pill">${data.length}개 항목</span></div><div class="notice">기준정보의 명칭을 수정하면 해당 법인·본부 범위의 직원, 정원, 채용 자료에 일괄 반영됩니다. 과거 월말 확정 자료와 개인별 과거 발령 이력은 보존합니다. 인사발령처럼 실제 소속 이동은 직원 정보에서 별도로 처리하세요.</div><div class="tablewrap"><table><thead><tr><th>명칭</th><th>법인</th><th>본부 / 실</th><th>사용 건수</th><th>상태</th><th>관리</th></tr></thead><tbody>${data.map((r,i)=>`<tr><td><b>${esc(r.value)}</b></td><td>${esc(r.corporation||'-')}</td><td>${esc(r.headquarters||'-')}</td><td>${actualUses(r)}건</td><td>${r.active===false?'<span class="pill warn">사용 중지</span>':'<span class="pill good">사용</span>'}</td><td><button class="btn tiny" data-master-edit="${i}">수정</button> <button class="btn tiny" data-master-toggle="${i}">${r.active===false?'사용 재개':'사용 중지'}</button> <button class="btn tiny" data-master-delete="${i}" style="color:#b42318;border-color:#f1b4b0">삭제</button></td></tr>`).join('')||'<tr><td colspan="6" class="empty">등록된 항목이 없습니다.</td></tr>'}</tbody></table></div></section>`;}
 function visible(){return rows().filter(x=>x.type===filterType&&(!filterText||[x.value,x.corporation,x.headquarters].some(y=>String(y||'').toLowerCase().includes(filterText.toLowerCase())))).sort((a,b)=>String(a.corporation).localeCompare(String(b.corporation),'ko')||String(a.headquarters).localeCompare(String(b.headquarters),'ko')||String(a.value).localeCompare(String(b.value),'ko'));}
 function editor(source=null){const type=source?.type||filterType;const corp=source?.corporation||'',hq=source?.headquarters||'';modal(source?'기준정보 수정':'기준정보 추가',`<div class="formgrid"><label>관리 항목<select id="miType" ${source?'disabled':''}>${Object.entries(TYPES).map(([k,v])=>`<option value="${k}" ${k===type?'selected':''}>${esc(v)}</option>`).join('')}</select></label><label>명칭 *<input id="miName" value="${esc(source?.value||'')}" maxlength="100" placeholder="명칭 입력"></label><label id="miCorpLabel">소속 법인<select id="miCorp"><option value="">전체 / 미지정</option>${candidates('corporation').map(x=>`<option ${x===corp?'selected':''}>${esc(x)}</option>`).join('')}</select></label><label id="miHqLabel">소속 본부 / 실<select id="miHQ"><option value="">전체 / 미지정</option>${candidates('headquarters',corp).map(x=>`<option ${x===hq?'selected':''}>${esc(x)}</option>`).join('')}</select></label></div><div class="hint" style="margin-top:12px">부서/팀은 법인과 본부/실을 선택하는 것이 좋습니다. 동일 명칭의 조직이 여러 법인에 있을 경우 구별할 수 있습니다.</div><div class="modalactions"><button class="btn" id="miCancel">취소</button><button class="btn primary" id="miSave">저장</button></div>`);
  const typeEl=document.getElementById('miType'),corpEl=document.getElementById('miCorp'),hqEl=document.getElementById('miHQ');function adjust(){const t=typeEl.value;document.getElementById('miCorpLabel').style.display=['department','headquarters'].includes(t)?'flex':'none';document.getElementById('miHqLabel').style.display=t==='department'?'flex':'none';}typeEl.onchange=adjust;corpEl.onchange=()=>{const vals=candidates('headquarters',corpEl.value);hqEl.innerHTML='<option value="">전체 / 미지정</option>'+vals.map(x=>`<option>${esc(x)}</option>`).join('');};adjust();
  document.getElementById('miCancel').onclick=closeModal;
- document.getElementById('miSave').onclick=()=>{if(!window.__hrCloudConnected?.()){alert('공유 데이터 로그인 후 기준정보를 저장하세요.');return;}const t=typeEl.value,v=document.getElementById('miName').value.trim(),c=['department','headquarters'].includes(t)?corpEl.value:'',h=t==='department'?hqEl.value:'';if(!v){alert('명칭을 입력하세요.');return;}if(t==='department'&&(!c||!h)){alert('부서를 추가할 법인과 본부/실을 선택하세요.');return;}if(t==='headquarters'&&!c){alert('본부/실을 추가할 법인을 선택하세요.');return;}const next=record(t,v,c,h,source?.active!==false);if(rows().some(x=>key(x)===key(next)&&(!source||key(x)!==key(source)))){alert('같은 기준정보가 이미 등록되어 있습니다.');return;}if(source){const old=master().find(x=>key(x)===key(source));if(old){Object.assign(old,next)}else master().push(next);}else master().push(next);closeModal();commit('기준정보 '+(source?'수정':'추가'),`${TYPES[t]} / ${v}`);};
+ document.getElementById('miSave').onclick=()=>{if(!window.__hrCloudConnected?.()){alert('공유 데이터 로그인 후 기준정보를 저장하세요.');return;}const t=typeEl.value,v=document.getElementById('miName').value.trim(),c=['department','headquarters'].includes(t)?corpEl.value:'',h=t==='department'?hqEl.value:'';if(!v){alert('명칭을 입력하세요.');return;}if(t==='department'&&(!c||!h)){alert('부서를 추가할 법인과 본부/실을 선택하세요.');return;}if(t==='headquarters'&&!c){alert('본부/실을 추가할 법인을 선택하세요.');return;}const next=record(t,v,c,h,source?.active!==false);if(rows().some(x=>key(x)===key(next)&&(!source||key(x)!==key(source)))&&!source){alert('같은 기준정보가 이미 등록되어 있습니다.');return;}if(source){
+ const changed=key(source)!==key(next);
+ if(changed&&(source.corporation!==next.corporation||source.headquarters!==next.headquarters)){
+   alert('기존 자료를 안전하게 일괄 정정하려면 소속 법인과 본부/실을 유지하고 명칭만 변경하세요. 소속 변경은 별도 인사발령으로 처리하세요.');return;
+ }
+ const use=actualUses(source);
+ if(changed&&!confirm(`[${TYPES[t]}] ${source.value} → ${v}\n현재 직원·정원·채용 자료 ${use}건의 명칭을 함께 바꾸시겠습니까?\n(과거 월말 확정 기록과 과거 발령 이력은 보존됩니다.)`))return;
+ let counts={employees:0,plans:0,recruitment:0,reference_master:0};
+ if(changed)counts=renameReferences(source,next);
+ const arr=master();
+ const old=arr.find(x=>key(x)===key(source));
+ const target=arr.find(x=>x!==old&&key(x)===key(next)&&x.deleted!==true);
+ if(target){target.active=next.active;if(old)Object.assign(old,{...source,active:false,deleted:true});}
+ else if(old)Object.assign(old,next);else arr.push(next);
+ // When a legacy/default value is derived, suppress its obsolete label.
+ if(changed){const obsolete={...source,active:false,deleted:true};
+   const existingOld=arr.find(x=>key(x)===key(source));
+   if(existingOld)Object.assign(existingOld,obsolete);else arr.push(obsolete);
+ }
+ closeModal();commit('기준정보 수정',`${TYPES[t]} / ${source.value} → ${v} (직원 ${counts.employees}건, 정원 ${counts.plans}건, 채용 ${counts.recruitment}건)`);
+ }else{master().push(next);closeModal();commit('기준정보 추가',`${TYPES[t]} / ${v}`);}};
 }
 const nav=document.querySelector('.navs'),anchor=nav?.querySelector('[data-view="employees"]');if(anchor){anchor.insertAdjacentHTML('afterend','<button class="nav" data-view="master">▤ 기준정보 관리</button>');nav.querySelector('[data-view="master"]').addEventListener('click',()=>setView('master'));}
 names.master=['기준정보 관리','법인·본부·부서·직위·직급 등 인사 기준정보를 관리합니다.'];
