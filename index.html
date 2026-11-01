@@ -220,15 +220,15 @@ document.addEventListener('input',e=>{if(e.target.id==='unionSearch'){unionSearc
 
 /* Korean IME-safe search: keep the active input mounted while composing.
    All list screens share the same deferred refresh helper. */
-const SEARCH_INPUT_IDS=new Set(['employeeSearch','recruitSearch','unionSearch','leaderSearch','bulkSearch']);
+const SEARCH_INPUT_IDS=new Set(['employeeSearch','recruitSearch','unionSearch','leaderSearch','bulkSearch','masterSearch','exitSearch','interviewQuery']);
 const imeComposing=new Set();
 const searchRefreshTimers=new Map();
 function scheduleSearchRender(id){
   clearTimeout(searchRefreshTimers.get(id));
-  if(imeComposing.has(id))return;
+  if(imeComposing.has(id)||document.getElementById(id)?.isComposing)return;
   searchRefreshTimers.set(id,setTimeout(()=>{
     searchRefreshTimers.delete(id);
-    if(imeComposing.has(id))return;
+    if(imeComposing.has(id)||document.getElementById(id)?.isComposing)return;
     const input=document.getElementById(id);
     if(!input)return;
     const start=input.selectionStart,end=input.selectionEnd;
@@ -969,7 +969,7 @@ document.addEventListener('change',ev=>{
   return `<section class="panel"><div class="toolbar"><input id="interviewQuery" placeholder="성명·사번·부서·멘토 검색" value="${safe(interviewQuery)}" style="min-width:230px">${select('interviewCorp',['진합','제이앤드에프','지노스','진우정공'],interviewCorp,'전체 법인')}<button class="btn" onclick="window.resetInterviewFilters()">초기화</button><button class="btn" onclick="downloadExcel('OJT계획이수')">면담·OJT Excel</button></div><div class="summaryline"><b>면담기록 누계 ${fmt(total)}명</b><span class="muted">조회 결과 ${fmt(list.length)}명 · 정규직 전환 및 퇴사 후에도 보존</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>현재 상태</th><th>고용형태</th><th>멘토</th><th>3일차</th><th>1주일차</th><th>1개월차</th><th>기록 확인</th></tr></thead><tbody>${list.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.corporation)}</td><td>${safe(e.department)}</td><td>${safe(e.status)}</td><td>${safe(e.employment_type||'미확인')}</td><td>${safe(e.mentor_name||'미지정')}</td>${stages.map(([k])=>`<td>${safe(e.mentoring?.[k]?.date||'미작성')}</td>`).join('')}<td><button class="btn tiny" onclick="window.openInterview(${idArg(e.id)})">열람·수정</button></td></tr>`).join('')||'<tr><td colspan="11" class="empty">저장된 면담기록이 없습니다.</td></tr>'}</tbody></table></div></section>`
  }
  window.resetInterviewFilters=function(){interviewQuery='';interviewCorp='';render()};
- document.addEventListener('input',ev=>{if(ev.target.id==='interviewQuery'){interviewQuery=ev.target.value;clearTimeout(window.__interviewSearchTimer);if(ev.isComposing)return;window.__interviewSearchTimer=setTimeout(()=>{if(view==='interviews')render()},300)}});
+ document.addEventListener('input',ev=>{if(ev.target.id==='interviewQuery'){interviewQuery=ev.target.value;scheduleSearchRender('interviewQuery');}});
  document.addEventListener('compositionend',ev=>{if(ev.target.id==='interviewQuery'){interviewQuery=ev.target.value;clearTimeout(window.__interviewSearchTimer);window.__interviewSearchTimer=setTimeout(()=>{if(view==='interviews')render()},300)}});
  document.addEventListener('change',ev=>{if(ev.target.id==='interviewCorp'){interviewCorp=ev.target.value;render()}});
 
@@ -1295,7 +1295,7 @@ const nav=document.querySelector('.navs'),anchor=nav?.querySelector('[data-view=
 names.master=['기준정보 관리','법인·본부·부서·직위·직급 등 인사 기준정보를 관리합니다.'];
 const previousRender=render;render=function(){if(view==='master'){document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view==='master'));$('#heading').textContent=names.master[0];$('#subheading').textContent=names.master[1];$('#content').innerHTML=viewMaster();return;}previousRender();};
 document.addEventListener('change',e=>{if(e.target.id==='masterType'){filterType=e.target.value;filterText='';render();}});
-document.addEventListener('input',e=>{if(e.target.id==='masterSearch'){filterText=e.target.value;const selection=e.target.selectionStart;render();const el=document.getElementById('masterSearch');el?.focus();el?.setSelectionRange(selection,selection);}});
+document.addEventListener('input',e=>{if(e.target.id==='masterSearch'){filterText=e.target.value;scheduleSearchRender('masterSearch');}});
 document.addEventListener('click',e=>{if(view!=='master')return;const add=e.target.closest('#masterAdd');if(add){editor();return;}const edit=e.target.closest('[data-master-edit]');if(edit){editor(visible()[Number(edit.dataset.masterEdit)]);return;}const toggle=e.target.closest('[data-master-toggle]');if(toggle){if(!window.__hrCloudConnected?.()){alert('공유 데이터 로그인 후 변경하세요.');return;}const r=visible()[Number(toggle.dataset.masterToggle)];if(!r)return;const use=actualUses(r);if(r.active!==false&&use>0&&!confirm(`현재 ${use}건에서 사용 중입니다. 기존 자료는 유지하고 신규 입력 후보에서만 제외할까요?`))return;const arr=master(),item=arr.find(x=>key(x)===key(r));if(item)item.active=r.active===false;else arr.push({...r,active:false});commit('기준정보 상태변경',`${TYPES[r.type]} / ${r.value}`);}});
 // Extend existing datalist inputs without replacing employee fields or historical values.
 window.__hrMasterCandidates=candidates;
