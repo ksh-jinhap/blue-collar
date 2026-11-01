@@ -1874,4 +1874,69 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  };
 })();
 </script>
+<script>
+/* Retrospective departures: additive correction to historical exit roster, not month-end headcount. */
+(function(){
+ 'use strict';
+ const $id=id=>document.getElementById(id);
+ const dateOk=value=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(value||''))return false;const [y,m,d]=value.split('-').map(Number);const dt=new Date(Date.UTC(y,m-1,d));return dt.getUTCFullYear()===y&&dt.getUTCMonth()===m-1&&dt.getUTCDate()===d;};
+ const seoulToday=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+ const htmlOptions=(values)=>values.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+ const fromEmployees=field=>[...new Set((db.employees||[]).map(e=>String(e[field]||'').trim()).filter(Boolean))];
+ const cols={corporation:'법인',headquarters:'본부/실',department:'부서/팀',position:'직위',grade:'직급'};
+ function historicalForm(){
+  if(!window.__hrCloudConnected?.())return alert('공동 데이터 로그인 후 등록할 수 있습니다.');
+  const choices=Object.entries(cols).map(([k,label])=>`<label>${label}${k==='corporation'||k==='department'?' *':''}<input list="pastExit_${k}_options" id="pastExit_${k}" autocomplete="off" placeholder="${label} 입력"><datalist id="pastExit_${k}_options">${htmlOptions(fromEmployees(k))}</datalist></label>`).join('');
+  modal('과거 퇴사자 등록',`<div class="notice">기존 등록자가 아닌 과거 퇴사자만 추가합니다. 이미 저장된 직원은 중복 등록하지 마세요. 입력한 과거 퇴사일에 해당하는 월말 확정 자료에 명단을 추가하며, 당시의 운영인원 총계는 변경하지 않습니다.</div><div class="formgrid">
+  <label>사번 *<input id="pastExit_no" autocomplete="off" required></label>
+  <label>성명 *<input id="pastExit_name" autocomplete="off" required></label>
+  ${choices}
+  <label>입사일 *<input id="pastExit_hire" type="date" required></label>
+  <label>퇴사일 *<input id="pastExit_day" type="date" required max="${seoulToday()}"></label>
+  <label>퇴사사유<input id="pastExit_reason" autocomplete="off"></label>
+  </div><p class="hint">사번·성명·소속·입사일·퇴사일 확인 후 저장합니다. 확정 자료가 존재하지 않는 월은 소급 생성하지 않습니다.</p>
+  <div class="modalactions"><button type="button" class="btn" id="pastExit_cancel">취소</button><button type="button" class="btn primary" id="pastExit_submit">과거 퇴사 기록 저장</button></div>`);
+  $id('pastExit_cancel').onclick=closeModal;
+  $id('pastExit_submit').onclick=saveHistorical;
+ }
+ function saveHistorical(){
+  if(!window.__hrCloudConnected?.())return alert('공동 데이터 연결을 확인하세요.');
+  const no=$id('pastExit_no').value.trim(), name=$id('pastExit_name').value.trim();
+  const hire=$id('pastExit_hire').value, exit=$id('pastExit_day').value,reason=$id('pastExit_reason').value.trim();
+  const attrs=Object.fromEntries(Object.keys(cols).map(k=>[k,$id('pastExit_'+k).value.trim()]));
+  if(!no||!name||!attrs.corporation||!attrs.department||!hire||!exit)return alert('필수 입력 항목을 확인하세요.');
+  if(!dateOk(hire)||!dateOk(exit)||hire>exit||exit>seoulToday())return alert('입사일 및 퇴사일을 확인하세요. 퇴사일은 오늘 이전이어야 합니다.');
+  if((db.employees||[]).some(e=>String(e.employee_no||'').trim()===no||String(e.name||'').trim()===name))return alert('동일한 사번 또는 성명이 이미 등록되어 있습니다. 기존 자료를 먼저 확인하세요.');
+  const year=Number(exit.slice(0,4)),month=Number(exit.slice(5,7));
+  const matching=(db.snapshots||[]).filter(s=>Number(s.year)===year&&Number(s.month)===month);
+  if(matching.length>1)return alert('동일 월말 확정 자료가 여러 건 존재합니다. 중복된 기록을 먼저 확인하세요.');
+  if(matching.length&& !Array.isArray(matching[0].employee_details))return alert('이 달의 월말 기록에 직원별 상세 명단이 없어 자동 반영할 수 없습니다.');
+  if(matching.length&&matching[0].employee_details.some(e=>String(e.employee_no||'').trim()===no||String(e.name||'').trim()===name))return alert('월말 확정 명단에 같은 직원이 존재합니다. 중복 여부를 확인하세요.');
+  const notice=matching.length?`${year}년 ${month}월 월말 확정 명단에도 추가됩니다. 확정 당시의 운영인원·부서별 운영인원은 변경하지 않습니다.`:`${year}년 ${month}월의 월말 상세 기록이 없어 현재 퇴사자 명단에만 추가됩니다.`;
+  if(!confirm(`${name} (${no}) / 퇴사일 ${exit}\n\n${notice}\n\n등록하시겠습니까?`))return;
+  const employee={id:uid(),employee_no:no,name,status:'퇴사',hire_date:hire,exit_date:exit,exit_reason:reason, ...attrs,
+    gender:'',education:'',union_status:'미확인',field_leader_role:'미지정',employment_type:'',salary_type:''};
+  db.employees.push(employee);
+  const timestamp=new Date().toISOString();
+  if(matching.length){
+   const snap=matching[0];snap.employee_details.push(structuredClone(employee));
+   // This is a retrospective amendment to the detailed departure roster only.
+   snap.retrospective_exit_corrections??=[];
+   snap.retrospective_exit_corrections.push({employee_id:employee.id,employee_no:no,exit_date:exit,recorded_at:timestamp,reason:'과거 퇴사자 누락 명단 보완'});
+  }
+  db.history??=[];db.history.unshift({employee_id:employee.id,event_date:exit,event_type:'퇴사',title:'과거 퇴사자 등록',description:'과거 퇴사 기록 사후 보완',department:employee.department,grade:employee.grade});
+  closeModal();
+  commit('과거 퇴사자 등록',`${no} ${name} / ${exit}${matching.length?' / 월말 명단 보완':''}`);
+  alert('과거 퇴사자 등록 요청을 저장했습니다. 공동 저장 상태를 확인하고 퇴사자 명단에서 해당 월을 조회하세요.');
+ }
+ const oldRender=render;
+ render=function(){oldRender();if(view!=='exits'||!window.__hrCloudConnected?.())return;const root=$id('content');if(!root)return;
+  const panel=root.querySelector('#pastExitAddPanel');if(panel)return;
+  const section=document.createElement('section');section.className='panel';section.id='pastExitAddPanel';
+  section.innerHTML='<div class="toolbar" style="justify-content:space-between;flex-wrap:wrap"><div><h2 style="margin:0">과거 퇴사자 명단 보완</h2><p class="hint">초기 등록에서 누락된 과거 퇴사자만 별도로 추가합니다.</p></div><button type="button" class="btn primary" id="pastExitAddButton">+ 과거 퇴사자 등록</button></div>';
+  root.insertAdjacentElement('afterbegin',section);
+  $id('pastExitAddButton').addEventListener('click',historicalForm);
+ };
+})();
+</script>
 </body></html>
