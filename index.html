@@ -1828,7 +1828,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    return Number(new Intl.DateTimeFormat('en-US',{timeZone:'Asia/Seoul',year:'numeric'}).format(new Date()));
  }
  function retirementCandidate(e, yearValue, ageLimit){
-   if(!occupied(e))return null;
+   if(!occupied(e)||e.position==='촉탁직'||e.reemployment_type==='정년 후 촉탁직')return null;
    const birthday=typeof employeeBirthDate==='function'?employeeBirthDate(e):'';
    const m=String(birthday||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
    if(m){
@@ -1852,7 +1852,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
         String(a.employee.corporation||'').localeCompare(String(b.employee.corporation||''),'ko')||
         String(a.employee.name||'').localeCompare(String(b.employee.name||''),'ko'));
    const rows=list.map(({employee:e,date,basis})=>`<tr>
-     <td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td>
+     <td>${esc(e.employee_no)}</td><td><button type="button" class="btn tiny" onclick="openRetirementContractConversion(${hrEmployeeIdArg(e.id)})">${esc(e.name)} · 촉탁직 전환</button></td>
      <td>${esc(e.corporation)}</td><td>${esc(e.headquarters)}</td><td>${esc(e.department)}</td>
      <td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(employeeBirthDate(e))}</td>
      <td>${esc(date)}</td><td>${esc(basis)}</td>
@@ -1937,6 +1937,98 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
   root.insertAdjacentElement('afterbegin',section);
   $id('pastExitAddButton').addEventListener('click',historicalForm);
  };
+})();
+</script>
+<script id="monthlyRecruitmentAndRetirementContractFix">
+(function(){
+'use strict';
+const dateValid=v=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(String(v||'')))return false;const [y,m,d]=v.split('-').map(Number);const x=new Date(Date.UTC(y,m-1,d));return x.getUTCFullYear()===y&&x.getUTCMonth()===m-1&&x.getUTCDate()===d;};
+const monthKey=v=>dateValid(v)?v.slice(0,7):'';
+const getEmployeeByRecruit=r=>(db.employees||[]).find(e=>String(e.id)===String(r.employee_id));
+const actualCompleted=r=>r.completed_date||r.hired_date||getEmployeeByRecruit(r)?.hire_date||'';
+const period=r=>r.stage==='입사 완료'?monthKey(actualCompleted(r)):monthKey(r.date);
+const str=v=>esc(v==null?'':String(v));
+// For existing linked hires, use their saved actual hiring date; never silently redate a completed hire.
+const originalRecruitmentOpen=openRecruitment;
+openRecruitment=function(id=null,encoded=''){
+ originalRecruitmentOpen(id,encoded);
+ const r=(db.recruitment||[]).find(x=>String(x.id)===String(id));
+ const area=document.getElementById('rStart')?.closest('.formgrid');
+ if(!area)return;
+ const item=document.createElement('label');item.id='rCompletedLabel';
+ item.innerHTML='실제 입사 완료일 <input id="rCompleted" type="date" value="'+str(r?actualCompleted(r):'')+'"><small class="hint">입사 완료 단계의 월별 집계 기준입니다. 직원 등록 연계 시 실제 입사일을 자동 적용합니다.</small>';
+ area.appendChild(item);
+};
+saveRecruitment=function(id){
+ const corp=get('rCorp'),hq=get('rHQ'),dept=get('rDept'),stage=get('rStage');
+ const completed=document.getElementById('rCompleted')?.value||'';
+ if(!corp||!hq||!dept)return alert('법인·본부·부서를 입력하세요.');
+ if(stage==='입사 완료'&&!dateValid(completed))return alert('입사 완료 단계에서는 실제 입사 완료일을 입력해야 합니다.');
+ if(completed&&!dateValid(completed))return alert('실제 입사 완료일을 확인하세요.');
+ const o={request_no:get('rNo'),date:get('rDate'),name:get('rName'),corporation:corp,headquarters:hq,department:dept,stage,start_date:get('rStart'),completed_date:completed,memo:get('rMemo')};
+ if(id){const r=db.recruitment.find(x=>String(x.id)===String(id));if(!r)return alert('채용 건을 찾지 못했습니다.');Object.assign(r,o)}
+ else db.recruitment.unshift({id:uid(),...o});
+ closeModal();commit('채용 진행 '+(id?'수정':'등록'),o.department+' / '+o.stage+(completed?' / 완료일 '+completed:''));
+};
+// Employee registration linkage from recruitment: original routine has already set stage and employee_id.
+const originalEmployeeSave=saveEmployee;
+saveEmployee=function(id){
+ const before=db.employees.length;
+ const recruitId=typeof currentRecruitId!=='undefined'?currentRecruitId:null;
+ originalEmployeeSave(id);
+ if(!id&&recruitId&&db.employees.length>before){
+  const r=(db.recruitment||[]).find(x=>String(x.id)===String(recruitId));
+  const e=db.employees[db.employees.length-1];
+  if(r&&e){r.completed_date=e.hire_date||today();save();render();}
+ }
+};
+recruitmentView=function(){
+ const selected=String(planYear)+'-'+String(planMonth).padStart(2,'0');
+ const all=(db.recruitment||[]);
+ const monthRows=all.filter(r=>period(r)===selected);
+ const list=monthRows.filter(r=>!recruitmentSearch||[r.name,r.department,r.request_no,r.stage].some(x=>String(x||'').includes(recruitmentSearch)));
+ const counts={requested:0,process:0,pending:0,completed:0};
+ monthRows.forEach(r=>{if(r.stage==='채용 요청')counts.requested++;else if(['공고·모집','서류 검토','면접'].includes(r.stage))counts.process++;else if(r.stage==='합격·입사예정')counts.pending++;else if(r.stage==='입사 완료')counts.completed++});
+ const unknown=all.filter(r=>r.stage==='입사 완료'&&!period(r));
+ return yearPicker()+`<div class="cards" style="grid-template-columns:repeat(4,minmax(0,1fr))">${card('채용 요청',counts.requested,selected+' 접수')}${card('전형 진행',counts.process,selected+' 접수')}${card('입사 예정',counts.pending,selected+' 접수')}${card('입사 완료',counts.completed,selected+' 실제 입사')}</div>
+ <section class="panel"><div class="toolbar"><input id="recruitSearch" placeholder="대상자·부서·요청번호 검색" value="${str(recruitmentSearch)}"><button class="btn primary" onclick="openRecruitment()">+ 채용 건 등록</button></div>
+ <div class="notice">선택 기준월: <b>${selected}</b>. 채용 요청·진행·예정은 접수일이 속한 월, <b>입사 완료는 실제 입사 완료일이 속한 월</b>에 표시합니다. 월별 집계는 당시 상태의 이력이 아니라 현재 저장된 단계로 분류합니다.</div>
+ ${unknown.length?`<div class="hint">실제 입사 완료일이 확인되지 않는 완료 건 ${unknown.length}건은 월별 집계에서 제외했습니다. 해당 채용 건을 수정해 실제 완료일을 입력해 주세요.</div>`:''}
+ <div class="tablewrap"><table><thead><tr><th>접수일</th><th>요청번호</th><th>법인 / 부서</th><th>대상자</th><th>진행 단계</th><th>입사 예정일</th><th>실제 입사 완료일</th><th>메모</th><th>관리</th></tr></thead><tbody>
+ ${list.map(r=>`<tr><td>${str(r.date)}</td><td>${str(r.request_no)}</td><td>${str(r.corporation)}<br><b>${str(r.department)}</b></td><td>${str(r.name||'미정')}</td><td><span class="status-chip">${str(r.stage)}</span></td><td>${str(r.start_date)}</td><td>${r.stage==='입사 완료'?str(actualCompleted(r)):'-'}</td><td>${str(r.memo)}</td><td><button class="btn tiny" onclick="openRecruitment(${hrEmployeeIdArg(r.id)})">수정</button> ${r.stage!=='입사 완료'?`<button class="btn tiny primary" onclick="hireRecruitment(${hrEmployeeIdArg(r.id)})">직원 등록</button>`:''} <button class="btn tiny danger" onclick="deleteRecruitment(${hrEmployeeIdArg(r.id)})">삭제</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">해당 기준월의 채용 진행 건이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+};
+// Conversion retains the original employment spell as a former employee and creates a new, linked employment spell.
+window.openRetirementContractConversion=function(id){
+ const e=(db.employees||[]).find(x=>String(x.id)===String(id));
+ if(!e)return alert('해당 직원 기록을 찾지 못했습니다.');
+ if(e.status==='퇴사')return alert('이미 퇴사한 직원입니다. 기존 기록을 확인하세요.');
+ if((db.employees||[]).some(x=>String(x.previous_employee_id)===String(e.id)))return alert('이미 이 직원의 촉탁직 전환 기록이 존재합니다.');
+ modal('정년 후 촉탁직 전환 · '+str(e.name),`<div class="notice">기존 사번 <b>${str(e.employee_no)}</b>의 근속 이력은 보존하며, 전환일 전날 기존 근무기록을 종료합니다. 새 사번과 새 입사일로 촉탁직 근무기록을 만듭니다. 다른 직원 정보는 이어받습니다.</div><div class="formgrid">${field('새 사번 *','reContractNo','','text','required')}${field('촉탁직 재입사일 *','reContractDate',today(),'date','required')}${field('기존 근무 종료일 *','reContractExit','','date','required')}</div><div class="hint">기존 종료일은 새 입사일 전날을 기본으로 합니다. 실제 인사발령일과 일치하는지 확인하세요. 전환일이 오늘 이후인 경우 이 기능으로 미리 전환할 수 없습니다.</div><div class="modalactions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="saveRetirementContractConversion(${hrEmployeeIdArg(e.id)})">촉탁직 전환 저장</button></div>`);
+ const input=document.getElementById('reContractDate'),exit=document.getElementById('reContractExit');
+ const update=()=>{if(!dateValid(input.value))return;let d=new Date(input.value+'T00:00:00Z');d.setUTCDate(d.getUTCDate()-1);exit.value=d.toISOString().slice(0,10);};
+ input.addEventListener('change',update);update();
+};
+window.saveRetirementContractConversion=function(id){
+ const old=(db.employees||[]).find(x=>String(x.id)===String(id));
+ if(!old||old.status==='퇴사')return alert('기존 직원의 재직 상태를 확인하세요.');
+ const no=document.getElementById('reContractNo')?.value.trim(),start=document.getElementById('reContractDate')?.value,exit=document.getElementById('reContractExit')?.value;
+ if(!no||!dateValid(start)||!dateValid(exit)||exit>=start)return alert('새 사번, 새 입사일, 기존 근무 종료일을 정확하게 입력하세요.');
+ if(start>today())return alert('미래 일자는 전환할 수 없습니다. 실제 전환일 이후에 처리하세요.');
+ if(old.hire_date&&dateValid(old.hire_date)&&exit<old.hire_date)return alert('기존 근무 종료일이 과거 입사일보다 빠릅니다.');
+ if((db.employees||[]).some(e=>String(e.employee_no||'').trim()===no))return alert('이미 사용 중이거나 과거에 사용된 사번입니다. 다른 사번을 입력하세요.');
+ if((db.employees||[]).some(e=>String(e.previous_employee_id)===String(old.id)))return alert('이미 촉탁직 재입사 기록이 존재합니다.');
+ if(!confirm(`${old.name} · 기존 사번 ${old.employee_no} 종료 ${exit}\n새 사번 ${no} · 촉탁직 입사 ${start}\n\n기존 기록을 보존하고 새 촉탁직 근무기록을 생성하시겠습니까?`))return;
+ const newId=uid();
+ const newer={...old,id:newId,employee_no:no,hire_date:start,position:'촉탁직',status:'재직',previous_employee_id:old.id,previous_employee_no:old.employee_no,reemployment_type:'정년 후 촉탁직',reemployment_date:start};
+ for(const k of ['exit_date','retirement_date','scheduled_exit_date','exit_reason','leave_date','leave_start_date','leave_end_date','conversion_date','conversion_scheduled_date'])delete newer[k];
+ old.status='퇴사';old.exit_date=exit;old.exit_reason='정년 후 촉탁직 재입사';old.next_employee_id=newId;
+ db.employees.push(newer);
+ db.history??=[];
+ db.history.unshift({employee_id:old.id,event_date:exit,event_type:'퇴사',title:'정년 종료 · 촉탁직 재입사',description:`기존 사번 ${old.employee_no} 종료, 새 사번 ${no} 연계`,department:old.department,grade:old.grade});
+ db.history.unshift({employee_id:newId,event_date:start,event_type:'입사',title:'촉탁직 재입사',description:`기존 사번 ${old.employee_no}에서 새 사번 ${no}로 전환`,department:newer.department,grade:newer.grade});
+ closeModal();commit('정년 후 촉탁직 전환',old.name+' / '+old.employee_no+' → '+no+' / '+start);
+ alert('촉탁직 전환 기록을 저장 요청했습니다. 공동 DB 저장 완료 상태와 신규 직원 정보를 확인하세요.');
+};
 })();
 </script>
 </body></html>
