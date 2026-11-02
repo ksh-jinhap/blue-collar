@@ -2061,19 +2061,19 @@ saveEmployee=function(id){
  }
 };
 recruitmentView=function(){
- const selected=String(planYear)+'-'+String(planMonth).padStart(2,'0');
+ const selected=String(planYear);
  const all=(db.recruitment||[]);
- const monthRows=all.filter(r=>period(r)===selected);
- const list=monthRows.filter(r=>!recruitmentSearch||[r.name,r.department,r.request_no,r.stage].some(x=>String(x||'').includes(recruitmentSearch)));
+ const yearRows=all.filter(r=>String(period(r)||'').slice(0,4)===selected);
+ const list=yearRows.filter(r=>!recruitmentSearch||[r.name,r.department,r.request_no,r.stage].some(x=>String(x||'').includes(recruitmentSearch)));
  const counts={requested:0,process:0,pending:0,completed:0};
- monthRows.forEach(r=>{if(r.stage==='채용 요청')counts.requested++;else if(['공고·모집','서류 검토','면접'].includes(r.stage))counts.process++;else if(r.stage==='합격·입사예정')counts.pending++;else if(r.stage==='입사 완료')counts.completed++});
+ yearRows.forEach(r=>{if(r.stage==='채용 요청')counts.requested++;else if(['공고·모집','서류 검토','면접'].includes(r.stage))counts.process++;else if(r.stage==='합격·입사예정')counts.pending++;else if(r.stage==='입사 완료')counts.completed++});
  const unknown=all.filter(r=>r.stage==='입사 완료'&&!period(r));
- return yearPicker()+`<div class="cards" style="grid-template-columns:repeat(4,minmax(0,1fr))">${card('채용 요청',counts.requested,selected+' 접수')}${card('전형 진행',counts.process,selected+' 접수')}${card('입사 예정',counts.pending,selected+' 접수')}${card('입사 완료',counts.completed,selected+' 실제 입사')}</div>
+ return `<div class="toolbar"><label>기준연도</label><input id="planYear" type="number" min="2000" max="2100" value="${planYear}" style="width:115px"><span class="hint">채용 진행 건을 연도별로 조회합니다.</span></div>`+`<div class="cards" style="grid-template-columns:repeat(4,minmax(0,1fr))">${card('채용 요청',counts.requested,selected+'년 접수')}${card('전형 진행',counts.process,selected+'년 접수')}${card('입사 예정',counts.pending,selected+'년 접수')}${card('입사 완료',counts.completed,selected+'년 실제 입사')}</div>
  <section class="panel"><div class="toolbar"><input id="recruitSearch" placeholder="대상자·부서·요청번호 검색" value="${str(recruitmentSearch)}"><button class="btn primary" onclick="openRecruitment()">+ 채용 건 등록</button></div>
- <div class="notice">선택 기준월: <b>${selected}</b>. 채용 요청·진행·예정은 접수일이 속한 월, <b>입사 완료는 실제 입사 완료일이 속한 월</b>에 표시합니다. 월별 집계는 당시 상태의 이력이 아니라 현재 저장된 단계로 분류합니다.</div>
- ${unknown.length?`<div class="hint">실제 입사 완료일이 확인되지 않는 완료 건 ${unknown.length}건은 월별 집계에서 제외했습니다. 해당 채용 건을 수정해 실제 완료일을 입력해 주세요.</div>`:''}
+ <div class="notice">선택 기준연도: <b>${selected}년</b>. 채용 요청·진행·예정은 접수일이 속한 연도, <b>입사 완료는 실제 입사 완료일이 속한 연도</b>에 표시합니다. 연도별 집계는 당시 상태의 이력이 아니라 현재 저장된 단계로 분류합니다.</div>
+ ${unknown.length?`<div class="hint">실제 입사 완료일이 확인되지 않는 완료 건 ${unknown.length}건은 연도별 집계에서 제외했습니다. 해당 채용 건을 수정해 실제 완료일을 입력해 주세요.</div>`:''}
  <div class="tablewrap"><table><thead><tr><th>접수일</th><th>요청번호</th><th>법인 / 부서</th><th>대상자</th><th>진행 단계</th><th>입사 예정일</th><th>실제 입사 완료일</th><th>메모</th><th>관리</th></tr></thead><tbody>
- ${list.map(r=>`<tr><td>${str(r.date)}</td><td>${str(r.request_no)}</td><td>${str(r.corporation)}<br><b>${str(r.department)}</b></td><td>${str(r.name||'미정')}</td><td><span class="status-chip">${str(r.stage)}</span></td><td>${str(r.start_date)}</td><td>${r.stage==='입사 완료'?str(actualCompleted(r)):'-'}</td><td>${str(r.memo)}</td><td><button class="btn tiny" onclick="openRecruitment(${hrEmployeeIdArg(r.id)})">수정</button> ${r.stage!=='입사 완료'?`<button class="btn tiny primary" onclick="hireRecruitment(${hrEmployeeIdArg(r.id)})">직원 등록</button>`:''} <button class="btn tiny danger" onclick="deleteRecruitment(${hrEmployeeIdArg(r.id)})">삭제</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">해당 기준월의 채용 진행 건이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+ ${list.map(r=>`<tr><td>${str(r.date)}</td><td>${str(r.request_no)}</td><td>${str(r.corporation)}<br><b>${str(r.department)}</b></td><td>${str(r.name||'미정')}</td><td><span class="status-chip">${str(r.stage)}</span></td><td>${str(r.start_date)}</td><td>${r.stage==='입사 완료'?str(actualCompleted(r)):'-'}</td><td>${str(r.memo)}</td><td><button class="btn tiny" onclick="openRecruitment(${hrEmployeeIdArg(r.id)})">수정</button> ${r.stage!=='입사 완료'?`<button class="btn tiny primary" onclick="hireRecruitment(${hrEmployeeIdArg(r.id)})">직원 등록</button>`:''} <button class="btn tiny danger" onclick="deleteRecruitment(${hrEmployeeIdArg(r.id)})">삭제</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">해당 기준연도의 채용 진행 건이 없습니다.</td></tr>'}</tbody></table></div></section>`;
 };
 // Conversion retains the original employment spell as a former employee and creates a new, linked employment spell.
 window.openRetirementContractConversion=function(id){
