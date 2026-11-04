@@ -278,7 +278,19 @@ function photoPath(id){const key=String(id??'');if(!/^\d{1,20}$/.test(key))throw
 async function photoRequest(path,method='GET',body=null,type=''){
  if(!session?.access_token||rev===null)throw Error('공동 DB 로그인 후 이용할 수 있습니다.');
  const res=await fetch(cfg.url+'/storage/v1'+path,{method,headers:{...headers(),...(type?{'Content-Type':type}:{})},body});
- if(!res.ok){if(method==='GET'&&res.status===404)return null;const txt=await res.text();throw Error(res.status+' '+txt.slice(0,180));}
+ if(!res.ok){
+  const txt=await res.text();
+  if(method==='GET'){
+   let detail=null;
+   try{detail=JSON.parse(txt);}catch(_ignored){}
+   // Storage can return HTTP 400 with JSON statusCode: 404 for a missing object.
+   // Only treat missing objects as 'no photo'; all other failures remain errors.
+   const missing=detail&&(String(detail.statusCode)==='404'||res.status===404)&&
+     (detail.code==='NoSuchKey'||detail.error==='not_found'||detail.message==='Object not found');
+   if(missing)return null;
+  }
+  throw Error(res.status+' '+txt.slice(0,180));
+ }
  return res;
 }
 window.__hrPhotoStorage={
