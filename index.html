@@ -2757,8 +2757,22 @@ window.saveRetirementContractConversion=function(id){
   // Query once on entry; never claim a missing photo until list succeeds.
   refresh();
  }
+ // Route this new view before the legacy render chain. Earlier render overrides
+ // only know the old views and would otherwise call an undefined renderer.
  const previousRender=render;
- render=function(){const result=previousRender.apply(this,arguments);mount();return result;};
+ render=function(){
+  if(view==='photoAdmin'){
+   if(typeof session==='undefined'||!session){view='cloud';return previousRender.apply(this,arguments);}
+   const title=names.photoAdmin;
+   byId('heading').textContent=title[0];
+   byId('subheading').textContent=title[1];
+   byId('content').innerHTML=window.__hrPhotoAdminView();
+   document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view==='photoAdmin'));
+   mount();
+   return;
+  }
+  return previousRender.apply(this,arguments);
+ };
  // The folder navigation was built earlier; insert in System Management directly.
  const systemGroup=[...document.querySelectorAll('.nav-folder')].find(folder=>folder.querySelector('.folder-head')?.textContent.includes('시스템 관리'));
  const target=systemGroup?.querySelector('.folder-items');
