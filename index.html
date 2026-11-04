@@ -802,7 +802,7 @@ unionExportObserve.observe(mainContent,{childList:true});
  return `<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">${card('계약직 전환 대상',total,'퇴사자 제외')}${card('만료 30일 이내',soon,'기준일 포함, 미전환자')}${card('계약기간 경과',overdue,'전환 여부 확인 필요','negative')}</div>
  <div class="notice">계약기간 = <b>입사한 월을 1개월째로 하여 3개월째 마지막 날</b>. 예: 10월 19일 입사 → 12월 31일 만료. 기존 데이터에 고용형태가 없는 경우 직위 또는 직급이 ‘사원’이면 계약직 후보로 표시합니다. 실제 고용형태는 개별 인원 수정에서 확인·변경하세요. 정규직 전환일을 미리 등록하면 해당 날짜에 자동으로 정규직 처리됩니다.</div>
  <section class="panel"><div class="report-head"><h2>계약직 · 정규직 전환 대상 (${fmt(total)}명)</h2><button class="btn" onclick="downloadExcel('정규직전환대상')">대상자 Excel</button></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>직위</th><th>입사일</th><th>계약 만료일</th><th>구분</th><th>처리</th></tr></thead><tbody>${tableRows(pending)||'<tr><td colspan="9" class="empty">정규직 전환 대상자가 없습니다.</td></tr>'}</tbody></table></div></section>
- <section class="panel"><h2>정규직 전환 완료 (${fmt(converted.length)}명)</h2><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>입사일</th><th>전환일</th><th>수정</th></tr></thead><tbody>${converted.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><button class="btn tiny" data-interview-id="${esc(String(e.id))}">${esc(e.name)}</button></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.hire_date||'')}</td><td>${esc(e.conversion_date||'')}</td><td><button class="btn tiny" data-conversion-id="${esc(String(e.id))}">전환일 수정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">전환 완료 기록이 없습니다.</td></tr>'}</tbody></table></div></section>`}
+ <section class="panel"><div class="report-head"><h2>정규직 전환 완료 (${fmt(converted.length)}명)</h2><button type="button" class="btn" onclick="window.hrBulkEstimateRegularDates()">전환일 미기록자 일괄 계산·저장</button></div><div class="hint">실제 전환일은 유지하고, 전환일이 없는 정규직 직원만 입사월 포함 3개월째 말일의 다음 날로 계산해 별도로 저장합니다. 계산일은 실제 확정일이 아닙니다.</div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>입사일</th><th>전환일</th><th>수정</th></tr></thead><tbody>${converted.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><button class="btn tiny" data-interview-id="${esc(String(e.id))}">${esc(e.name)}</button></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.hire_date||'')}</td><td>${esc(e.conversion_date||'')}</td><td><button class="btn tiny" data-conversion-id="${esc(String(e.id))}">전환일 수정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">전환 완료 기록이 없습니다.</td></tr>'}</tbody></table></div></section>`}
  render=function(){if(view===newView){if(typeof session!=='undefined'&&!session){view='cloud';return currentRender()}document.getElementById('heading').textContent=names[newView][0];document.getElementById('subheading').textContent=names[newView][1];document.getElementById('content').innerHTML=conversionView();document.querySelectorAll('#content [data-conversion-id]').forEach(b=>b.addEventListener('click',()=>window.openConversion(b.dataset.conversionId)));document.querySelectorAll('#content [data-interview-id]').forEach(b=>b.addEventListener('click',()=>window.openInterview(b.dataset.interviewId)));document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===newView));return}currentRender()};
  window.openConversion=function(id){
   const e=db.employees.find(x=>String(x.id)===String(id));if(!e)return;
@@ -1646,7 +1646,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    ['부서 / 팀',e.department],['직위',e.position],['직급',e.grade],['성별',e.gender],
    ['생년월일',typeof employeeBirthDate==='function'?employeeBirthDate(e):e.birth_date],
    ['연령',typeof displayAge==='function'?displayAge(e):e.age],['입사일',e.hire_date],['현재 상태',e.status],
-   ['학력',e.education],['고용형태',e.employment_type],['급여 형태',e.salary_type],
+   ['학력',e.education],['고용형태',e.employment_type],['정규직 전환일',window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date],['전환일 구분',window.hrRegularConversionSource?window.hrRegularConversionSource(e):''],['급여 형태',e.salary_type],
    ['현장관리자 직책',e.field_leader_role],
    ['휴직 시작일',e.leave_start_date||e.leave_date],['휴직 종료일',e.leave_end_date],
    ['산재 시작일',e.industrial_accident_start_date],['산재 종료일',e.industrial_accident_end_date],
@@ -2107,6 +2107,54 @@ window.saveRetirementContractConversion=function(id){
  closeModal();commit('정년 후 촉탁직 전환',old.name+' / '+old.employee_no+' → '+no+' / '+start);
  alert('촉탁직 전환 기록을 저장 요청했습니다. 공동 DB 저장 완료 상태와 신규 직원 정보를 확인하세요.');
 };
+})();
+</script>
+
+<script>
+/* Regular-conversion history: actual dates are authoritative; bulk estimates live in a separate field. */
+(function(){
+ 'use strict';
+ const iso=s=>/^\d{4}-\d{2}-\d{2}$/.test(String(s||''))?String(s):'';
+ const valid=s=>{if(!iso(s))return false;const [y,m,d]=s.split('-').map(Number);const v=new Date(Date.UTC(y,m-1,d));return v.getUTCFullYear()===y&&v.getUTCMonth()===m-1&&v.getUTCDate()===d;};
+ function estimatedConversion(hire){
+  if(!valid(hire))return '';
+  const [y,m]=hire.split('-').map(Number);
+  // The hire month is month 1; conversion follows the final day of month 3.
+  return new Date(Date.UTC(y,m+2,1)).toISOString().slice(0,10);
+ }
+ function regular(e){return String(e?.employment_type||'').trim()==='정규직';}
+ function actual(e){return valid(e?.conversion_date)?e.conversion_date:'';}
+ function savedEstimate(e){
+  if(!valid(e?.regular_conversion_estimated_date))return '';
+  // A changed hire date invalidates an older derived value; recompute for display.
+  return e.regular_conversion_estimated_date===estimatedConversion(e.hire_date)?e.regular_conversion_estimated_date:'';
+ }
+ window.hrRegularConversionLabel=function(e){
+  if(actual(e))return actual(e);
+  if(!regular(e))return '—';
+  return savedEstimate(e)||estimatedConversion(e.hire_date)||'—';
+ };
+ window.hrRegularConversionSource=function(e){
+  if(actual(e))return '실제 등록일';
+  if(!regular(e))return '전환 기록 없음';
+  const est=savedEstimate(e)||estimatedConversion(e.hire_date);
+  return est?(savedEstimate(e)?'계산값 · 저장됨':'계산값 · 미저장'):'입사일 확인 필요';
+ };
+ window.hrBulkEstimateRegularDates=function(){
+  const employees=Array.isArray(db.employees)?db.employees:[];
+  const candidates=employees.filter(e=>regular(e)&&!actual(e)&&valid(e.hire_date));
+  const changes=candidates.filter(e=>e.regular_conversion_estimated_date!==estimatedConversion(e.hire_date));
+  const skipped=employees.filter(e=>regular(e)&&!actual(e)&&!valid(e.hire_date)).length;
+  if(!changes.length){alert('새로 계산해 저장할 정규직 전환일이 없습니다.'+(skipped?'\n입사일 확인 필요: '+skipped+'명':''));return;}
+  if(!confirm('정규직 전환일 미등록 직원 '+changes.length+'명의 계산값을 별도 저장하시겠습니까?\n\n입사월 포함 3개월째 말일의 다음 날로 계산합니다.\n이미 등록된 실제 전환일은 수정하지 않습니다.\n실제 확인된 전환일과 계산값은 상세정보에서 구분됩니다.'))return;
+  changes.forEach(e=>{
+   e.regular_conversion_estimated_date=estimatedConversion(e.hire_date);
+   e.regular_conversion_estimate_rule='입사월 포함 3개월째 말일 다음 날';
+  });
+  if(typeof commit==='function')commit('정규직 전환일 계산값 일괄 등록',changes.length+'명 · 기존 실제 전환일 유지 · 입사일 확인 필요 '+skipped+'명');
+  else if(typeof save==='function'){save();render();}
+  alert('계산값 '+changes.length+'명의 저장을 요청했습니다. 상단의 공동 저장 상태를 확인하세요.'+(skipped?'\n입사일 확인 필요: '+skipped+'명':''));
+ };
 })();
 </script>
 </body></html>
