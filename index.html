@@ -2352,4 +2352,61 @@ window.saveRetirementContractConversion=function(id){
  };
 })();
 </script>
+
+<script id="unionActualRosterLookup">
+/* Search the actual monthly/current union roster, not only the legacy unionView. */
+(function(){
+  'use strict';
+  let query='';
+  const normalize=v=>String(v||'').normalize('NFC').toLocaleLowerCase('ko-KR').trim();
+  const earlierRender=render;
+  function applyFilter(){
+    const field=document.getElementById('unionActualSearch');
+    if(!field)return;
+    query=field.value;
+    const term=normalize(query);
+    let visible=0;
+    document.querySelectorAll('[data-union-roster-table]').forEach(table=>{
+      let count=0;
+      table.querySelectorAll('tbody tr').forEach(tr=>{
+        const cells=tr.querySelectorAll('td');
+        if(cells.length<2)return;
+        const match=!term||normalize(cells[0].textContent).includes(term)||normalize(cells[1].textContent).includes(term);
+        tr.hidden=!match;
+        tr.style.display=match?'':'none';
+        if(match)count++;
+      });
+      visible+=count;
+    });
+    const countEl=document.getElementById('unionActualResultCount');
+    if(countEl)countEl.textContent=`검색 결과 ${visible}명`;
+  }
+  function mountSearch(){
+    if(view!=='union')return;
+    const content=document.getElementById('content');
+    if(!content||content.querySelector('#unionActualSearch'))return;
+    const panels=[...content.querySelectorAll('section.panel')].filter(panel=>{
+      const heading=panel.querySelector('h2');
+      return heading&&/^(생산직 조합원 명단|사무직 조합원 명단)/.test(heading.textContent.trim())&&panel.querySelector('table');
+    });
+    if(!panels.length)return;
+    for(const panel of panels)panel.querySelector('table').setAttribute('data-union-roster-table','');
+    const bar=document.createElement('section');
+    bar.className='panel no-print';
+    bar.innerHTML='<h2>조합원 검색</h2><div class="toolbar"><input id="unionActualSearch" type="search" autocomplete="off" placeholder="사번 또는 이름 검색" aria-label="조합원 사번 또는 성명 검색" style="min-width:220px;flex:1"><span class="hint" id="unionActualResultCount"></span></div><p class="hint">아래 생산직·사무직 조합원 명단에서 일치하는 인원만 표시합니다.</p>';
+    panels[0].parentNode.insertBefore(bar,panels[0]);
+    const field=bar.querySelector('#unionActualSearch');
+    field.value=query;
+    field.addEventListener('input',applyFilter);
+    field.addEventListener('search',applyFilter);
+    applyFilter();
+  }
+  render=function(){
+    const result=earlierRender.apply(this,arguments);
+    mountSearch();
+    return result;
+  };
+  // Leave the input mounted while entering Korean; no render() call on keystrokes.
+})();
+</script>
 </body></html>
