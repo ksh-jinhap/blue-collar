@@ -2279,4 +2279,77 @@ window.saveRetirementContractConversion=function(id){
  };
 })();
 </script>
+<script id="sameNameRosterScript">
+/* Read-only same-name roster. Identical names are not proof of different identities. */
+(function(){
+ 'use strict';
+ const navGroup=Array.from(document.querySelectorAll('.nav-folder')).find(g=>g.querySelector('.folder-head')?.textContent.includes('명부/현황'));
+ const menu=navGroup?.querySelector('.folder-items');
+ if(!menu || menu.querySelector('[data-view="same-names"]'))return;
+ const button=document.createElement('button');
+ button.type='button';button.className='nav';button.dataset.view='same-names';button.textContent='동명이인';
+ menu.appendChild(button);
+ button.addEventListener('click',()=>setView('same-names'));
+ names['same-names']=['동명이인 명부','성명이 같은 직원의 사번·소속·상태를 비교합니다.'];
+ const normalizeName=value=>String(value??'').normalize('NFC').trim().replace(/\s+/g,' ');
+ const safe=value=>typeof esc==='function'?esc(String(value??'')):String(value??'');
+ function sameNameGroups(){
+  const byName=new Map();
+  for(const person of Array.isArray(db?.employees)?db.employees:[]){
+   const name=normalizeName(person.name);
+   if(!name)continue;
+   if(!byName.has(name))byName.set(name,[]);
+   byName.get(name).push(person);
+  }
+  return [...byName.entries()].filter(([,rows])=>rows.length>=2)
+   .sort((a,b)=>a[0].localeCompare(b[0],'ko-KR'))
+   .map(([name,rows])=>({name,rows:rows.slice().sort((a,b)=>String(a.employee_no??'').localeCompare(String(b.employee_no??''),'ko-KR'))}));
+ }
+ function viewSameNames(){
+  const groups=sameNameGroups();
+  const people=groups.reduce((count,g)=>count+g.rows.length,0);
+  return `<div class="cards">${card('동일 성명 그룹',groups.length,'2건 이상 등록된 성명')}${card('해당 직원 기록',people,'퇴사자 포함 · 등록 기록 기준')}</div>`+
+    `<section class="panel"><h2>동명이인 명부</h2><p class="hint">성명 표기가 같은 기록을 모았습니다. 같은 사람이 재입사하여 사번이 여러 개인 경우에도 표시됩니다. 사번·소속·입사일로 확인하세요.</p>`+
+    (groups.length?groups.map(group=>`<div style="margin:18px 0 22px"><h3 style="margin:0 0 8px">${safe(group.name)} <span class="muted" style="font-size:13px">${group.rows.length}건</span></h3>`+
+    `<div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부 / 실</th><th>부서 / 팀</th><th>입사일</th><th>퇴사일</th><th>현재 상태</th></tr></thead><tbody>`+
+    group.rows.map(person=>`<tr><td>${safe(person.employee_no)}</td><td><button type="button" class="hr-name-link" data-employee-detail="${safe(String(person.id))}" title="직원 상세정보 보기">${safe(person.name)}</button></td><td>${safe(person.corporation)}</td><td>${safe(person.headquarters)}</td><td>${safe(person.department)}</td><td>${safe(person.hire_date)}</td><td>${safe(person.exit_date||'-')}</td><td>${safe(person.status)}</td></tr>`).join('')+
+    `</tbody></table></div></div>`).join(''):'<div class="empty">현재 등록된 직원 기록 중 이름이 같은 경우가 없습니다.</div>')+
+    `</section>`;
+ }
+ const previousRender=render;
+ render=function(){
+  if(view!=='same-names')return previousRender();
+  if(typeof session!=='undefined'&&!session){view='cloud';return previousRender();}
+  document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===view));
+  document.getElementById('heading').textContent=names['same-names'][0];
+  document.getElementById('subheading').textContent=names['same-names'][1];
+  document.getElementById('content').innerHTML=viewSameNames();
+ };
+})();
+</script>
+<script id="unionRosterSearchEnhancement">
+/* Member lookup in the Labor Union view. Read-only; shares the existing IME-safe unionSearch state. */
+(function(){
+ 'use strict';
+ const priorUnionView=unionView;
+ const safe=v=>esc(String(v??''));
+ const normalize=v=>String(v??'').normalize('NFC').trim().toLocaleLowerCase('ko-KR');
+ unionView=function(){
+   const base=priorUnionView();
+   const term=normalize(unionSearch);
+   const prod=(Array.isArray(db.employees)?db.employees:[])
+     .filter(e=>e.union_status==='가입'&&e.status!=='퇴사'&&String(e.position||'').trim()!=='계약직')
+     .map(e=>({employee_no:e.employee_no,name:e.name,corporation:e.corporation,department:e.department,category:'생산직'}));
+   const office=(Array.isArray(db.office_union_members)?db.office_union_members:[])
+     .filter(e=>e.union_status==='가입'||!e.union_status)
+     .map(e=>({employee_no:e.employee_no,name:e.name,corporation:e.corporation||'-',department:e.department,category:'사무직'}));
+   const matched=[...prod,...office].filter(e=>!term||[e.employee_no,e.name].some(x=>normalize(x).includes(term)))
+     .sort((a,b)=>String(a.name??'').localeCompare(String(b.name??''),'ko-KR')||String(a.employee_no??'').localeCompare(String(b.employee_no??'')));
+   const rows=matched.slice(0,400).map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.category)}</td><td>${safe(e.corporation)}</td><td>${safe(e.department)}</td></tr>`).join('');
+   const panel=`<section class="panel"><h2>노동조합 명부 검색</h2><div class="toolbar"><input id="unionSearch" type="search" autocomplete="off" placeholder="사번 또는 이름 입력" aria-label="노동조합 명부 사번 또는 이름 검색" value="${safe(unionSearch)}" style="min-width:220px;flex:1"><span class="hint">조회 결과 ${matched.length}명</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>구분</th><th>법인</th><th>부서</th></tr></thead><tbody>${rows||'<tr><td colspan="5" class="empty">검색 결과가 없습니다.</td></tr>'}</tbody></table></div>${matched.length>400?'<p class="hint">앞의 400명만 표시됩니다. 사번 또는 성명으로 검색 범위를 좁혀주세요.</p>':''}<p class="hint">가입 상태가 확인된 생산직 현원 및 등록된 사무직 조합원 명부를 조회합니다. 검색은 자료를 변경하지 않습니다.</p></section>`;
+   const insertAfter=base.indexOf('</div>');
+   return insertAfter>=0?base.slice(0,insertAfter+6)+panel+base.slice(insertAfter+6):panel+base;
+ };
+})();
+</script>
 </body></html>
