@@ -2527,4 +2527,149 @@ window.saveRetirementContractConversion=function(id){
  });
 })();
 </script>
+
+<style>
+.hr-bulk-backdrop{position:fixed;inset:0;background:rgba(15,23,42,.65);z-index:100000;display:flex;align-items:center;justify-content:center;padding:16px}
+.hr-bulk-dialog{background:white;color:#172032;border-radius:13px;width:min(980px,100%);max-height:94vh;overflow:auto;box-shadow:0 16px 55px rgba(0,0,0,.25);padding:22px}
+.hr-bulk-dialog h2{margin:0 0 10px}.hr-bulk-hint{font-size:13px;line-height:1.65;color:#475569;margin-bottom:14px}
+.hr-bulk-summary{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}.hr-bulk-summary span{padding:7px 11px;border-radius:8px;background:#eff6ff;color:#1e3a8a;font-size:13px}
+.hr-bulk-scroller{max-height:39vh;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;margin:12px 0}
+.hr-bulk-scroller table{width:100%;border-collapse:collapse;font-size:13px}.hr-bulk-scroller th{position:sticky;top:0;background:#f1f5f9;z-index:1}
+.hr-bulk-scroller td,.hr-bulk-scroller th{padding:8px;text-align:left;border-bottom:1px solid #e2e8f0;white-space:nowrap}
+.hr-bulk-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px}
+.hr-bulk-dialog button:disabled{opacity:.5;cursor:not-allowed}.hr-bulk-progress{font-size:13px;color:#334155;white-space:pre-wrap;margin:10px 0}
+</style>
+<script>
+/* Bulk employee photos: exact employee_no -> employee.id matching, Storage only.
+   Does not modify the shared employee JSON, snapshots, or audit trail. */
+(function(){
+ 'use strict';
+ const MAX_FILE=10*1024*1024,MAX_FILES=1000,MAX_OUTPUT=450*1024;
+ const MIME={jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',webp:'image/webp'};
+ let rows=[],running=false,cancelled=false;
+ const el=id=>document.getElementById(id);
+ const cleanedNo=s=>String(s??'').trim().normalize('NFC');
+ const html=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const basename=name=>{const m=/^(.+)\.(jpe?g|png|webp)$/i.exec(String(name||''));return m?{no:cleanedNo(m[1]),ext:m[2].toLowerCase()}:null;};
+ function injectButton(){
+  if(view!=='employees'||!window.__hrCloudConnected?.())return;
+  const root=el('content');if(!root||el('hrBulkPhotoOpen'))return;
+  const area=document.createElement('section');area.className='panel';area.style.cssText='padding:12px 20px;margin-bottom:12px';
+  area.innerHTML='<div class="toolbar" style="margin:0;gap:10px;flex-wrap:wrap;align-items:center"><button type="button" class="btn" id="hrBulkPhotoOpen">직원 사진 일괄 등록</button><span class="hint">사진 파일명(사번.jpg 등)을 직원 사번과 정확히 대조하여 저장합니다. 기존 사진은 기본 보호됩니다.</span></div>';
+  root.insertBefore(area,root.firstChild);
+  el('hrBulkPhotoOpen').addEventListener('click',open);
+ }
+ const formerRender=render;
+ render=function(){const out=formerRender.apply(this,arguments);injectButton();return out;};
+ function open(){
+  if(!window.__hrPhotoStorage?.ready()){alert('공동 DB에 로그인 후 사용해 주세요.');return;}
+  rows=[];running=false;cancelled=false;
+  document.querySelector('.hr-bulk-backdrop')?.remove();
+  const wrap=document.createElement('div');wrap.className='hr-bulk-backdrop';wrap.id='hrBulkPhotoBackdrop';
+  wrap.innerHTML=`<section class="hr-bulk-dialog" role="dialog" aria-modal="true" aria-labelledby="hrBulkPhotoTitle">
+   <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><h2 id="hrBulkPhotoTitle">직원 사진 일괄 등록</h2><button type="button" class="btn" id="hrBulkPhotoClose">닫기</button></div>
+   <p class="hr-bulk-hint">여러 사진을 선택하면 <b>파일명에서 확장자를 뺀 부분</b>을 직원 사번과 정확하게 비교합니다. 예: <code>260537.jpg</code> → 사번 <code>260537</code>. 앞자리 0도 유지됩니다. JPG, PNG, WEBP 지원 · 파일당 10MB 이하 · 최대 1,000개.<br>사번이 없거나 중복된 직원, 같은 사번의 사진이 여러 장인 경우는 자동 제외됩니다. 업로드 전 명단을 검토하세요.</p>
+   <label style="font-weight:600">사진 파일 선택 <input type="file" id="hrBulkPhotoFiles" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" multiple style="display:block;margin:8px 0;width:100%"></label>
+   <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:12px 0"><input type="checkbox" id="hrBulkPhotoOverwrite"> 이미 등록된 사진도 교체하기 (기본값: 교체 안 함)</label>
+   <div id="hrBulkPhotoSummary" class="hr-bulk-summary" aria-live="polite"></div>
+   <div class="hr-bulk-scroller"><table><thead><tr><th>파일명</th><th>사번</th><th>성명</th><th>부서</th><th>검사 및 처리 결과</th></tr></thead><tbody id="hrBulkPhotoRows"><tr><td colspan="5">사진 파일을 선택해 주세요.</td></tr></tbody></table></div>
+   <div class="hr-bulk-progress" id="hrBulkPhotoProgress" role="status" aria-live="polite"></div>
+   <div class="hr-bulk-actions"><button type="button" class="btn primary" id="hrBulkPhotoStart" disabled>일치 사진 등록 시작</button><button type="button" class="btn" id="hrBulkPhotoCancel" disabled>중단 요청</button><span class="hint">저장할 사진은 직원별 비공개 저장소에 보관되며 직원 인사정보는 변경되지 않습니다.</span></div>
+   </section>`;
+  document.body.appendChild(wrap);
+  el('hrBulkPhotoClose').onclick=()=>{if(running){alert('업로드 중에는 창을 닫을 수 없습니다. 먼저 중단을 요청하세요.');return;}wrap.remove();};
+  el('hrBulkPhotoFiles').onchange=ev=>stage(ev.target.files);
+  el('hrBulkPhotoStart').onclick=uploadAll;
+  el('hrBulkPhotoCancel').onclick=()=>{cancelled=true;el('hrBulkPhotoCancel').disabled=true;progress('진행 중인 파일 처리 후 중단합니다.');};
+ }
+ function progress(v){if(el('hrBulkPhotoProgress'))el('hrBulkPhotoProgress').textContent=v;}
+ function renderRows(){
+  const tbody=el('hrBulkPhotoRows');if(!tbody)return;
+  tbody.innerHTML=rows.map((r,i)=>`<tr><td title="${html(r.file.name)}">${html(r.file.name)}</td><td>${html(r.no||'-')}</td><td>${html(r.employee?.name||'-')}</td><td>${html(r.employee?.department||'-')}</td><td id="hrBulkPhotoStatus${i}">${html(r.status)}</td></tr>`).join('')||'<tr><td colspan="5">사진 파일을 선택해 주세요.</td></tr>';
+  const valid=rows.filter(r=>r.valid).length;
+  el('hrBulkPhotoSummary').innerHTML=`<span>선택 ${rows.length}장</span><span>사번 일치 ${valid}장</span><span>검사 제외 ${rows.length-valid}장</span>`;
+  el('hrBulkPhotoStart').disabled=running||!valid;
+ }
+ function rowStatus(i,v){rows[i].status=v;const cell=el('hrBulkPhotoStatus'+i);if(cell)cell.textContent=v;}
+ function stage(files){
+  if(running)return;
+  rows=[];progress('');
+  if(files.length>MAX_FILES){progress('최대 1,000개까지만 선택할 수 있습니다. 파일을 나누어 선택해 주세요.');renderRows();return;}
+  const employeeMap=new Map();
+  for(const e of db.employees||[]){const n=cleanedNo(e.employee_no);if(!n)continue;if(!employeeMap.has(n))employeeMap.set(n,[]);employeeMap.get(n).push(e);}
+  const namesCount=new Map();
+  for(const file of files){const item=basename(file.name);if(item)namesCount.set(item.no,(namesCount.get(item.no)||0)+1);}
+  for(const file of files){
+   const item=basename(file.name),no=item?.no||'', matches=employeeMap.get(no)||[];
+   const row={file,no,employee:matches.length===1?matches[0]:null,status:'',valid:false};
+   if(!item)row.status='지원하지 않는 파일명/확장자';
+   else if(!no)row.status='사번이 비어 있음';
+   else if(file.size>MAX_FILE)row.status='원본 파일 10MB 초과';
+   else if(file.size===0)row.status='빈 파일';
+   else if(namesCount.get(no)>1)row.status='같은 사번의 사진 여러 장 (제외)';
+   else if(matches.length===0)row.status='일치하는 사번 없음';
+   else if(matches.length>1)row.status='동일 사번 직원 여러 명 (제외)';
+   else if(!/^[0-9]{1,20}$/.test(String(row.employee.id)))row.status='직원 식별값 오류';
+   else {row.valid=true;row.status='등록 가능';}
+   rows.push(row);
+  }
+  renderRows();
+  progress(rows.length?'매칭 결과를 확인한 다음 등록 시작을 눌러 주세요.':'사진 파일을 선택해 주세요.');
+ }
+ async function compress(file){
+  const extension=basename(file.name)?.ext;
+  if(!extension||!MIME[extension])throw Error('지원하지 않는 이미지 형식');
+  if(file.size>MAX_FILE)throw Error('10MB 초과');
+  // Actual decoding detects invalid or disguised image files; always output JPEG.
+  const bitmap=await createImageBitmap(file);
+  try{
+   const scale=Math.min(1,640/Math.max(bitmap.width,bitmap.height));
+   const canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+   const context=canvas.getContext('2d');if(!context)throw Error('이미지 변환 실패');
+   context.fillStyle='#fff';context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);
+   const data=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.78));
+   if(!data||data.size>MAX_OUTPUT)throw Error('사진 압축 결과가 450KB를 초과합니다.');
+   return data;
+  }finally{bitmap.close();}
+ }
+ async function uploadAll(){
+  if(running||!window.__hrPhotoStorage?.ready())return;
+  const candidates=rows.map((r,i)=>({...r,index:i})).filter(r=>r.valid);
+  if(!candidates.length)return;
+  const overwrite=el('hrBulkPhotoOverwrite')?.checked===true;
+  if(!confirm(`매칭된 사진 ${candidates.length}장을 등록하시겠습니까?\n${overwrite?'기존에 등록된 사진도 교체됩니다.':'기존 사진이 있으면 건너뜁니다.'}\n저장 후 사진은 Supabase에 즉시 반영됩니다.`))return;
+  running=true;cancelled=false;
+  el('hrBulkPhotoStart').disabled=true;el('hrBulkPhotoFiles').disabled=true;el('hrBulkPhotoOverwrite').disabled=true;el('hrBulkPhotoCancel').disabled=false;
+  const api=window.__hrPhotoStorage;
+  let saved=0,skipped=0,failed=0,processed=0;
+  try{
+   for(const row of candidates){
+    if(cancelled)break;
+    const i=row.index;
+    try{
+     // Ensure a later employee roster change cannot silently remap a filename.
+     const matches=(db.employees||[]).filter(e=>cleanedNo(e.employee_no)===row.no);
+     if(matches.length!==1||String(matches[0].id)!==String(row.employee.id))throw Error('직원 명단이 바뀌었습니다. 파일을 다시 선택해 주세요.');
+     rowStatus(i,'사진 저장 여부 확인 중…');
+     if(!overwrite){const prior=await api.load(row.employee.id);if(prior){skipped++;rowStatus(i,'기존 사진 보존 · 건너뜀');processed++;progress(`처리 ${processed}/${candidates.length} · 저장 ${saved} · 건너뜀 ${skipped} · 실패 ${failed}`);continue;}}
+     rowStatus(i,'이미지 변환 및 업로드 중…');
+     const blob=await compress(row.file);
+     // Single-photo upload uses the same authenticated Storage API and internal ID path.
+     await api.replace(row.employee.id,blob);
+     saved++;rowStatus(i,'저장 완료 ('+Math.ceil(blob.size/1024)+'KB)');
+    }catch(error){failed++;rowStatus(i,'실패: '+String(error.message||error).slice(0,110));}
+    processed++;progress(`처리 ${processed}/${candidates.length} · 저장 ${saved} · 건너뜀 ${skipped} · 실패 ${failed}`);
+   }
+  }finally{
+   running=false;
+   const remaining=candidates.length-processed;
+   progress(`완료: 저장 ${saved}건 · 기존 사진 건너뜀 ${skipped}건 · 실패 ${failed}건${remaining?' · 미처리 '+remaining+'건':''}. 실패·미처리 파일을 다시 선택해 재시도할 수 있습니다.`);
+   el('hrBulkPhotoFiles').disabled=false;el('hrBulkPhotoOverwrite').disabled=false;el('hrBulkPhotoCancel').disabled=true;
+   // Prevent accidental repeat replacements when batch has finished.
+   el('hrBulkPhotoStart').disabled=true;
+   el('hrBulkPhotoFiles').value='';
+  }
+ }
+})();
+</script>
 </body></html>
