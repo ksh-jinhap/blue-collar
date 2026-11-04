@@ -1646,7 +1646,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    ['부서 / 팀',e.department],['직위',e.position],['직급',e.grade],['성별',e.gender],
    ['생년월일',typeof employeeBirthDate==='function'?employeeBirthDate(e):e.birth_date],
    ['연령',typeof displayAge==='function'?displayAge(e):e.age],['입사일',e.hire_date],['현재 상태',e.status],
-   ['학력',e.education],['고용형태',e.employment_type],['정규직 전환일',window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date],['전환일 구분',window.hrRegularConversionSource?window.hrRegularConversionSource(e):''],['급여 형태',e.salary_type],
+   ['학력',e.education],['고용형태',e.employment_type],['정규직 전환일',window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date],['급여 형태',e.salary_type],
    ['현장관리자 직책',e.field_leader_role],
    ['휴직 시작일',e.leave_start_date||e.leave_date],['휴직 종료일',e.leave_end_date],
    ['산재 시작일',e.industrial_accident_start_date],['산재 종료일',e.industrial_accident_end_date],
@@ -2154,6 +2154,115 @@ window.saveRetirementContractConversion=function(id){
   if(typeof commit==='function')commit('정규직 전환일 계산값 일괄 등록',changes.length+'명 · 기존 실제 전환일 유지 · 입사일 확인 필요 '+skipped+'명');
   else if(typeof save==='function'){save();render();}
   alert('계산값 '+changes.length+'명의 저장을 요청했습니다. 상단의 공동 저장 상태를 확인하세요.'+(skipped?'\n입사일 확인 필요: '+skipped+'명':''));
+ };
+})();
+</script>
+
+<!-- multi-period-leave: keep leave / industrial accident / parental leave as independent historical periods -->
+<style>
+.hr-multi-periods{grid-column:1/-1;border:1px solid #dbe4ee;border-radius:12px;padding:14px;margin-top:7px}
+.hr-multi-periods h3{font-size:15px;margin:0 0 6px}
+.hr-multi-periods p{font-size:12px;color:#64748b;margin:0 0 12px}
+.hr-period-row{display:grid;grid-template-columns:125px repeat(2,minmax(0,1fr));gap:10px;align-items:end;margin-top:10px}
+.hr-period-row>label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px}
+.hr-period-row input{width:100%;min-width:0;box-sizing:border-box}
+@media(max-width:600px){.hr-period-row{grid-template-columns:1fr 1fr}.hr-period-row>strong{grid-column:1/-1}}
+</style>
+<script>
+(function(){
+ 'use strict';
+ const groups=[
+  {label:'일반휴직',fields:['leave_start_date','leave_end_date'],input:['eLeaveDate','eLeaveEnd']},
+  {label:'산재',fields:['industrial_accident_start_date','industrial_accident_end_date'],input:['eAccidentStart','eAccidentEnd']},
+  {label:'육아휴직',fields:['parental_leave_start_date','parental_leave_end_date'],input:['eParentalStart','eParentalEnd']}
+ ];
+ const val=id=>document.getElementById(id)?.value||'';
+ const validDate=value=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const [y,m,d]=value.split('-').map(Number);
+  const check=new Date(Date.UTC(y,m-1,d));
+  return check.getUTCFullYear()===y&&check.getUTCMonth()===m-1&&check.getUTCDate()===d;
+ };
+ const oldOpen=window.openEmployee;
+ window.openEmployee=function(id=null,encoded=''){
+  const result=oldOpen(id,encoded);
+  const status=document.getElementById('eStatus');
+  const form=status?.closest('.formgrid');
+  if(!form)return result;
+  const employee=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
+  const panel=document.createElement('section');
+  panel.id='hrMultiPeriodPanel';
+  panel.className='hr-multi-periods';
+  panel.innerHTML='<h3>휴직 · 산재 · 육아휴직 기간</h3><p>현재 상태와 무관하게 각각의 기간을 기록할 수 있습니다. 과거 기간도 보존됩니다. 미발생 항목은 빈칸으로 두세요.</p>'+groups.map((g,i)=>
+   '<div class="hr-period-row"><strong>'+g.label+'</strong>'+
+   g.fields.map((key,j)=>'<label>'+(j===0?'시작일':'종료일')+'<input type="date" id="hrPeriod_'+i+'_'+j+'"></label>').join('')+
+   '</div>'
+  ).join('');
+  form.appendChild(panel);
+  groups.forEach((g,i)=>g.fields.forEach((field,j)=>{
+   const node=document.getElementById('hrPeriod_'+i+'_'+j);
+   node.value=String(employee?.[field]||(i===0&&j===0?employee?.leave_date:'')||'');
+  }));
+  // Earlier editors show fields only for the selected current status. The new consolidated panel
+  // replaces their UI but keeps their hidden input nodes for compatibility with their save handlers.
+  const oldRow=document.getElementById('employmentStatusDates');
+  const oldExtra=document.getElementById('hrAdditionalLeaveDates');
+  const oldParental=document.getElementById('parentalLeavePeriod');
+  const hideLegacy=()=>{
+   for(const el of [oldRow,oldExtra,oldParental])if(el)el.style.setProperty('display','none','important');
+  };
+  hideLegacy();
+  status.addEventListener('change',hideLegacy);
+  return result;
+ };
+ const oldSave=window.saveEmployee;
+ window.saveEmployee=function(id){
+  const panel=document.getElementById('hrMultiPeriodPanel');
+  if(!panel)return oldSave(id);
+  const current=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
+  const newDates=groups.map((g,i)=>g.fields.map((_,j)=>val('hrPeriod_'+i+'_'+j)));
+  for(let i=0;i<groups.length;i++){
+   const [start,end]=newDates[i];
+   if((start&&!end)||(!start&&end)){
+    alert(groups[i].label+' 시작일과 종료일을 모두 입력하거나 둘 다 비워 주세요.');return;
+   }
+   if(start&&(!validDate(start)||!validDate(end)||end<start)){
+    alert(groups[i].label+' 기간의 날짜를 확인해 주세요.');return;
+   }
+  }
+  const status=val('eStatus');
+  // Prior handlers still require a pair when the current status is a leave type.
+  const required={'휴직':0,'산재':1,'육아휴직':2}[status];
+  if(required!==undefined&&!newDates[required][0]){
+   alert(status+' 상태에서는 해당 기간을 입력해 주세요.');return;
+  }
+  // Keep the old status-specific save chain working, without erasing previously recorded periods.
+  groups.forEach((g,i)=>g.input.forEach((legacy,j)=>{
+   const node=document.getElementById(legacy);if(node)node.value=newDates[i][j];
+  }));
+  const count=(db.employees||[]).length;
+  const oldValues=current?groups.map(g=>g.fields.map(key=>String(current[key]||''))):null;
+  const result=oldSave(id);
+  const target=id==null?((db.employees||[]).length>count?db.employees.at(-1):null):(db.employees||[]).find(e=>String(e.id)===String(id));
+  if(!target||target.status!==status)return result;
+  let changed=false;
+  groups.forEach((g,i)=>{
+   g.fields.forEach((key,j)=>{
+    if(String(target[key]||'')!==newDates[i][j]){
+     target[key]=newDates[i][j];changed=true;
+    }
+   });
+   const before=oldValues?.[i]||['',''];
+   if((before[0]!==newDates[i][0]||before[1]!==newDates[i][1])&&newDates[i][0]){
+    db.history??=[];
+    db.history.unshift({employee_id:target.id,event_date:newDates[i][0],event_type:'상태변경',title:g.label+' 기간 '+(before[0]||before[1]?'수정':'등록'),description:newDates[i][0]+' ~ '+newDates[i][1],department:target.department,grade:target.grade});
+    changed=true;
+   }
+  });
+  // Retain the legacy general-leave start key for downstream reports.
+  if(newDates[0][0]&&target.leave_date!==newDates[0][0]){target.leave_date=newDates[0][0];changed=true;}
+  if(changed){save();render();}
+  return result;
  };
 })();
 </script>
