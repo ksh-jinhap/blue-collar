@@ -272,6 +272,26 @@ async function request(path,options={}){
  if(!r.ok){const t=await r.text();throw Error('공유 서버 '+r.status+': '+t.slice(0,160));}
  return r.status===204?[]:r.json();
 }
+/* Employee photos live in private Supabase Storage; never in shared JSON. */
+const PHOTO_BUCKET='hr-employee-photos';
+function photoPath(id){const key=String(id??'');if(!/^\d{1,20}$/.test(key))throw Error('직원 식별값이 유효하지 않습니다.');return 'employees/'+key+'.jpg';}
+async function photoRequest(path,method='GET',body=null,type=''){
+ if(!session?.access_token||rev===null)throw Error('공동 DB 로그인 후 이용할 수 있습니다.');
+ const res=await fetch(cfg.url+'/storage/v1'+path,{method,headers:{...headers(),...(type?{'Content-Type':type}:{})},body});
+ if(!res.ok){if(method==='GET'&&res.status===404)return null;const txt=await res.text();throw Error(res.status+' '+txt.slice(0,180));}
+ return res;
+}
+window.__hrPhotoStorage={
+ async load(id){const res=await photoRequest('/object/authenticated/'+PHOTO_BUCKET+'/'+photoPath(id));return res?res.blob():null;},
+ async upload(id,blob){await photoRequest('/object/'+PHOTO_BUCKET+'/'+photoPath(id),'POST',blob,'image/jpeg');},
+ async replace(id,blob){
+  if(!session?.access_token||rev===null)throw Error('로그인이 필요합니다.');
+  const res=await fetch(cfg.url+'/storage/v1/object/'+PHOTO_BUCKET+'/'+photoPath(id),{method:'POST',headers:{...headers(),'Content-Type':'image/jpeg','x-upsert':'true','cache-control':'no-cache'},body:blob});
+  if(!res.ok)throw Error('사진 저장 실패 ('+res.status+'): '+(await res.text()).slice(0,160));
+ },
+ async remove(id){await photoRequest('/object/'+PHOTO_BUCKET,'DELETE',JSON.stringify({prefixes:[photoPath(id)]}),'application/json');},
+ ready(){return Boolean(session?.access_token&&rev!==null);}
+};
 function panel(){
  return `<div class="panel" style="padding:20px;margin-bottom:20px"><h2 style="margin-top:0">3인 공유 연결 설정</h2>
  <div class="notice">GitHub Pages만으로는 직원 데이터가 공유되지 않습니다. 승인된 계정과 접근 제한된 DB를 설정한 후 로그인해야 3명에게 변경 내용이 반영됩니다. GitHub 저장소에는 초기 직원 데이터·백업 파일을 올리지 마세요.</div>
@@ -2407,6 +2427,92 @@ window.saveRetirementContractConversion=function(id){
     return result;
   };
   // Leave the input mounted while entering Korean; no render() call on keystrokes.
+})();
+</script>
+
+<style>
+.hr-photo-card{display:flex;align-items:flex-start;gap:15px;padding:14px;border:1px solid #dce4ed;background:#f8fafc;border-radius:12px;margin:12px 0 18px;flex-wrap:wrap}
+.hr-photo-image{width:116px;height:142px;border-radius:8px;object-fit:cover;background:#e7edf3;border:1px solid #dce4ed;flex-shrink:0}
+.hr-photo-placeholder{width:116px;height:142px;display:flex;align-items:center;justify-content:center;background:#e7edf3;border:1px dashed #b6c5d6;border-radius:8px;color:#64748b;font-size:13px;flex-shrink:0}
+.hr-photo-controls{flex:1;min-width:215px}.hr-photo-controls p{margin:5px 0 9px;font-size:12px;color:#64748b}
+.hr-photo-controls input[type=file]{max-width:100%;font-size:13px;margin:0 0 8px}
+.hr-photo-controls .btn{margin-right:5px;margin-top:4px}
+</style>
+<script>
+/* Standalone UI extension for per-employee photo upload and read-only detail preview.
+   Photos are stored outside the hr_shared_state JSON, so they never inflate saves/backups. */
+(function(){
+ 'use strict';
+ const MAX_INPUT=10*1024*1024,MAX_OUTPUT=450*1024;
+ const photoUrls=new WeakMap();
+ function panel(id,editable){
+  const box=document.createElement('section');box.className='hr-photo-card';box.dataset.photoEmployee=String(id);
+  box.innerHTML='<div class="hr-photo-placeholder" role="img" aria-label="등록된 사진 없음">사진 없음</div><div class="hr-photo-controls"><strong>직원 사진</strong><p class="hr-photo-status" aria-live="polite">비공개 저장소에서 사진 확인 중…</p>'+
+   (editable?'<input type="file" accept="image/jpeg,image/png,image/webp" aria-label="직원 사진 선택"><div><button type="button" class="btn tiny primary" data-photo-upload>사진 등록·교체</button><button type="button" class="btn tiny danger" data-photo-remove>사진 삭제</button></div><p>JPG·PNG·WEBP, 최대 10MB · 자동 축소 저장. 직원 정보를 먼저 등록해야 사진을 추가할 수 있습니다.</p>':'')+'</div>';
+  if(editable){box.querySelector('[data-photo-upload]').addEventListener('click',()=>uploadPhoto(box,id));box.querySelector('[data-photo-remove]').addEventListener('click',()=>removePhoto(box,id));}
+  showPhoto(box,id);return box;
+ }
+ function status(box,text){const el=box.querySelector('.hr-photo-status');if(el)el.textContent=text;}
+ function replacePreview(box,blob){
+  const previous=photoUrls.get(box);if(previous)URL.revokeObjectURL(previous);
+  const old=box.querySelector('.hr-photo-image,.hr-photo-placeholder');if(!old)return;
+  if(blob){const url=URL.createObjectURL(blob);photoUrls.set(box,url);const img=document.createElement('img');img.className='hr-photo-image';img.alt='직원 등록 사진';img.src=url;old.replaceWith(img);}
+  else{photoUrls.delete(box);const placeholder=document.createElement('div');placeholder.className='hr-photo-placeholder';placeholder.textContent='사진 없음';old.replaceWith(placeholder);}
+ }
+ async function showPhoto(box,id){
+  const api=window.__hrPhotoStorage;if(!api?.ready()){status(box,'공동 DB 로그인 후 사진을 조회할 수 있습니다.');return;}
+  try{const blob=await api.load(id);if(!box.isConnected)return;replacePreview(box,blob);status(box,blob?'등록된 사진':'등록된 사진 없음');}
+  catch(error){if(box.isConnected)status(box,'사진 조회 오류: '+error.message);}
+ }
+ async function compress(file){
+  if(!file||!['image/jpeg','image/png','image/webp'].includes(file.type))throw Error('JPG·PNG·WEBP 파일을 선택해 주세요.');
+  if(file.size>MAX_INPUT)throw Error('원본 사진은 10MB 이하만 등록할 수 있습니다.');
+  const bitmap=await createImageBitmap(file);try{
+   const scale=Math.min(1,640/Math.max(bitmap.width,bitmap.height));const canvas=document.createElement('canvas');
+   canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));
+   const ctx=canvas.getContext('2d');if(!ctx)throw Error('사진을 처리할 수 없습니다.');
+   ctx.fillStyle='#fff';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(bitmap,0,0,canvas.width,canvas.height);
+   const blob=await new Promise(r=>canvas.toBlob(r,'image/jpeg',0.78));
+   if(!blob||blob.size>MAX_OUTPUT)throw Error('사진 용량이 너무 큽니다. 다른 사진을 사용해 주세요.');
+   return blob;
+  }finally{bitmap.close();}
+ }
+ function busy(box,yes){box.querySelectorAll('button,input').forEach(el=>el.disabled=yes);}
+ async function uploadPhoto(box,id){
+  const file=box.querySelector('input[type=file]')?.files?.[0];if(!file){alert('등록할 사진을 먼저 선택해 주세요.');return;}
+  const api=window.__hrPhotoStorage;if(!api?.ready()){alert('공동 DB 로그인 후 등록할 수 있습니다.');return;}
+  busy(box,true);status(box,'사진 축소 및 업로드 중…');
+  try{const blob=await compress(file);await api.replace(id,blob);if(box.isConnected){replacePreview(box,blob);status(box,'사진 저장 완료 · '+Math.ceil(blob.size/1024)+'KB');box.querySelector('input[type=file]').value='';}}
+  catch(error){if(box.isConnected)status(box,'사진 저장 실패: '+error.message);alert('사진 등록 실패: '+error.message);}
+  finally{if(box.isConnected)busy(box,false);}
+ }
+ async function removePhoto(box,id){
+  if(!confirm('이 직원의 등록된 사진을 삭제하시겠습니까? 직원 인사정보는 변경되지 않습니다.'))return;
+  const api=window.__hrPhotoStorage;if(!api?.ready()){alert('공동 DB 로그인이 필요합니다.');return;}
+  busy(box,true);status(box,'사진 삭제 중…');
+  try{await api.remove(id);if(box.isConnected){replacePreview(box,null);status(box,'사진 삭제 완료');}}
+  catch(error){if(box.isConnected)status(box,'사진 삭제 실패: '+error.message);alert('사진 삭제 실패: '+error.message);}
+  finally{if(box.isConnected)busy(box,false);}
+ }
+ // Wrap final openEmployee implementation, without changing saveEmployee / shared JSON.
+ const existingOpen=openEmployee;
+ openEmployee=function(id=null,encoded=''){
+  const result=existingOpen.apply(this,arguments);
+  const e=id==null?null:(db.employees||[]).find(x=>String(x.id)===String(id));
+  const body=document.querySelector('#modalBody');if(body&&!body.querySelector('.hr-photo-card')){
+   if(e){body.insertBefore(panel(e.id,true),body.firstChild);}
+   else{const note=document.createElement('div');note.className='notice';note.textContent='직원 사진은 신규 직원 정보를 저장한 다음 수정 화면에서 등록할 수 있습니다.';body.insertBefore(note,body.firstChild);}
+  }
+  return result;
+ };
+ // The detail view is opened by an existing document click listener. Inject the
+ // photo after that listener has produced its read-only modal (no DOM re-render).
+ document.addEventListener('click',event=>{
+  const link=event.target.closest('[data-employee-detail]');if(!link)return;
+  const id=link.getAttribute('data-employee-detail');
+  const body=document.querySelector('#modalBody');
+  if(body&&document.querySelector('#modalWrap.open')&&body.querySelector('.hr-detail-summary')&&!body.querySelector('.hr-photo-card'))body.insertBefore(panel(id,false),body.firstChild);
+ });
 })();
 </script>
 </body></html>
