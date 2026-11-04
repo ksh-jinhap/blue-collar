@@ -102,9 +102,9 @@ function commit(action,detail){db.audit.unshift({id:uid(),date:new Date().toLoca
 function plansFor(y){return db.plans.filter(p=>Number(p.year)===Number(y))}function unitCount(p){return db.employees.filter(e=>occupied(e)&&e.corporation===p.corporation&&e.headquarters===p.headquarters&&e.department===p.department).length}function planSummary(){let a=plansFor(planYear);return {target:a.reduce((s,p)=>s+Number(p.target||0),0),actual:a.reduce((s,p)=>s+unitCount(p),0),short:a.reduce((s,p)=>s+Math.max(0,Number(p.target||0)-unitCount(p)),0),extra:a.reduce((s,p)=>s+Math.max(0,unitCount(p)-Number(p.target||0)),0)}}
 function card(label,num,note,cl=''){return `<div class="card"><div class="label">${label}</div><div class="num ${cl}">${fmt(num)}</div><div class="note">${note}</div></div>`}function summaryCards(){const active=db.employees.filter(occupied),ret=db.employees.length-active.length,ps=planSummary();return `<div class="cards">${card('현재 운영 인원',active.length,'퇴사 제외 · 파견·대기·휴직 포함')}${card('사업계획 정원',ps.target,planYear+'년 등록 조직 기준')}${card('부족 TO',ps.short,'조직별 부족분의 합계','negative')}${card('초과 TO',ps.extra,'조직별 초과분의 합계','warning')}${card('퇴사 누계',ret,'등록된 전체 퇴사 인원')}</div>`}
 function select(name,opts,val='',empty='전체'){return `<select id="${name}">${empty!==null?`<option value="">${empty}</option>`:''}${opts.map(x=>`<option value="${esc(x)}" ${String(x)===String(val)?'selected':''}>${esc(x)}</option>`).join('')}</select>`}function unique(field){return [...new Set(db.employees.map(e=>e[field]||'').filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}function options(field,val=''){return `<datalist id="dl-${field}">${unique(field).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`}function heading(s){return `<div class="summaryline"><strong>${s}</strong></div>`}
-const names={dashboard:['대시보드','전체 인원과 사업계획 대비 TO를 즉시 확인합니다.'],employees:['생산직 인원관리','인원 추가·수정·퇴사 처리 시 정원 현황이 함께 갱신됩니다.'],plans:['사업계획 정원 · TO','연도·법인·본부·부서별 정원을 지정하고 충원 현황을 관리합니다.'],organization:['부서별 · 성별','생산직 운영 인원 구성 및 부서 현황을 조회합니다.'],history:['개인별 연혁','직원별 입사·이동·승급·퇴사 등을 누적 관리합니다.'],audit:['변경 기록','인원 및 사업계획 변경 내역을 확인합니다.'],backup:['저장 · 백업','현재 내용은 이 브라우저에 저장됩니다. 정기적인 백업을 권장합니다.']};
+const names={photoAdmin:['직원 사진 관리','사진 일괄 등록과 미등록 직원 현황을 확인합니다.'],dashboard:['대시보드','전체 인원과 사업계획 대비 TO를 즉시 확인합니다.'],employees:['생산직 인원관리','인원 추가·수정·퇴사 처리 시 정원 현황이 함께 갱신됩니다.'],plans:['사업계획 정원 · TO','연도·법인·본부·부서별 정원을 지정하고 충원 현황을 관리합니다.'],organization:['부서별 · 성별','생산직 운영 인원 구성 및 부서 현황을 조회합니다.'],history:['개인별 연혁','직원별 입사·이동·승급·퇴사 등을 누적 관리합니다.'],audit:['변경 기록','인원 및 사업계획 변경 내역을 확인합니다.'],backup:['저장 · 백업','현재 내용은 이 브라우저에 저장됩니다. 정기적인 백업을 권장합니다.']};
 function setView(v){view=v;document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===v));render()}
-function render(){const [h,d]=names[view];$('#heading').textContent=h;$('#subheading').textContent=d;$('#saveBadge').textContent=db.lastSaved?'저장됨 · '+db.lastSaved:'초기 명단 · 아직 변경 없음';$('#content').innerHTML=({dashboard:dashboard,employees:employeesView,plans:plansView,organization:organizationView,history:historyView,audit:auditView,backup:backupView}[view])()}
+function render(){const [h,d]=names[view];$('#heading').textContent=h;$('#subheading').textContent=d;$('#saveBadge').textContent=db.lastSaved?'저장됨 · '+db.lastSaved:'초기 명단 · 아직 변경 없음';$('#content').innerHTML=({dashboard:dashboard,employees:employeesView,plans:plansView,organization:organizationView,history:historyView,audit:auditView,backup:backupView,photoAdmin:()=>window.__hrPhotoAdminView()}[view])()}
 function legacyYearPicker(){return `<div class="toolbar"><label>사업계획 연도</label><input id="planYear" type="number" min="2000" max="2100" value="${planYear}" style="width:115px"><span class="hint">연도별 정원은 별도로 관리됩니다.</span></div>`}
 function dashboard(){let a=plansFor(planYear).map(p=>({...p,actual:unitCount(p)})).sort((a,b)=>(b.actual-monthTarget(b))-(a.actual-monthTarget(a))||String(a.corporation).localeCompare(String(b.corporation),'ko')||String(a.department).localeCompare(String(b.department),'ko'));let corps={};db.employees.filter(occupied).forEach(e=>{let k=e.corporation||'미지정';corps[k]=(corps[k]||0)+1});const max=Math.max(1,...Object.values(corps));return yearPicker()+summaryCards()+`<div class="notice"><b>TO 산정 기준</b> · 현재 운영 인원은 퇴사자를 제외한 재직·휴직·파견·대기·산재·육아휴직 인원을 포함합니다. 부족 TO는 <b>부서별 max(사업계획 정원 − 운영 인원, 0)</b>을 합산합니다. 계획 미등록 부서는 부족 TO에 포함되지 않습니다.</div><div class="section"><section class="panel"><h2>초과 TO 우선 확인</h2><div class="hint">초과 인원이 많은 팀부터 표시 · 전체 팀 스크롤 조회</div>${a.length?`<div class="tablewrap" style="max-height:500px;overflow:auto"><table><thead><tr><th>법인 / 본부 / 부서</th><th class="right">계획</th><th class="right">현재</th><th class="right">부족 / 초과</th><th>충원</th></tr></thead><tbody>${a.map(p=>`<tr><td>${esc(p.corporation)} · ${esc(p.headquarters)}<br><b>${esc(p.department)}</b></td><td class="right">${fmt(monthTarget(p))}</td><td class="right">${fmt(p.actual)}</td><td class="right ${monthTarget(p)>p.actual?'negative':monthTarget(p)<p.actual?'warning':'positive'}">${monthTarget(p)>p.actual?'-'+(monthTarget(p)-p.actual):monthTarget(p)<p.actual?'+'+(p.actual-monthTarget(p)):'일치'}</td><td><button class="btn tiny primary" onclick="openEmployee(null,'${encodeURIComponent(keyOf(p))}')">인원 등록</button></td></tr>`).join('')}</tbody></table></div>`:`<div class="empty">아직 ${planYear}년 사업계획 인원이 없습니다.<br><br><button class="btn primary" onclick="setView('plans')">사업계획 정원 입력하기</button></div>`}</section><section class="panel"><h2>법인별 운영 인원</h2>${Object.entries(corps).sort((a,b)=>b[1]-a[1]).map(([n,v])=>`<div style="margin:17px 0"><div class="summaryline" style="justify-content:space-between;margin-bottom:7px"><b>${esc(n)}</b><b>${fmt(v)}명</b></div><div class="bar"><i style="width:${100*v/max}%"></i></div></div>`).join('')}<div class="hint">※ 최초 데이터에는 사업계획 정원이 없으므로 직접 입력해야 합니다.</div></section></div>`}
 function employeesView(){let list=db.employees.filter(e=>(!search||[e.name,e.employee_no,e.corporation,e.headquarters,e.department].some(v=>String(v||'').toLowerCase().includes(search.toLowerCase())))&&(!filters.corporation||e.corporation===filters.corporation)&&(!filters.department||e.department===filters.department)&&(!filters.status||e.status===filters.status));return `<div class="panel"><div class="toolbar"><input id="employeeSearch" placeholder="성명, 사번, 부서 검색" value="${esc(search)}">${select('fCorp',unique('corporation'),filters.corporation)}${select('fDept',unique('department'),filters.department)}${select('fStatus',['재직','휴직','파견','대기','산재','육아휴직','퇴사'],filters.status)}<button class="btn" onclick="resetFilters()">초기화</button><button class="btn primary" onclick="openEmployee()">+ 신규 인원 등록</button></div><div class="summaryline"><span class="muted">조회 결과 <b>${fmt(list.length)}</b>명 · 전체 ${fmt(db.employees.length)}명</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부 / 부서</th><th>직급</th><th>성별</th><th>연령</th><th>입사일</th><th>상태</th><th>관리</th></tr></thead><tbody>${list.slice(0,300).map(e=>`<tr><td>${esc(e.employee_no)}</td><td><b>${esc(e.name)}</b></td><td>${esc(e.corporation)}</td><td>${esc(e.headquarters)}<br>${esc(e.department)}</td><td>${esc(e.grade)}</td><td>${esc(e.gender)}</td><td>${displayAge(e)}</td><td>${esc(e.hire_date)}</td><td><span class="pill ${e.status==='퇴사'?'warn':'good'}">${esc(e.status)}</span></td><td><button type="button" class="btn tiny" data-employee-edit="${esc(String(e.id))}">수정</button> <button class="btn tiny" onclick="openPersonal(${hrEmployeeIdArg(e.id)})">연혁</button> ${e.status!=='퇴사'?`<button class="btn tiny danger" onclick="retire(${e.id})">퇴사</button>`:''}</td></tr>`).join('')}</tbody></table></div>${list.length>300?`<div class="hint">조회 결과 중 300명만 표시됩니다. 검색·필터로 좁혀주세요.</div>`:''}</div>`}
@@ -302,6 +302,19 @@ window.__hrPhotoStorage={
   if(!res.ok)throw Error('사진 저장 실패 ('+res.status+'): '+(await res.text()).slice(0,160));
  },
  async remove(id){await photoRequest('/object/'+PHOTO_BUCKET,'DELETE',JSON.stringify({prefixes:[photoPath(id)]}),'application/json');},
+ async listRegisteredIds(){
+  // One authenticated paginated Storage listing, not hundreds of image downloads.
+  // Always query Storage itself; no assumption that a photo exists from employee JSON.
+  const ids=new Set(),pageSize=1000;
+  for(let offset=0;offset<50000;offset+=pageSize){
+   const response=await photoRequest('/object/list/'+PHOTO_BUCKET,'POST',JSON.stringify({prefix:'employees',limit:pageSize,offset,sortBy:{column:'name',order:'asc'}}),'application/json');
+   const items=await response.json();
+   if(!Array.isArray(items))throw Error('사진 저장소 목록 응답을 확인할 수 없습니다.');
+   for(const item of items){const name=String(item?.name||'');const found=/^(?:employees\/)?([0-9]{1,20})\.jpg$/i.exec(name);if(found)ids.add(found[1]);}
+   if(items.length<pageSize)return ids;
+  }
+  throw Error('사진 파일 목록이 너무 많아 조회를 중단했습니다.');
+ },
  ready(){return Boolean(session?.access_token&&rev!==null);}
 };
 function panel(){
@@ -2551,16 +2564,10 @@ window.saveRetirementContractConversion=function(id){
  const cleanedNo=s=>String(s??'').trim().normalize('NFC');
  const html=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const basename=name=>{const m=/^(.+)\.(jpe?g|png|webp)$/i.exec(String(name||''));return m?{no:cleanedNo(m[1]),ext:m[2].toLowerCase()}:null;};
- function injectButton(){
-  if(view!=='employees'||!window.__hrCloudConnected?.())return;
-  const root=el('content');if(!root||el('hrBulkPhotoOpen'))return;
-  const area=document.createElement('section');area.className='panel';area.style.cssText='padding:12px 20px;margin-bottom:12px';
-  area.innerHTML='<div class="toolbar" style="margin:0;gap:10px;flex-wrap:wrap;align-items:center"><button type="button" class="btn" id="hrBulkPhotoOpen">직원 사진 일괄 등록</button><span class="hint">사진 파일명(사번.jpg 등)을 직원 사번과 정확히 대조하여 저장합니다. 기존 사진은 기본 보호됩니다.</span></div>';
-  root.insertBefore(area,root.firstChild);
-  el('hrBulkPhotoOpen').addEventListener('click',open);
- }
- const formerRender=render;
- render=function(){const out=formerRender.apply(this,arguments);injectButton();return out;};
+ // Bulk upload lives in [시스템 관리] > [직원 사진 관리] only.
+ window.__hrOpenBulkPhoto=open;
+ // Preserve the original rendering chain; do not add a button in employee management.
+
  function open(){
   if(!window.__hrPhotoStorage?.ready()){alert('공동 DB에 로그인 후 사용해 주세요.');return;}
   rows=[];running=false;cancelled=false;
@@ -2669,6 +2676,96 @@ window.saveRetirementContractConversion=function(id){
    el('hrBulkPhotoStart').disabled=true;
    el('hrBulkPhotoFiles').value='';
   }
+ }
+})();
+</script>
+
+<style id="hrPhotoAdminStyle">
+.hr-photo-admin-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:16px 0}
+.hr-photo-admin-metric{background:#f1f5f9;padding:15px;border-radius:10px}
+.hr-photo-admin-metric strong{font-size:25px;display:block;margin-top:4px}
+.hr-photo-admin-scroll{max-height:58vh;overflow:auto;border:1px solid #dbe3ef;border-radius:9px}
+.hr-photo-admin-scroll table{width:100%;border-collapse:collapse}
+.hr-photo-admin-scroll th{position:sticky;top:0;background:#eff4fa;z-index:1}
+.hr-photo-admin-scroll th,.hr-photo-admin-scroll td{padding:9px 11px;border-bottom:1px solid #e2e8f0;text-align:left;font-size:13px}
+.hr-photo-admin-filters{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.hr-photo-admin-filters input{min-width:210px;flex:1}
+@media(max-width:640px){.hr-photo-admin-metrics{grid-template-columns:1fr}}
+</style>
+<script id="hrPhotoAdminScript">
+(function(){
+ 'use strict';
+ let latestIds=null,loading=false,scanToken=0,scope='active',query='';
+ const byId=id=>document.getElementById(id);
+ const html=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const normalize=s=>String(s??'').normalize('NFC').toLocaleLowerCase('ko-KR');
+ // Keep the existing employee data and photo Storage untouched: read-only report.
+ window.__hrPhotoAdminView=()=>`<section class="panel">
+  <h2>직원 사진 일괄 등록</h2>
+  <p class="hint">파일명과 직원 사번이 정확히 일치하는 사진만 등록합니다. 등록되지 않은 사번과 중복 사번은 제외하며 기존 사진은 기본적으로 보호합니다.</p>
+  <div class="toolbar"><button type="button" class="btn primary" id="hrBulkPhotoOpen">직원 사진 일괄 등록 열기</button></div>
+ </section>
+ <section class="panel">
+  <h2>사진 미등록 직원 조회</h2>
+  <p class="hint">실제 비공개 사진 저장소와 현재 직원 명단을 비교합니다. 파일을 조회할 수 없는 경우 미등록자로 잘못 판정하지 않습니다.</p>
+  <div class="hr-photo-admin-filters">
+   <button type="button" class="btn primary" id="hrPhotoRefresh">사진 등록 여부 새로 확인</button>
+   <label>조회 범위 <select id="hrPhotoScope"><option value="active" ${scope==='active'?'selected':''}>퇴사자 제외</option><option value="all" ${scope==='all'?'selected':''}>퇴사자 포함 전체</option></select></label>
+   <input type="search" id="hrPhotoMissingSearch" placeholder="사번, 성명, 법인, 부서 검색" aria-label="사진 미등록 직원 검색" autocomplete="off">
+  </div>
+  <div id="hrPhotoScanStatus" role="status" aria-live="polite" class="hint">사진 저장소 조회 전</div>
+  <div id="hrPhotoMetrics" class="hr-photo-admin-metrics"></div>
+  <div class="hr-photo-admin-scroll"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부 / 부서</th><th>상태</th></tr></thead><tbody id="hrPhotoMissingRows"><tr><td colspan="5">조회 버튼을 누르면 미등록 명단이 표시됩니다.</td></tr></tbody></table></div>
+  <p class="hint" id="hrPhotoMissingCount"></p>
+ </section>`;
+ function listEmployees(){return (db.employees||[]).filter(e=>scope==='all'||e.status!=='퇴사');}
+ function draw(){
+  const tbody=byId('hrPhotoMissingRows');if(!tbody)return;
+  const metrics=byId('hrPhotoMetrics');const note=byId('hrPhotoMissingCount');
+  if(!latestIds){metrics.innerHTML='';tbody.innerHTML='<tr><td colspan="5">사진 저장소 조회 후 표시됩니다.</td></tr>';note.textContent='';return;}
+  const employees=listEmployees();const complete=employees.filter(e=>latestIds.has(String(e.id)));
+  const missing=employees.filter(e=>!latestIds.has(String(e.id)));
+  const term=normalize(query).trim();const filtered=missing.filter(e=>!term||[e.employee_no,e.name,e.corporation,e.headquarters,e.department].some(v=>normalize(v).includes(term)));
+  metrics.innerHTML=`<div class="hr-photo-admin-metric">조회 인원<strong>${employees.length.toLocaleString('ko-KR')}명</strong></div><div class="hr-photo-admin-metric">사진 등록<strong>${complete.length.toLocaleString('ko-KR')}명</strong></div><div class="hr-photo-admin-metric">사진 미등록<strong>${missing.length.toLocaleString('ko-KR')}명</strong></div>`;
+  tbody.innerHTML=filtered.map(e=>`<tr><td>${html(e.employee_no)}</td><td>${html(e.name)}</td><td>${html(e.corporation)}</td><td>${html(e.headquarters)} / ${html(e.department)}</td><td>${html(e.status)}</td></tr>`).join('')||'<tr><td colspan="5">조건에 맞는 사진 미등록 직원이 없습니다.</td></tr>';
+  note.textContent=`미등록 ${missing.length.toLocaleString('ko-KR')}명 중 ${filtered.length.toLocaleString('ko-KR')}명 표시 · 사진 조회 시각: ${new Date().toLocaleString('ko-KR')}`;
+ }
+ async function refresh(){
+  if(loading)return;
+  const status=byId('hrPhotoScanStatus');const api=window.__hrPhotoStorage;
+  if(!api?.ready()){latestIds=null;draw();if(status)status.textContent='공동 DB 로그인 후 사진 저장소를 조회할 수 있습니다.';return;}
+  loading=true;latestIds=null;draw();if(status)status.textContent='비공개 저장소의 사진 목록 조회 중…';
+  const button=byId('hrPhotoRefresh');if(button)button.disabled=true;
+  const token=++scanToken;
+  try{
+   const ids=await api.listRegisteredIds();
+   if(token!==scanToken||view!=='photoAdmin')return;
+   latestIds=ids;
+   if(status)status.textContent='사진 저장소 조회 완료 · 최신 파일 기준';
+   draw();
+  }catch(err){
+   if(token!==scanToken||view!=='photoAdmin')return;
+   latestIds=null;draw();if(status)status.textContent='사진 등록 여부 확인 실패: '+String(err?.message||err)+' · 미등록 명단을 표시하지 않습니다.';
+  }finally{loading=false;if(byId('hrPhotoRefresh'))byId('hrPhotoRefresh').disabled=false;}
+ }
+ function mount(){
+  if(view!=='photoAdmin')return;
+  byId('hrBulkPhotoOpen')?.addEventListener('click',()=>window.__hrOpenBulkPhoto?.());
+  byId('hrPhotoRefresh')?.addEventListener('click',refresh);
+  const select=byId('hrPhotoScope');if(select)select.onchange=()=>{scope=select.value;draw();};
+  const search=byId('hrPhotoMissingSearch');if(search){search.value=query;search.addEventListener('input',()=>{query=search.value;draw();});}
+  // Query once on entry; never claim a missing photo until list succeeds.
+  refresh();
+ }
+ const previousRender=render;
+ render=function(){const result=previousRender.apply(this,arguments);mount();return result;};
+ // The folder navigation was built earlier; insert in System Management directly.
+ const systemGroup=[...document.querySelectorAll('.nav-folder')].find(folder=>folder.querySelector('.folder-head')?.textContent.includes('시스템 관리'));
+ const target=systemGroup?.querySelector('.folder-items');
+ if(target&&!target.querySelector('[data-view="photoAdmin"]')){
+  const button=document.createElement('button');button.type='button';button.className='nav';button.dataset.view='photoAdmin';button.textContent='직원 사진 관리';
+  button.addEventListener('click',()=>setView('photoAdmin'));
+  target.insertBefore(button,target.firstChild);
  }
 })();
 </script>
