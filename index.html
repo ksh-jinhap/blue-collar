@@ -1658,6 +1658,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    '<div class="hr-detail-stat"><small>근속기간'+(exit?' (퇴사일 기준)':' (오늘 기준)')+'</small><strong>'+safe(tenure(e.hire_date,ref))+'</strong></div>'+
    '<div class="hr-detail-stat"><small>현재 상태</small><strong>'+safe(e.status)+'</strong></div></div>'+
    '<div class="hr-detail-grid">'+items.map(([label,value])=>'<div class="hr-detail-cell"><small>'+safe(label)+'</small><span>'+safe(value)+'</span></div>').join('')+'</div>'+
+   (window.hrEmployeeLeavePeriods?'<div class="hr-period-detail"><h3>휴직 · 산재 · 육아휴직 회차별 이력</h3>'+window.hrEmployeeLeavePeriods(e).map(group=>'<h4 style="margin:12px 0 4px">'+safe(group.label)+'</h4>'+(group.periods.length?'<table><thead><tr><th>회차</th><th>시작일</th><th>종료일</th></tr></thead><tbody>'+group.periods.map((rec,i)=>'<tr><td>'+(i+1)+'회차</td><td>'+safe(rec.start_date)+'</td><td>'+safe(rec.end_date)+'</td></tr>').join('')+'</tbody></table>':'<p class="hint">기록 없음</p>')).join('')+'</div>':'')+
    '<p class="hint" style="margin-top:16px">조회 전용 화면입니다. 정보 수정은 명부 오른쪽의 ‘수정’ 버튼을 이용하세요. 주민등록번호는 표시하지 않습니다.</p>'+
    '<div class="modalactions"><button type="button" class="btn primary" id="hrCloseDetail">닫기</button></div>';
   modal('직원 상세정보 · 조회 전용',body);
@@ -2158,110 +2159,122 @@ window.saveRetirementContractConversion=function(id){
 })();
 </script>
 
-<!-- multi-period-leave: keep leave / industrial accident / parental leave as independent historical periods -->
+<!-- multi-period-leave: multiple rounds for general / industrial / parental leave -->
 <style>
 .hr-multi-periods{grid-column:1/-1;border:1px solid #dbe4ee;border-radius:12px;padding:14px;margin-top:7px}
 .hr-multi-periods h3{font-size:15px;margin:0 0 6px}
 .hr-multi-periods p{font-size:12px;color:#64748b;margin:0 0 12px}
-.hr-period-row{display:grid;grid-template-columns:125px repeat(2,minmax(0,1fr));gap:10px;align-items:end;margin-top:10px}
+.hr-period-row{display:grid;grid-template-columns:65px repeat(2,minmax(0,1fr)) auto;gap:8px;align-items:end;margin:9px 0}
 .hr-period-row>label{display:flex;flex-direction:column;gap:5px;min-width:0;font-size:12px}
 .hr-period-row input{width:100%;min-width:0;box-sizing:border-box}
-@media(max-width:600px){.hr-period-row{grid-template-columns:1fr 1fr}.hr-period-row>strong{grid-column:1/-1}}
+.hr-period-section{border-top:1px solid #e2e8f0;padding-top:10px;margin-top:12px}
+.hr-period-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.hr-period-detail{grid-column:1/-1;border-top:1px solid #e2e8f0;padding-top:10px;margin-top:7px}
+.hr-period-detail h3{font-size:14px;margin:4px 0 6px}
+.hr-period-detail table{width:100%;border-collapse:collapse;font-size:12px}
+.hr-period-detail th,.hr-period-detail td{padding:7px 5px;border-bottom:1px solid #e2e8f0;text-align:left}
+@media(max-width:600px){.hr-period-row{grid-template-columns:1fr 1fr}.hr-period-row>strong{grid-column:1/-1}.hr-period-row>button{grid-column:1/-1}.hr-period-head{flex-wrap:wrap}}
 </style>
 <script>
 (function(){
  'use strict';
  const groups=[
-  {label:'일반휴직',fields:['leave_start_date','leave_end_date'],input:['eLeaveDate','eLeaveEnd']},
-  {label:'산재',fields:['industrial_accident_start_date','industrial_accident_end_date'],input:['eAccidentStart','eAccidentEnd']},
-  {label:'육아휴직',fields:['parental_leave_start_date','parental_leave_end_date'],input:['eParentalStart','eParentalEnd']}
+  {label:'일반휴직',list:'leave_periods',fields:['leave_start_date','leave_end_date'],input:['eLeaveDate','eLeaveEnd']},
+  {label:'산재',list:'industrial_accident_periods',fields:['industrial_accident_start_date','industrial_accident_end_date'],input:['eAccidentStart','eAccidentEnd']},
+  {label:'육아휴직',list:'parental_leave_periods',fields:['parental_leave_start_date','parental_leave_end_date'],input:['eParentalStart','eParentalEnd']}
  ];
- const val=id=>document.getElementById(id)?.value||'';
- const validDate=value=>{
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
-  const [y,m,d]=value.split('-').map(Number);
-  const check=new Date(Date.UTC(y,m-1,d));
-  return check.getUTCFullYear()===y&&check.getUTCMonth()===m-1&&check.getUTCDate()===d;
- };
- const oldOpen=window.openEmployee;
+ const el=id=>document.getElementById(id);
+ const value=id=>el(id)?.value||'';
+ const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const validDate=v=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const [y,m,d]=v.split('-').map(Number),t=new Date(Date.UTC(y,m-1,d));return t.getUTCFullYear()===y&&t.getUTCMonth()===m-1&&t.getUTCDate()===d};
+ const normalize=record=>({start_date:String(record?.start_date||record?.start||''),end_date:String(record?.end_date||record?.end||'')});
+ function periods(e,g){
+  const arr=e?.[g.list];
+  if(Array.isArray(arr))return arr.map(normalize).filter(p=>p.start_date||p.end_date);
+  const start=String(e?.[g.fields[0]]||(g.list==='leave_periods'?e?.leave_date:'')||'');
+  const end=String(e?.[g.fields[1]]||'');
+  return start||end?[{start_date:start,end_date:end}]:[];
+ }
+ window.hrEmployeeLeavePeriods=function(e){return groups.map(g=>({label:g.label,periods:periods(e,g)}));};
+ const previousOpen=window.openEmployee;
  window.openEmployee=function(id=null,encoded=''){
-  const result=oldOpen(id,encoded);
-  const status=document.getElementById('eStatus');
-  const form=status?.closest('.formgrid');
-  if(!form)return result;
+  const result=previousOpen(id,encoded);
+  const status=el('eStatus');const form=status?.closest('.formgrid');if(!form)return result;
   const employee=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
-  const panel=document.createElement('section');
-  panel.id='hrMultiPeriodPanel';
-  panel.className='hr-multi-periods';
-  panel.innerHTML='<h3>휴직 · 산재 · 육아휴직 기간</h3><p>현재 상태와 무관하게 각각의 기간을 기록할 수 있습니다. 과거 기간도 보존됩니다. 미발생 항목은 빈칸으로 두세요.</p>'+groups.map((g,i)=>
-   '<div class="hr-period-row"><strong>'+g.label+'</strong>'+
-   g.fields.map((key,j)=>'<label>'+(j===0?'시작일':'종료일')+'<input type="date" id="hrPeriod_'+i+'_'+j+'"></label>').join('')+
-   '</div>'
-  ).join('');
+  const panel=document.createElement('section');panel.id='hrMultiPeriodPanel';panel.className='hr-multi-periods';
+  panel.innerHTML='<h3>휴직 · 산재 · 육아휴직 회차별 관리</h3><p>각 유형별로 여러 기간을 추가할 수 있습니다. 기존 등록 기간은 자동으로 첫 회차에 표시됩니다. 삭제할 회차는 해당 줄의 삭제 버튼을 누르세요.</p>'+groups.map((g,i)=>'<div class="hr-period-section"><div class="hr-period-head"><b>'+g.label+'</b><button type="button" class="btn tiny" data-hr-add="'+i+'">+ 회차 추가</button></div><div id="hrPeriodGroup_'+i+'"></div></div>').join('');
   form.appendChild(panel);
-  groups.forEach((g,i)=>g.fields.forEach((field,j)=>{
-   const node=document.getElementById('hrPeriod_'+i+'_'+j);
-   node.value=String(employee?.[field]||(i===0&&j===0?employee?.leave_date:'')||'');
-  }));
-  // Earlier editors show fields only for the selected current status. The new consolidated panel
-  // replaces their UI but keeps their hidden input nodes for compatibility with their save handlers.
-  const oldRow=document.getElementById('employmentStatusDates');
-  const oldExtra=document.getElementById('hrAdditionalLeaveDates');
-  const oldParental=document.getElementById('parentalLeavePeriod');
-  const hideLegacy=()=>{
-   for(const el of [oldRow,oldExtra,oldParental])if(el)el.style.setProperty('display','none','important');
-  };
-  hideLegacy();
-  status.addEventListener('change',hideLegacy);
+  function redraw(i){
+   const host=el('hrPeriodGroup_'+i);if(!host)return;
+   const records=panel.__periods[i];
+   host.innerHTML=records.length?records.map((rec,j)=>'<div class="hr-period-row" data-hr-round="'+j+'"><strong>'+ (j+1)+'회차</strong><label>시작일<input type="date" data-hr-field="start_date" data-hr-idx="'+i+'" data-hr-roundidx="'+j+'" value="'+safe(rec.start_date)+'"></label><label>종료일<input type="date" data-hr-field="end_date" data-hr-idx="'+i+'" data-hr-roundidx="'+j+'" value="'+safe(rec.end_date)+'"></label><button type="button" class="btn tiny danger" data-hr-delete="'+i+'" data-hr-roundidx="'+j+'">삭제</button></div>').join(''):'<p class="hint">등록된 기간 없음</p>';
+  }
+  panel.__periods=groups.map(g=>periods(employee,g));groups.forEach((g,i)=>redraw(i));
+  panel.addEventListener('input',event=>{
+   const node=event.target.closest('[data-hr-field]');if(!node)return;
+   const i=Number(node.dataset.hrIdx),j=Number(node.dataset.hrRoundidx);
+   if(panel.__periods[i]?.[j])panel.__periods[i][j][node.dataset.hrField]=node.value;
+  });
+  panel.addEventListener('click',event=>{
+   const add=event.target.closest('[data-hr-add]');if(add){const i=Number(add.dataset.hrAdd);panel.__periods[i].push({start_date:'',end_date:''});redraw(i);return;}
+   const del=event.target.closest('[data-hr-delete]');if(del){const i=Number(del.dataset.hrDelete),j=Number(del.dataset.hrRoundidx);panel.__periods[i].splice(j,1);redraw(i);}
+  });
+  // Hide previous single-period editors; keep input nodes for legacy save wrappers.
+  const previousFields=[el('employmentStatusDates'),el('hrAdditionalLeaveDates'),el('parentalLeavePeriod')];
+  function hide(){previousFields.forEach(node=>{if(node)node.style.setProperty('display','none','important')});}
+  hide();status.addEventListener('change',hide);
   return result;
  };
- const oldSave=window.saveEmployee;
+ const previousSave=window.saveEmployee;
  window.saveEmployee=function(id){
-  const panel=document.getElementById('hrMultiPeriodPanel');
-  if(!panel)return oldSave(id);
-  const current=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
-  const newDates=groups.map((g,i)=>g.fields.map((_,j)=>val('hrPeriod_'+i+'_'+j)));
+  const panel=el('hrMultiPeriodPanel');if(!panel)return previousSave(id);
+  // Pick up last edited value even when the date field has not blurred.
+  panel.querySelectorAll('[data-hr-field]').forEach(node=>{const i=Number(node.dataset.hrIdx),j=Number(node.dataset.hrRoundidx);if(panel.__periods[i]?.[j])panel.__periods[i][j][node.dataset.hrField]=node.value;});
+  const newLists=panel.__periods.map(rows=>rows.map(normalize));
   for(let i=0;i<groups.length;i++){
-   const [start,end]=newDates[i];
-   if((start&&!end)||(!start&&end)){
-    alert(groups[i].label+' 시작일과 종료일을 모두 입력하거나 둘 다 비워 주세요.');return;
+   let lastEnd='';
+   const sorted=[...newLists[i]].sort((a,b)=>a.start_date.localeCompare(b.start_date));
+   for(const record of sorted){
+    const {start_date:start,end_date:end}=record;
+    if(!start||!end||!validDate(start)||!validDate(end)||end<start){alert(groups[i].label+'의 모든 회차에 올바른 시작일과 종료일을 입력해 주세요.');return;}
+    if(lastEnd&&start<=lastEnd){alert(groups[i].label+'의 회차 간 기간이 겹칩니다. 날짜를 확인해 주세요.');return;}
+    lastEnd=end;
    }
-   if(start&&(!validDate(start)||!validDate(end)||end<start)){
-    alert(groups[i].label+' 기간의 날짜를 확인해 주세요.');return;
-   }
+   newLists[i]=sorted;
   }
-  const status=val('eStatus');
-  // Prior handlers still require a pair when the current status is a leave type.
-  const required={'휴직':0,'산재':1,'육아휴직':2}[status];
-  if(required!==undefined&&!newDates[required][0]){
-   alert(status+' 상태에서는 해당 기간을 입력해 주세요.');return;
-  }
-  // Keep the old status-specific save chain working, without erasing previously recorded periods.
-  groups.forEach((g,i)=>g.input.forEach((legacy,j)=>{
-   const node=document.getElementById(legacy);if(node)node.value=newDates[i][j];
-  }));
-  const count=(db.employees||[]).length;
-  const oldValues=current?groups.map(g=>g.fields.map(key=>String(current[key]||''))):null;
-  const result=oldSave(id);
-  const target=id==null?((db.employees||[]).length>count?db.employees.at(-1):null):(db.employees||[]).find(e=>String(e.id)===String(id));
+  const status=value('eStatus');const required={'휴직':0,'산재':1,'육아휴직':2}[status];
+  if(required!==undefined&&!newLists[required].length){alert(status+' 상태에서는 해당 기간을 1회차 이상 등록해 주세요.');return;}
+  // Legacy single-period fields represent only the most recent round.
+  const latest=newLists.map(rows=>rows.length?rows[rows.length-1]:{start_date:'',end_date:''});
+  groups.forEach((g,i)=>g.input.forEach((input,j)=>{const node=el(input);if(node)node.value=j===0?latest[i].start_date:latest[i].end_date;}));
+  const beforeCount=(db.employees||[]).length;
+  const old=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
+  const priorLists=groups.map(g=>periods(old,g));
+  const result=previousSave(id);
+  const target=id==null?((db.employees||[]).length>beforeCount?db.employees.at(-1):null):(db.employees||[]).find(e=>String(e.id)===String(id));
   if(!target||target.status!==status)return result;
   let changed=false;
   groups.forEach((g,i)=>{
-   g.fields.forEach((key,j)=>{
-    if(String(target[key]||'')!==newDates[i][j]){
-     target[key]=newDates[i][j];changed=true;
-    }
-   });
-   const before=oldValues?.[i]||['',''];
-   if((before[0]!==newDates[i][0]||before[1]!==newDates[i][1])&&newDates[i][0]){
-    db.history??=[];
-    db.history.unshift({employee_id:target.id,event_date:newDates[i][0],event_type:'상태변경',title:g.label+' 기간 '+(before[0]||before[1]?'수정':'등록'),description:newDates[i][0]+' ~ '+newDates[i][1],department:target.department,grade:target.grade});
+   const oldRecords=priorLists[i],rows=newLists[i];
+   if(JSON.stringify(oldRecords)!==JSON.stringify(rows)){
+    target[g.list]=rows.map(p=>({...p}));
     changed=true;
+    const oldSet=new Set(oldRecords.map(p=>p.start_date+'|'+p.end_date));
+    const newSet=new Set(rows.map(p=>p.start_date+'|'+p.end_date));
+    db.history??=[];
+    rows.filter(p=>!oldSet.has(p.start_date+'|'+p.end_date)).forEach(p=>db.history.unshift({employee_id:target.id,event_date:p.start_date,event_type:'상태변경',title:g.label+' 회차 등록·수정',description:p.start_date+' ~ '+p.end_date,department:target.department,grade:target.grade}));
+    oldRecords.filter(p=>!newSet.has(p.start_date+'|'+p.end_date)).forEach(p=>db.history.unshift({employee_id:target.id,event_date:new Date().toISOString().slice(0,10),event_type:'상태변경',title:g.label+' 회차 삭제·정정',description:p.start_date+' ~ '+p.end_date,department:target.department,grade:target.grade}));
+   }
+   for(let j=0;j<2;j++){
+    const key=g.fields[j],newVal=j===0?latest[i].start_date:latest[i].end_date;
+    if(String(target[key]||'')!==newVal){target[key]=newVal;changed=true;}
    }
   });
-  // Retain the legacy general-leave start key for downstream reports.
-  if(newDates[0][0]&&target.leave_date!==newDates[0][0]){target.leave_date=newDates[0][0];changed=true;}
-  if(changed){save();render();}
+  if(String(target.leave_date||'')!==latest[0].start_date){target.leave_date=latest[0].start_date;changed=true;}
+  if(changed){
+   if(typeof commit==='function')commit('휴직·산재 회차별 기간 변경',target.employee_no+' '+target.name+' · 기간 정보 갱신');
+   else {save();render();}
+  }
   return result;
  };
 })();
