@@ -3206,7 +3206,14 @@ function validate(rows,type){
   if(g.conflicts.length){for(const row of g.rows)errors.push({row,no:g.no,reason:[...new Set(g.conflicts)].join(', ')});continue;}
   const old=existing(g.employee),oldList=Array.isArray(old[cfg.key])?old[cfg.key]:[],seen=new Set(oldList.map(x=>signature(x,cfg.fields)));
   const additions=[];
-  for(const item of g.items){const sig=signature(item,cfg.fields);if(seen.has(sig))continue;seen.add(sig);additions.push(item);}
+  for(let i=0;i<g.items.length;i++){
+   const item=g.items[i],sig=signature(item,cfg.fields);
+   if(seen.has(sig)){
+    errors.push({row:g.rows[i]??'-',no:g.no,reason:'기존 기록 또는 엑셀 내 완전 동일한 내용 (중복 제외)'});
+    continue;
+   }
+   seen.add(sig);additions.push(item);
+  }
   const changes={};for(const [key,value] of Object.entries(g.scalars))if(value!==String(old[key]||'').trim())changes[key]=value;
   if(!additions.length&&!Object.keys(changes).length){errors.push({row:g.rows.join(','),no:g.no,reason:'새로 반영할 내용 없음'});continue;}
   records.push({...g,additions,changes});
@@ -3216,6 +3223,7 @@ function validate(rows,type){
 function draw(){const root=document.getElementById('hrBulkCardOverlay');if(!root||!preview)return;
  const p=preview;root.querySelector('#hrBulkApply').disabled=!p.records.length;
  root.querySelector('#hrBulkPreview').innerHTML=`<div class="hr-bulk-summary"><span>읽은 행 <b>${p.rows.length}</b></span><span>적용 대상 <b>${p.records.length}명</b></span><span>제외 <b>${p.errors.length}행</b></span></div>
+ <div class="hint" style="margin:6px 0 10px">총 추가 예정 <b>${p.records.reduce((sum,r)=>sum+r.additions.length,0)}건</b> · 같은 사번에 여러 행이 있으면 각 행을 별도 기록으로 등록합니다. 완전히 같은 내용은 중복 제외 목록에서 확인하세요.</div>
  <div class="tablewrap" style="max-height:290px"><table><thead><tr><th>사번</th><th>성명</th><th>엑셀 행</th><th>새 내역</th><th>변경 항목</th></tr></thead><tbody>${p.records.map(r=>`<tr><td>${html(r.no)}</td><td>${html(r.employee.name)}</td><td>${html(r.rows.join(', '))}</td><td>${r.additions.length}건</td><td>${html(Object.keys(r.changes).map(k=>(configs[p.type].fields.concat(configs[p.type].optional||[]).find(([id])=>id===k)||[k,k])[1]).join(', ')||'-')}</td></tr>`).join('')||'<tr><td colspan="5">적용할 자료 없음</td></tr>'}</tbody></table></div>
  ${p.errors.length?`<h3 style="margin:15px 0 6px">제외 내역</h3><div class="tablewrap" style="max-height:160px"><table><thead><tr><th>행</th><th>사번</th><th>사유</th></tr></thead><tbody>${p.errors.map(r=>`<tr><td>${html(r.row)}</td><td>${html(r.no)}</td><td>${html(r.reason)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
 }
