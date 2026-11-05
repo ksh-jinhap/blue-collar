@@ -2972,7 +2972,7 @@ window.saveRetirementContractConversion=function(id){
  const lists=[
  {key:'family',title:'가족사항',columns:[['name','가족성명'],['relation','관계'],['note','비고']]},
  {key:'school',title:'학력사항',columns:[['category','학력구분'],['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']]},
- {key:'career',title:'경력사항',columns:[['period','근무기간'],['company','회사명'],['role','직위명'],['duty','담당업무']]},
+ {key:'career',title:'경력사항',columns:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']]},
  {key:'licenses',title:'자격/면허사항',columns:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']]}
  ];
  const extraOf=e=>e.hr_record_card&&typeof e.hr_record_card==='object'&&!Array.isArray(e.hr_record_card)?e.hr_record_card:{};
@@ -3020,7 +3020,7 @@ window.saveRetirementContractConversion=function(id){
   let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
    <div class="hr-record-primary"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-items">${items}</div></div>
    <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>`;
-  for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>record[key]||''));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
+  for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
   content+=tableSection('인사변동사항',['변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
    h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
   ]:[h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
@@ -3056,7 +3056,7 @@ window.saveRetirementContractConversion=function(id){
   };
  }
  function addRow(target,item,data){const row=document.createElement('div');row.className='hr-record-edit-row';
-  row.innerHTML=item.columns.map(([key,label])=>`<label>${safe(label)}<input data-column="${safe(key)}" value="${safe(data[key]||'')}"></label>`).join('')+'<button type="button" class="btn tiny danger">삭제</button>';
+  row.innerHTML=item.columns.map(([key,label])=>`<label>${safe(label)}<input data-column="${safe(key)}" value="${safe(data[key]||'')}"></label>`).join('')+(item.key==='career'&&data.period?`<input type="hidden" data-column="period" value="${safe(data.period)}">`:'')+'<button type="button" class="btn tiny danger">삭제</button>';
   row.querySelector('button').onclick=()=>row.remove();target.append(row);
  }
  window.__hrRecordCardOpen=function(id){if(typeof window.__hrCloudConnected==='function'&&!window.__hrCloudConnected()){alert('공동 DB 로그인 후 열 수 있습니다.');return;}
@@ -3095,7 +3095,7 @@ const html=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'
 const configs={
  family:{title:'가족사항 등록',key:'family',fields:[['name','가족성명'],['relation','가족관계'],['note','비고']],required:'name'},
  school:{title:'학력사항 등록',key:'school',fields:[['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']],required:'school',optional:[['resident_address','주민등록주소']]},
- career:{title:'경력사항 등록',key:'career',fields:[['period','근무기간'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
+ career:{title:'경력사항 등록',key:'career',fields:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
  licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']],required:'name'},
  basics:{title:'인사기록카드 내용 등록',key:null,fields:[['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],['job_category','직종'],['military_branch','병역군별'],['military_rank','병역계급']]},
  appointment:{title:'인사변동사항 등록',key:'appointment',fields:[['event_date','변동일자'],['previous_department','현재부서'],['appointed_department','발령부서'],['appointed_position','발령직위'],['appointed_role','직책'],['change_reason','변동사유']],required:'event_date'}
@@ -3182,6 +3182,19 @@ function validateAppointments(rows,type){
  }
  return {type,rows,records,errors};
 }
+function careerDate(value){
+ let v=String(value??'').trim();
+ if(!v)return '';
+ if(/^\d{5}(?:\.0+)?$/.test(v)){
+  const serial=Number(v);if(serial<1||serial>150000)return null;
+  v=new Date(Date.UTC(1899,11,30)+serial*86400000).toISOString().slice(0,10);
+ }
+ const m=/^(\d{4})[-./]?(\d{1,2})[-./]?(\d{1,2})$/.exec(v);
+ if(!m)return null;
+ const y=+m[1],mon=+m[2],day=+m[3],d=new Date(Date.UTC(y,mon-1,day));
+ if(y<1900||y>2100||d.getUTCFullYear()!==y||d.getUTCMonth()!==mon-1||d.getUTCDate()!==day)return null;
+ return String(y).padStart(4,'0')+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
 function validate(rows,type){
  if(type==='appointment')return validateAppointments(rows,type);
  const cfg=configs[type],errors=[],groups=new Map(),records=[];
@@ -3192,6 +3205,12 @@ function validate(rows,type){
   const candidates=employees(no);
   if(candidates.length!==1){errors.push({row:row.row,no,reason:candidates.length?'등록된 동일 사번이 여러 건':'일치하는 직원 없음'});continue;}
   const val=Object.fromEntries(cfg.fields.map(([key,label])=>[key,String(row[label]||'').trim()]));
+  if(type==='career'){
+   const start=careerDate(val.start_date),end=careerDate(val.end_date);
+   if(start===null||end===null){errors.push({row:row.row,no,reason:'경력시작일 또는 경력종료일 날짜 형식 오류'});continue;}
+   if(start&&end&&start>end){errors.push({row:row.row,no,reason:'경력종료일이 경력시작일보다 빠름'});continue;}
+   val.start_date=start;val.end_date=end;
+  }
   const extra=Object.fromEntries((cfg.optional||[]).map(([key,label])=>[key,String(row[label]||'').trim()]));
   if(!Object.values(val).some(Boolean)&&!Object.values(extra).some(Boolean)){errors.push({row:row.row,no,reason:'입력 값 없음'});continue;}
   if(cfg.key&&Object.values(val).some(Boolean)&&!val[cfg.required]){errors.push({row:row.row,no,reason:'필수 내용 누락 ('+cfg.fields.find(x=>x[0]===cfg.required)[1]+')'});continue;}
