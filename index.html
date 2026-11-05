@@ -456,7 +456,7 @@ return {
 function makeXlsx(name,items){const files=[];const types=['<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'];let workbook='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>',rels='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">';items.forEach((item,i)=>{let n=i+1;files.push(['xl/worksheets/sheet'+n+'.xml',sheetXML(item.rows)]);types.push('<Override PartName="/xl/worksheets/sheet'+n+'.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>');workbook+='<sheet name="'+xml(safeName(item.name))+'" sheetId="'+n+'" r:id="rId'+n+'"/>';rels+='<Relationship Id="rId'+n+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet'+n+'.xml"/>'});workbook+='</sheets></workbook>';rels+='<Relationship Id="rId'+(items.length+1)+'" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';types.push('</Types>');files.push(['[Content_Types].xml',types.join('')],['_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],['xl/workbook.xml',workbook],['xl/_rels/workbook.xml.rels',rels],['xl/styles.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="2"><font><sz val="11"/><name val="Aptos"/></font><font><b/><color rgb="FFFFFFFF"/><sz val="11"/><name val="Aptos"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF16445A"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="2"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyFont="1" applyFill="1"/></cellXfs></styleSheet>']);let blob=zip(files),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name+'_'+date()+'.xlsx';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000)}
 window.__unionBaseSheets=sheets;window.__unionMakeXlsx=makeXlsx;window.downloadExcel=function(kind='all'){const sections=sheets();let chosen=kind==='all'?Object.values(sections):[sections[kind]||sections['요약']];if(kind==='all'&&!confirm('전체 Excel에는 직원별 자료와 노조 가입 여부가 포함됩니다. 접근이 제한된 곳에 저장하시겠습니까?'))return;if(kind==='노조명부'||kind==='노조가입전체'){if(!confirm('노조 관련 Excel 파일을 다운로드합니다. 접근과 공유에 유의해 주세요.'))return}makeXlsx('생산직_인사TO_'+(kind==='all'?'전체':kind),chosen)};
 const byView={dashboard:'요약',exits:'퇴사자명단',employees:'인원현황',plans:'사업계획TO',recruitment:'채용진행',executive:'현재TO분석',organization:'조직별현황',history:'개인연혁',audit:'변경기록',union:'노조명부',forecast:'요약',leaders:'현장관리자집계',backup:'all'};
-const content=document.getElementById('content');const observer=new MutationObserver(()=>{let viewName=typeof view==='string'?view:'';if(viewName==='cloud')return;const existing=document.getElementById('exportExcelBar');if(existing)return;let panel=content.querySelector('.panel, .cards, .toolbar');if(!panel)return;const bar=document.createElement('div');bar.id='exportExcelBar';bar.className='toolbar';bar.style.cssText='margin:10px 0 16px;display:flex;gap:8px;flex-wrap:wrap';const b=document.createElement('button');b.className='btn';b.textContent='현재 화면 Excel (.xlsx)';b.onclick=()=>window.downloadExcel(byView[view]||'요약');const all=document.createElement('button');all.className='btn';all.textContent='전체 자료 Excel (.xlsx)';all.onclick=()=>window.downloadExcel('all');bar.append(b,all);content.insertBefore(bar,content.firstChild)});observer.observe(content,{childList:true,subtree:false});
+const content=document.getElementById('content');const observer=new MutationObserver(()=>{let viewName=typeof view==='string'?view:'';if(viewName==='cloud')return;const existing=document.getElementById('exportExcelBar');if(existing)return;let panel=content.querySelector('.panel, .cards, .toolbar');if(!panel)return;const bar=document.createElement('div');bar.id='exportExcelBar';bar.className='toolbar';bar.style.cssText='margin:10px 0 16px;display:flex;gap:8px;flex-wrap:wrap';const b=document.createElement('button');b.className='btn';b.textContent='현재 화면 Excel (.xlsx)';b.onclick=()=>window.downloadCurrentScreenExcel();const all=document.createElement('button');all.className='btn';all.textContent='전체 자료 Excel (.xlsx)';all.onclick=()=>window.downloadExcel('all');bar.append(b,all);content.insertBefore(bar,content.firstChild)});observer.observe(content,{childList:true,subtree:false});
 })();
 </script>
 <script>/* Field leader register and organization analytics */
@@ -2819,6 +2819,90 @@ window.saveRetirementContractConversion=function(id){
   });
   target.insertBefore(button,target.firstChild);
  }
+})();
+</script>
+
+<script id="currentScreenExcelFix">
+/* Current-screen Excel: export what is actually rendered instead of falling back to Summary.
+   Read-only: does not mutate db, Supabase or photo storage. */
+(function(){
+ 'use strict';
+ const outName=(value)=>String(value||'현재화면').replace(/[\\/:*?"<>|]/g,' ').replace(/\s+/g,' ').trim().slice(0,35)||'현재화면';
+ const tidy=(value)=>String(value||'').replace(/\u00a0/g,' ').replace(/[ \t]+/g,' ').replace(/\n\s*\n/g,'\n').trim();
+ const visible=(element)=>{
+   if(!element||element.hidden||element.closest('[hidden],.hidden,[aria-hidden="true"]'))return false;
+   const css=window.getComputedStyle(element);
+   return css.display!=='none'&&css.visibility!=='hidden';
+ };
+ const getCell=(cell)=>{
+   if(!visible(cell))return '';
+   const clone=cell.cloneNode(true);
+   // Buttons used to open employee profiles contain useful name text.
+   // Remove action buttons, but retain buttons that represent a data value.
+   clone.querySelectorAll('button,input[type="checkbox"],input[type="radio"],.no-print').forEach(el=>{
+     if(el.matches('button')&&(el.matches('.hr-name-link,[data-employee-detail],[data-interview-id]')||(!el.classList.contains('btn')&&!el.hasAttribute('onclick')))){
+       el.replaceWith(document.createTextNode(el.textContent||''));
+     } else el.remove();
+   });
+   clone.querySelectorAll('input:not([type="checkbox"]),select,textarea').forEach(el=>{
+     const original=cell.querySelector('#'+CSS.escape(el.id||'__no_id__'));
+     el.replaceWith(document.createTextNode(original?.value||el.value||''));
+   });
+   return tidy(clone.innerText||clone.textContent||'');
+ };
+ function exportTable(table){
+   const trs=Array.from(table.querySelectorAll('tr')).filter(visible);
+   if(!trs.length)return [];
+   // Exclude UI-only columns such as edit, delete, select and management.
+   const header=trs.find(tr=>tr.querySelector('th'))||trs[0];
+   const cells=Array.from(header.children).filter(el=>el.matches('th,td'));
+   const ignored=new Set();
+   cells.forEach((c,i)=>{const label=tidy(c.textContent);if(c.querySelector('input[type="checkbox"],input[type="radio"]')||/^(관리|수정|삭제|선택|처리|상세|사진관리|사진 관리)$/.test(label))ignored.add(i);});
+   return trs.map(tr=>{
+     const cols=Array.from(tr.children).filter(el=>el.matches('th,td'));
+     return cols.filter((c,i)=>!ignored.has(i)&&visible(c)).map(c=>getCell(c));
+   }).filter(row=>row.length&&row.some(v=>v!==''));
+ }
+ function panelTitle(table,idx){
+   const root=table.closest('.panel,.exec-section,section')||table.parentElement;
+   const heading=root?.querySelector('h2,h3,.report-head h2,.smallcaps');
+   return tidy(heading?.textContent)||('표 '+idx);
+ }
+ function makeUniqueName(value,seen){
+   const base=outName(value).slice(0,31);let name=base,n=2;
+   while(seen.has(name)){const suffix='_'+n++;name=base.slice(0,31-suffix.length)+suffix;}
+   seen.add(name);return name;
+ }
+ window.downloadCurrentScreenExcel=function(){
+   const container=document.getElementById('content');
+   if(!container){alert('현재 화면을 찾지 못했습니다.');return;}
+   const isLogged=typeof window.__hrCloudConnected==='function'&&window.__hrCloudConnected();
+   if(!isLogged){alert('공동 DB 로그인 후 다운로드할 수 있습니다.');return;}
+   const sectionName=tidy(document.getElementById('heading')?.textContent||'현재화면');
+   const sheets=[],seen=new Set();
+   const cards=Array.from(container.querySelectorAll('.cards .card')).filter(visible).map(el=>{
+      const label=tidy(el.querySelector('.label')?.textContent);
+      const val=tidy(el.querySelector('.num')?.textContent);
+      const note=tidy(el.querySelector('.note')?.textContent);
+      return label?[label,val,note]:null;
+   }).filter(Boolean);
+   if(cards.length)sheets.push({name:makeUniqueName('화면 요약',seen),rows:[['항목','값','설명'],...cards]});
+   const tables=Array.from(container.querySelectorAll('table')).filter(visible);
+   tables.forEach((table,i)=>{
+      const rows=exportTable(table);
+      if(!rows.length)return;
+      const title=panelTitle(table,i+1);
+      sheets.push({name:makeUniqueName(title,seen),rows});
+   });
+   // Some views contain field cards or textual records without a table.
+   if(!sheets.length){
+      alert('현재 화면에 Excel로 내려받을 표 또는 집계가 없습니다. 다른 조회 화면에서 시도해 주세요.');
+      return;
+   }
+   const filename='생산직_인사TO_현재화면_'+outName(sectionName);
+   try{window.__unionMakeXlsx(filename,sheets)}
+   catch(error){console.error('현재 화면 Excel 저장 실패',error);alert('Excel 생성 실패: '+String(error?.message||error));}
+ };
 })();
 </script>
 </body></html>
