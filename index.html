@@ -2786,7 +2786,7 @@ window.saveRetirementContractConversion=function(id){
    // Central setView already applies the login guard. Do not silently
    // redirect from this renderer: a transient refresh failure should not
    // make an already displayed photo-management screen jump to login.
-   if(!session?.access_token){
+   if(!window.__hrCloudConnected?.()){
     byId('heading').textContent='직원 사진 관리';
     byId('subheading').textContent='로그인 상태 확인';
     byId('content').innerHTML='<section class="panel"><h2>공동 DB 연결 확인 필요</h2><p class="hint">현재 로그인 상태를 확인할 수 없습니다. 다른 데이터를 변경하지 않았습니다.</p><button type="button" class="btn primary" id="hrPhotoGoLogin">공유 설정에서 다시 로그인</button></section>';
@@ -2809,7 +2809,7 @@ window.saveRetirementContractConversion=function(id){
  if(target&&!target.querySelector('[data-view="photoAdmin"]')){
   const button=document.createElement('button');button.type='button';button.className='nav';button.dataset.view='photoAdmin';button.textContent='직원 사진 관리';
   button.addEventListener('click',()=>{
-   if(!session?.access_token){
+   if(!window.__hrCloudConnected?.()){
     // Existing global guard routes to shared login. Explain why clearly.
     alert('현재 공동 DB 로그인 세션이 없습니다. [3인 공유 설정]에서 다시 로그인한 뒤 직원 사진 관리를 열어 주세요.');
     setView('cloud');
