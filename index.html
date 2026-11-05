@@ -2912,7 +2912,7 @@ window.saveRetirementContractConversion=function(id){
 .hr-record-actions>div{display:flex;gap:8px;flex-wrap:wrap}
 .hr-record-sheet{background:white;color:#1c2839;font-size:calc(11px + 2pt)}
 .hr-record-sheet header{text-align:center;margin-bottom:10px}.hr-record-sheet header h1{font-size:calc(23px + 2pt);letter-spacing:.65em;margin:0 0 3px}.hr-record-subtitle{font-size:calc(10px + 2pt);color:#64748b}
-.hr-record-primary{display:grid;grid-template-columns:minmax(0,1fr) 116px;gap:10px;align-items:start}
+.hr-record-primary{display:grid;grid-template-columns:116px minmax(0,1fr);gap:10px;align-items:start}
 .hr-record-photo{width:116px;height:152px;display:flex;align-items:center;justify-content:center;text-align:center;border:1px solid #abb5c3;color:#8692a3;background:#f7fafc;overflow:hidden;align-self:start}
 .hr-record-photo img{width:100%;height:100%;object-fit:cover}
 .hr-record-items{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-left:1px solid #abb5c3;border-top:1px solid #abb5c3;min-width:0}
@@ -2925,9 +2925,9 @@ window.saveRetirementContractConversion=function(id){
 .hr-record-section th{background:#f2f5fa;text-align:center;color:#24314a}.hr-record-section .hr-record-empty{text-align:center;color:#8290a0}
 .hr-record-sheet footer{text-align:right;font-size:calc(9px + 2pt);color:#66758a;padding-top:4px}
 .hr-record-edit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hr-record-edit-grid label,.hr-record-edit-row label{font-size:calc(11px + 2pt);font-weight:700;color:#54657c;display:flex;flex-direction:column;gap:4px;min-width:0}
-.hr-record-edit-grid input,.hr-record-edit-row input{width:100%;padding:7px 8px}.hr-record-edit-section{border-top:1px solid #e2e8f0;margin-top:16px;padding-top:12px}.hr-record-edit-head{display:flex;align-items:center;justify-content:space-between}.hr-record-edit-head h3{margin:0 0 10px;font-size:calc(14px + 2pt)}
+.hr-record-edit-grid input,.hr-record-edit-grid textarea,.hr-record-edit-row input{width:100%;padding:7px 8px}.hr-record-address-field{grid-column:1/-1}.hr-record-address-field textarea{resize:vertical;min-height:58px}.hr-record-edit-section{border-top:1px solid #e2e8f0;margin-top:16px;padding-top:12px}.hr-record-edit-head{display:flex;align-items:center;justify-content:space-between}.hr-record-edit-head h3{margin:0 0 10px;font-size:calc(14px + 2pt)}
 .hr-record-edit-row{display:flex;gap:9px;align-items:end;margin:7px 0}.hr-record-edit-row label{flex:1}.hr-record-edit-row button{flex-shrink:0}
-@media(max-width:720px){.hr-record-overlay{padding:5px}.hr-record-window,.hr-record-editor{padding:9px}.hr-record-primary{grid-template-columns:minmax(0,1fr) 86px;gap:6px}.hr-record-photo{width:86px;height:115px}.hr-record-items{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-record-item:nth-child(2n){border-right:0}.hr-record-item:nth-child(4n){border-right:1px solid #d3d9e1}.hr-record-edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-record-edit-row{flex-wrap:wrap}.hr-record-edit-row label{flex:1 1 40%}}
+@media(max-width:720px){.hr-record-overlay{padding:5px}.hr-record-window,.hr-record-editor{padding:9px}.hr-record-primary{grid-template-columns:86px minmax(0,1fr);gap:6px}.hr-record-photo{width:86px;height:115px}.hr-record-items{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-record-item:nth-child(2n){border-right:0}.hr-record-item:nth-child(4n){border-right:1px solid #d3d9e1}.hr-record-edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-record-edit-row{flex-wrap:wrap}.hr-record-edit-row label{flex:1 1 40%}}
 @media print{
  @page{size:A4 landscape;margin:8mm}
  html,body{margin:0!important;padding:0!important;background:white!important;height:auto!important;min-height:0!important;overflow:visible!important}
@@ -2939,7 +2939,7 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay .hr-record-actions{display:none!important}
  #hrRecordOverlay .hr-record-sheet{font-size:calc(9px + 2pt)!important;max-width:none!important;width:100%!important}
  #hrRecordOverlay .hr-record-sheet header h1{font-size:calc(19px + 2pt)!important;margin-bottom:2px!important}
- #hrRecordOverlay .hr-record-primary{grid-template-columns:minmax(0,1fr) 104px!important;gap:8px!important;break-inside:avoid}
+ #hrRecordOverlay .hr-record-primary{grid-template-columns:104px minmax(0,1fr)!important;gap:8px!important;break-inside:avoid}
  #hrRecordOverlay .hr-record-photo{width:104px!important;height:140px!important;min-height:0!important}
  #hrRecordOverlay .hr-record-item{padding:3px 5px!important;min-height:28px!important}
  #hrRecordOverlay .hr-record-item span{font-size:calc(8px + 2pt)!important}
@@ -2966,7 +2966,7 @@ window.saveRetirementContractConversion=function(id){
  ['hanja_name','한문'],['marital_status','결혼구분'],['academic_category','학력구분'],['military_category','병역구분'],
  ['military_branch','병역군별'],['military_service','병역병과'],['military_rank','병역계급'],
  ['job_category','직종'],['job_duty','직무'],['employment_category','입사구분'],['business_site','사업장'],
- ['appointment_date','인사변동일'],['service_description','주민등록주소 외 근무 참고사항'],
+ ['appointment_date','인사변동일'],['resident_address','주민등록주소'],
  ['family_note','가족사항 비고']
  ];
  const lists=[
@@ -2995,7 +2995,7 @@ window.saveRetirementContractConversion=function(id){
   'job_category':x.job_category,'job_duty':x.job_duty,'employment_category':x.employment_category,
   'employment_type':e.employment_type,'hire_date':e.hire_date,'exit_date':e.exit_date,
   'appointment_date':x.appointment_date,'regular_conversion':window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date,
-  'manager_role':e.field_leader_role,'status':e.status,'service_description':x.service_description,
+  'manager_role':e.field_leader_role,'status':e.status,'resident_address':x.resident_address,
   'family_note':x.family_note
  };return show(values[k]);}
  const basic=[
@@ -3018,8 +3018,8 @@ window.saveRetirementContractConversion=function(id){
   const periods=window.hrEmployeeLeavePeriods?window.hrEmployeeLeavePeriods(e):[];
   const items=basic.map(([label,k])=>`<div class="hr-record-item"><span>${safe(label)}</span><strong>${cardValue(e,x,k)}</strong></div>`).join('');
   let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
-   <div class="hr-record-primary"><div class="hr-record-items">${items}</div><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div></div>
-   <div class="hr-record-note${String(x.service_description||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소 외 근무 참고사항</b><span>${show(x.service_description)}</span></div>`;
+   <div class="hr-record-primary"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-items">${items}</div></div>
+   <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>`;
   for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>record[key]||''));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
   content+=tableSection('인사변동사항',['변동일','변동사유','부서','직위','직책','내용'],evt.map(h=>[h.event_date,h.event_type||h.title,h.department,h.position||'',h.grade||'',h.description||h.title]));
   const pr=[];for(const g of periods)for(let i=0;i<g.periods.length;i++)pr.push([g.label,(i+1)+'회차',g.periods[i].start_date,g.periods[i].end_date]);
@@ -3035,7 +3035,7 @@ window.saveRetirementContractConversion=function(id){
  async function loadPhoto(id){const target=document.getElementById('hrRecordPhoto');if(!target||!window.__hrPhotoStorage?.ready())return;
   try{const blob=await window.__hrPhotoStorage.load(id);if(!blob||currentId!==String(id)||!target.isConnected)return;const url=URL.createObjectURL(blob);if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=url;target.innerHTML='';const image=document.createElement('img');image.alt='직원 사진';image.src=url;target.append(image);}catch(err){console.warn('인사기록카드 사진 조회:',err?.message||err);}}
  function editCard(id){const e=getEmp(id);if(!e)return;const x=extraOf(e),root=overlay();root.dataset.mode='edit';
-  root.innerHTML=`<div class="hr-record-editor"><div class="hr-record-actions"><b>${show(e.name)} · 인사기록카드 추가항목 수정</b><button type="button" class="btn" id="hrCardEditCancel">취소</button></div><div class="notice">기존 사번·입사일·소속 등은 직원 [수정]에서 관리합니다. 이 화면은 인사기록카드의 추가 항목과 가족·학력·경력·자격 내역만 저장합니다.</div><div class="hr-record-edit-grid">${fieldDefs.map(([key,label])=>`<label>${safe(label)}<input data-card-field="${safe(key)}" value="${safe(x[key]||'')}"></label>`).join('')}</div><div id="hrRecordListEditor"></div><div class="hr-record-actions"><button type="button" class="btn" id="hrCardCancelBottom">취소</button><button type="button" class="btn primary" id="hrCardSave">추가항목 저장</button></div></div>`;
+  root.innerHTML=`<div class="hr-record-editor"><div class="hr-record-actions"><b>${show(e.name)} · 인사기록카드 추가항목 수정</b><button type="button" class="btn" id="hrCardEditCancel">취소</button></div><div class="notice">기존 사번·입사일·소속 등은 직원 [수정]에서 관리합니다. 이 화면은 인사기록카드의 추가 항목과 가족·학력·경력·자격 내역만 저장합니다.</div><div class="hr-record-edit-grid">${fieldDefs.map(([key,label])=>`<label class="${key==='resident_address'?'hr-record-address-field':''}">${safe(label)}${key==='resident_address'?`<textarea data-card-field="${safe(key)}" rows="2">${safe(x[key]||'')}</textarea>`:`<input data-card-field="${safe(key)}" value="${safe(x[key]||'')}">`}</label>`).join('')}</div><div id="hrRecordListEditor"></div><div class="hr-record-actions"><button type="button" class="btn" id="hrCardCancelBottom">취소</button><button type="button" class="btn primary" id="hrCardSave">추가항목 저장</button></div></div>`;
   const listContainer=root.querySelector('#hrRecordListEditor');
   for(const item of lists){const box=document.createElement('section');box.className='hr-record-edit-section';box.dataset.list=item.key;
    box.innerHTML=`<div class="hr-record-edit-head"><h3>${safe(item.title)}</h3><button type="button" class="btn tiny" data-add-list="${safe(item.key)}">+ 행 추가</button></div><div class="hr-record-edit-rows"></div>`;listContainer.append(box);
@@ -3066,5 +3066,62 @@ window.saveRetirementContractConversion=function(id){
  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.getElementById('hrRecordOverlay'))close()});
 })();
 
+</script>
+
+<style>
+.hr-bulk-backdrop{position:fixed;inset:0;background:#142036bd;z-index:10020;display:flex;align-items:center;justify-content:center;padding:16px}
+.hr-bulk-modal{background:#fff;border-radius:14px;padding:22px;width:min(1100px,100%);max-height:93vh;overflow:auto;color:#17243b}
+.hr-bulk-toolbar{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:12px 0}
+.hr-bulk-summary{display:flex;gap:12px;flex-wrap:wrap;margin:10px 0}
+.hr-bulk-summary span{padding:8px 12px;background:#f1f5fa;border-radius:8px}
+.hr-bulk-status{color:#64748b;font-size:12px}
+@media print{.hr-bulk-backdrop{display:none!important}}
+</style>
+<script>
+/* Independent XLSX record-card importer: does not alter the existing authentication,
+   photo handling, navigation render chain, or any other employee fields. */
+(function(){
+'use strict';
+const escBulk=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const columns=['사번','주민등록주소','학력구분','입학일자','졸업일자','학교명','전공명'];
+const types=['category','admission','graduation','school','major'];
+let preview=null,loadedName='';
+const schoolSig=x=>types.map(k=>String(x[k]||'').trim()).join('\u241f');
+const studentData=r=>Object.fromEntries(types.map((k,i)=>[k,String(r[columns[i+2]]||'').trim()]));
+const nonEmptySchool=x=>types.some(k=>x[k]);
+function findEmployees(no){return (db.employees||[]).filter(e=>String(e.employee_no||'').trim()===no);}
+function box(){let el=document.getElementById('hrBulkCardOverlay');if(el)return el;el=document.createElement('div');el.id='hrBulkCardOverlay';el.className='hr-bulk-backdrop';el.innerHTML=`<div class="hr-bulk-modal" role="dialog" aria-modal="true" aria-label="인사기록카드 주소 학력 일괄 등록">
+<div class="hr-record-actions"><h2 style="margin:0">인사기록카드 · 주소/학력 일괄 등록</h2><button class="btn" id="hrBulkClose">닫기</button></div>
+<div class="notice">엑셀(.xlsx) 첫 시트의 <b>사번</b>과 현재 직원 명단을 정확히 대조합니다. 일치하는 직원만 처리하며, 기존 주소는 빈칸으로 지워지지 않습니다. 기존 학력 내역은 보존하고 중복되지 않는 행만 추가합니다. 동일 사번이 직원 명단에 여러 번 존재하면 해당 건은 제외합니다.</div>
+<div class="hr-bulk-toolbar"><button class="btn" id="hrBulkTemplate">엑셀 양식 다운로드</button><label class="btn" style="cursor:pointer">작성된 엑셀 선택<input id="hrBulkFile" type="file" accept=".xlsx" hidden></label><span id="hrBulkFilename" class="hr-bulk-status">선택된 파일 없음</span></div>
+<div id="hrBulkPreview"><div class="empty">엑셀 파일을 선택하면 사번 매칭 결과가 표시됩니다.</div></div>
+<div class="hr-record-actions"><span class="hint">미리보기를 확인하고 등록하세요. 업로드 전 JSON 백업을 권장합니다.</span><button class="btn primary" id="hrBulkApply" disabled>검증된 항목 일괄 등록</button></div>
+</div>`;document.body.append(el);
+el.querySelector('#hrBulkClose').onclick=()=>el.remove();
+el.querySelector('#hrBulkTemplate').onclick=()=>{if(typeof window.__hrCardTemplate==='function')window.__hrCardTemplate();else alert('엑셀 양식은 별도 제공 파일을 사용해 주세요.');};
+el.querySelector('#hrBulkFile').onchange=async ev=>{const file=ev.target.files?.[0];if(!file)return;el.querySelector('#hrBulkFilename').textContent=file.name;el.querySelector('#hrBulkApply').disabled=true;el.querySelector('#hrBulkPreview').textContent='엑셀 검사 중…';try{const rows=await readXlsx(file);preview=validate(rows);loadedName=file.name;renderPreview();}catch(err){preview=null;el.querySelector('#hrBulkPreview').textContent='불러오기 실패: '+(err.message||err);}ev.target.value='';};
+el.querySelector('#hrBulkApply').onclick=apply;
+return el;}
+function getText(root,tag){return root.getElementsByTagName(tag)[0]?.textContent||'';}
+async function inflate(data){if(typeof DecompressionStream==='undefined')throw Error('이 브라우저는 XLSX 압축 해제를 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용하세요.');let stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));let buf=await new Response(stream).arrayBuffer();if(buf.byteLength>20*1024*1024)throw Error('엑셀 압축 해제 크기가 제한을 초과했습니다.');return new Uint8Array(buf);}
+function u16(v,i){return v[i]|(v[i+1]<<8)}
+function u32(v,i){return (v[i]|(v[i+1]<<8)|(v[i+2]<<16)|(v[i+3]<<24))>>>0}
+async function zipFiles(file){if(file.size>8*1024*1024)throw Error('엑셀 파일이 8MB를 넘습니다. 분할해서 등록하세요.');let b=new Uint8Array(await file.arrayBuffer()),files=new Map(),dec=new TextDecoder();let end=-1;for(let i=b.length-22;i>=Math.max(0,b.length-65557);i--)if(u32(b,i)===0x06054b50){end=i;break}if(end<0)throw Error('정상적인 XLSX ZIP 파일이 아닙니다.');let n=u16(b,end+10),pos=u32(b,end+16);if(n>300)throw Error('엑셀 파일에 항목이 너무 많습니다.');for(let j=0;j<n;j++){if(u32(b,pos)!==0x02014b50)throw Error('압축 파일 색인이 손상되었습니다.');let method=u16(b,pos+10),size=u32(b,pos+20),nameLen=u16(b,pos+28),extra=u16(b,pos+30),comment=u16(b,pos+32),start=u32(b,pos+42),name=dec.decode(b.slice(pos+46,pos+46+nameLen));if(name.startsWith('xl/')&&(name==='xl/sharedStrings.xml'||name==='xl/workbook.xml'||name==='xl/_rels/workbook.xml.rels'||/^xl\/worksheets\/sheet\d+\.xml$/.test(name))){if(size>12*1024*1024)throw Error('엑셀 시트가 너무 큽니다.');let off=start;if(u32(b,off)!==0x04034b50)throw Error('엑셀 데이터가 손상되었습니다.');let dataStart=off+30+u16(b,off+26)+u16(b,off+28);let chunk=b.slice(dataStart,dataStart+size);files.set(name,method===0?chunk:method===8?await inflate(chunk):(()=>{throw Error('지원하지 않는 압축 형식입니다.')})());}pos+=46+nameLen+extra+comment;}return files;}
+function xmlDoc(buf){const doc=new DOMParser().parseFromString(new TextDecoder().decode(buf),'application/xml');if(doc.querySelector('parsererror'))throw Error('엑셀 XML 형식을 읽을 수 없습니다.');return doc;}
+async function readXlsx(file){if(!/\.xlsx$/i.test(file.name))throw Error('엑셀 .xlsx 파일만 지원합니다.');const files=await zipFiles(file);let path='xl/worksheets/sheet1.xml';if(!files.has(path))throw Error('첫 번째 시트를 찾을 수 없습니다.');let shared=[];if(files.has('xl/sharedStrings.xml')){let doc=xmlDoc(files.get('xl/sharedStrings.xml'));shared=[...doc.getElementsByTagName('si')].map(x=>[...x.getElementsByTagName('t')].map(n=>n.textContent||'').join(''));}const doc=xmlDoc(files.get(path));const rows=[];for(const r of [...doc.getElementsByTagName('row')]){const vals={};for(const c of [...r.getElementsByTagName('c')]){const ref=c.getAttribute('r')||'',col=(ref.match(/^[A-Z]+/)||[])[0];if(!col)continue;let value='';let t=c.getAttribute('t');if(t==='inlineStr')value=[...c.getElementsByTagName('t')].map(n=>n.textContent||'').join('');else{let v=getText(c,'v');value=t==='s'?shared[Number(v)]??'':v;}vals[col]=String(value??'').trim();}if(Object.keys(vals).length)rows.push(vals);if(rows.length>5500)throw Error('최대 5,000건을 지원합니다. 엑셀을 분할해 주세요.');}if(!rows.length)throw Error('첫 번째 시트에 데이터가 없습니다.');const letters=i=>{let v=i+1,z='';while(v){v--;z=String.fromCharCode(65+v%26)+z;v=Math.floor(v/26);}return z};const hdr=rows[0],colMap={};for(const [k,v]of Object.entries(hdr)){let label=v.replace(/\s+/g,'').replace(/^\uFEFF/,'');for(const h of columns)if(h.replace(/\s+/g,'')===label)colMap[h]=k;}if(columns.some(h=>!colMap[h]))throw Error('첫 줄에 필수 열이 빠졌습니다: '+columns.filter(h=>!colMap[h]).join(', '));const out=[];for(let i=1;i<rows.length;i++){let o={};for(const h of columns)o[h]=rows[i][colMap[h]]||'';if(Object.values(o).some(Boolean))out.push({row:i+2,...o});}return out;}
+function validate(rows){const records=[],byNo=new Map(),errors=[];let seen=new Set();for(const row of rows){const no=String(row['사번']||'').trim(),addr=String(row['주민등록주소']||'').trim(),school=studentData(row);if(!no){errors.push({row:row.row,no:'-',reason:'사번 없음'});continue;}if(!/^[0-9A-Za-z_-]{1,40}$/.test(no)){errors.push({row:row.row,no,reason:'사번 형식 오류'});continue;}const matches=findEmployees(no);if(matches.length!==1){errors.push({row:row.row,no,reason:matches.length?'직원 사번 중복':'일치 직원 없음'});continue;}if(!addr&&!nonEmptySchool(school)){errors.push({row:row.row,no,reason:'입력 자료 없음'});continue;}if(nonEmptySchool(school)&&!school.school){errors.push({row:row.row,no,reason:'학력사항의 학교명 누락'});continue;}let group=byNo.get(no);if(!group){group={employee:matches[0],address:'',school:[],sourceRows:[],errors:[]};byNo.set(no,group);}group.sourceRows.push(row.row);if(addr&&group.address&&group.address!==addr)group.errors.push('동일 사번의 주소 값 충돌');else if(addr)group.address=addr;if(nonEmptySchool(school)&&!group.school.some(x=>schoolSig(x)===schoolSig(school)))group.school.push(school);}
+for(const [no,g] of byNo){if(g.errors.length){for(const row of g.sourceRows)errors.push({row,no,reason:g.errors.join(', ')});continue;}const old=g.employee.hr_record_card||{},already=Array.isArray(old.school)?old.school:[],newSchools=g.school.filter(x=>!already.some(y=>schoolSig(x)===schoolSig(y)));const addressWillUpdate=Boolean(g.address&&g.address!==String(old.resident_address||'').trim());if(addressWillUpdate||newSchools.length)records.push({no,employee:g.employee,address:g.address,addressWillUpdate,newSchools,rows:g.sourceRows});else errors.push({row:g.sourceRows.join(','),no,reason:'변경 항목 없음'});}return {rows,records,errors};}
+function renderPreview(){const root=box(),place=root.querySelector('#hrBulkPreview');const p=preview;root.querySelector('#hrBulkApply').disabled=!p?.records?.length;place.innerHTML=`<div class="hr-bulk-summary"><span>엑셀 자료 <b>${p.rows.length}</b>행</span><span>등록 대상 <b>${p.records.length}</b>명</span><span>제외 <b>${p.errors.length}</b>행</span></div><div class="tablewrap" style="max-height:300px"><table><thead><tr><th>사번</th><th>성명</th><th>적용 행</th><th>주소 변경</th><th>학력 추가</th></tr></thead><tbody>${p.records.map(r=>`<tr><td>${escBulk(r.no)}</td><td>${escBulk(r.employee.name)}</td><td>${escBulk(r.rows.join(','))}</td><td>${r.addressWillUpdate?'예':'-'}</td><td>${r.newSchools.length}건</td></tr>`).join('')||'<tr><td colspan="5">등록할 자료가 없습니다.</td></tr>'}</tbody></table></div>${p.errors.length?`<h3 style="margin:16px 0 6px">제외된 행</h3><div class="tablewrap" style="max-height:180px"><table><thead><tr><th>행</th><th>사번</th><th>사유</th></tr></thead><tbody>${p.errors.map(r=>`<tr><td>${escBulk(r.row)}</td><td>${escBulk(r.no)}</td><td>${escBulk(r.reason)}</td></tr>`).join('')}</tbody></table></div>`:''}`;}
+function apply(){if(!preview?.records?.length)return;if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용하세요.');return;} // repeat matching to avoid stale records
+const p=validate(preview.rows);if(p.errors.length!==preview.errors.length||p.records.length!==preview.records.length){preview=p;renderPreview();alert('직원 자료가 변경되었습니다. 매칭 결과를 다시 확인해 주세요.');return;}
+if(!confirm(`${p.records.length}명의 인사기록카드에 주소 및 학력사항을 추가합니다. 기존 학력은 보존됩니다. 진행할까요?`))return;
+for(const row of p.records){const emp=row.employee;const old=emp.hr_record_card&&typeof emp.hr_record_card==='object'&&!Array.isArray(emp.hr_record_card)?emp.hr_record_card:{};const merged={...old};if(row.addressWillUpdate)merged.resident_address=row.address;merged.school=[...(Array.isArray(old.school)?old.school:[]),...row.newSchools];emp.hr_record_card=merged;}
+const count=p.records.length;preview=null;document.getElementById('hrBulkCardOverlay')?.remove();commit('인사기록카드 주소·학력 일괄 등록',`${count}명 / 엑셀 사번 대조`);alert(`${count}명 반영 요청 완료. 화면 상단의 공동 DB 저장 완료 표시를 확인해 주세요.`);}
+window.__hrCardBulkOpen=function(){if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용할 수 있습니다.');return;}preview=null;box();};
+// The existing XLSX exporter is local/offline. Reuse it for a blank import template.
+window.__hrCardTemplate=function(){const make=window.__unionMakeXlsx;if(typeof make!=='function'){alert('엑셀 양식 생성 기능을 사용할 수 없습니다.');return;}make('인사기록카드_주소학력_일괄등록_양식',[{name:'일괄등록',rows:[columns]}]);};
+function installButton(){const target=[...document.querySelectorAll('.nav-folder')].find(e=>e.querySelector('.folder-head')?.textContent.includes('시스템 관리'))?.querySelector('.folder-items');if(!target||target.querySelector('#hrCardBulkMenu'))return;const b=document.createElement('button');b.id='hrCardBulkMenu';b.type='button';b.className='nav';b.textContent='인사기록카드 일괄등록';b.addEventListener('click',()=>window.__hrCardBulkOpen());target.append(b);}
+installButton();
+})();
 </script>
 </body></html>
