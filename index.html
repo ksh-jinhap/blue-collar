@@ -3021,7 +3021,9 @@ window.saveRetirementContractConversion=function(id){
    <div class="hr-record-primary"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-items">${items}</div></div>
    <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>`;
   for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>record[key]||''));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
-  content+=tableSection('인사변동사항',['변동일','변동사유','부서','직위','직책','내용'],evt.map(h=>[h.event_date,h.event_type||h.title,h.department,h.position||'',h.grade||'',h.description||h.title]));
+  content+=tableSection('인사변동사항',['변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
+   h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
+  ]:[h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
   const pr=[];for(const g of periods)for(let i=0;i<g.periods.length;i++)pr.push([g.label,(i+1)+'회차',g.periods[i].start_date,g.periods[i].end_date]);
   content+=tableSection('휴직 · 산재 · 육아휴직',['구분','회차','시작일','종료일'],pr);
   content+=`<footer>출력일: ${new Date().toLocaleDateString('ko-KR')}</footer></div>`;
@@ -3095,7 +3097,8 @@ const configs={
  school:{title:'학력사항 등록',key:'school',fields:[['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']],required:'school',optional:[['resident_address','주민등록주소']]},
  career:{title:'경력사항 등록',key:'career',fields:[['period','근무기간'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
  licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']],required:'name'},
- basics:{title:'인사기록카드 내용 등록',key:null,fields:[['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],['job_category','직종'],['military_branch','병역군별'],['military_rank','병역계급']]}
+ basics:{title:'인사기록카드 내용 등록',key:null,fields:[['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],['job_category','직종'],['military_branch','병역군별'],['military_rank','병역계급']]},
+ appointment:{title:'인사변동사항 등록',key:'appointment',fields:[['event_date','변동일자'],['previous_department','현재부서'],['appointed_department','발령부서'],['appointed_position','발령직위'],['appointed_role','직책'],['change_reason','변동사유']],required:'event_date'}
 };
 let current=null,preview=null,source='';
 function cols(cfg){return ['사번',...cfg.fields.map(f=>f[1]),...(cfg.optional||[]).map(f=>f[1])];}
@@ -3109,7 +3112,7 @@ function modalFor(type){
  let root=document.getElementById('hrBulkCardOverlay');if(root)root.remove();
  const cfg=configs[type];root=document.createElement('div');root.id='hrBulkCardOverlay';root.className='hr-bulk-backdrop';
  root.innerHTML=`<div class="hr-bulk-modal" role="dialog" aria-modal="true" aria-label="${html(cfg.title)}"><div class="hr-record-actions"><h2 style="margin:0">${html(cfg.title)}</h2><button class="btn" id="hrBulkClose">닫기</button></div>
- <div class="notice">엑셀 첫 시트의 <b>사번</b>을 직원 명단과 정확하게 대조합니다. 사번 불일치·중복 직원·값 충돌은 제외합니다. 기존 이력은 유지하고 새로운 행만 추가합니다. 빈 셀은 기존 내용을 지우지 않습니다.${type==='school'?' 이 메뉴의 엑셀에서는 주민등록주소도 함께 등록할 수 있습니다.':''}</div>
+ <div class="notice">엑셀 첫 시트의 <b>사번</b>을 직원 명단과 정확하게 대조합니다. 사번 불일치·중복 직원·값 충돌은 제외합니다. 기존 이력은 유지하고 새로운 행만 추가합니다. 빈 셀은 기존 내용을 지우지 않습니다.${type==='school'?' 이 메뉴의 엑셀에서는 주민등록주소도 함께 등록할 수 있습니다.':''}${type==='appointment'?' 같은 사번은 엑셀 맨 마지막 행이 최초 변동입니다. 아래 행부터 역순 등록하며, <b>현재 직원의 소속·직위·직책은 변경하지 않고 이력만 추가</b>합니다.':''}</div>
  <div class="hr-bulk-toolbar"><button class="btn" id="hrBulkTemplate">${html(cfg.title)} 엑셀 양식 다운로드</button><label class="btn" style="cursor:pointer">작성된 엑셀 선택<input id="hrBulkFile" type="file" accept=".xlsx" hidden></label><span id="hrBulkFilename" class="hr-bulk-status">선택된 파일 없음</span></div>
  <div id="hrBulkPreview"><div class="empty">작성한 엑셀을 선택하면 대상자와 제외 항목을 보여줍니다.</div></div>
  <div class="hr-record-actions"><span class="hint">검토 후 적용해 주세요. 적용 전 JSON 백업을 권장합니다.</span><button class="btn primary" id="hrBulkApply" disabled>검증된 항목 일괄 등록</button></div></div>`;
@@ -3133,7 +3136,54 @@ async function zipFiles(file){if(file.size>8*1024*1024)throw Error('엑셀 파�
 function xmlDoc(buf){const doc=new DOMParser().parseFromString(new TextDecoder().decode(buf),'application/xml');if(doc.querySelector('parsererror'))throw Error('엑셀 XML 형식을 읽을 수 없습니다.');return doc;}
 async function readXlsx(file,columns){if(!/\.xlsx$/i.test(file.name))throw Error('엑셀 .xlsx 파일만 지원합니다.');const files=await zipFiles(file);let path='xl/worksheets/sheet1.xml';if(!files.has(path))throw Error('첫 번째 시트를 찾을 수 없습니다.');let shared=[];if(files.has('xl/sharedStrings.xml')){let doc=xmlDoc(files.get('xl/sharedStrings.xml'));shared=[...doc.getElementsByTagName('si')].map(x=>[...x.getElementsByTagName('t')].map(n=>n.textContent||'').join(''));}const doc=xmlDoc(files.get(path));const rows=[];for(const r of [...doc.getElementsByTagName('row')]){const vals={};for(const c of [...r.getElementsByTagName('c')]){const ref=c.getAttribute('r')||'',col=(ref.match(/^[A-Z]+/)||[])[0];if(!col)continue;let value='';let t=c.getAttribute('t');if(t==='inlineStr')value=[...c.getElementsByTagName('t')].map(n=>n.textContent||'').join('');else{let v=getText(c,'v');value=t==='s'?shared[Number(v)]??'':v;}vals[col]=String(value??'').trim();}if(Object.values(vals).some(x=>String(x||'').trim()!=='')){vals.__excelRow=Number(r.getAttribute('r')||rows.length+1);rows.push(vals);}if(rows.length>5500)throw Error('최대 5,000건을 지원합니다. 엑셀을 분할해 주세요.');}if(!rows.length)throw Error('첫 번째 시트에 데이터가 없습니다.');const letters=i=>{let v=i+1,z='';while(v){v--;z=String.fromCharCode(65+v%26)+z;v=Math.floor(v/26);}return z};const hdr=rows[0],colMap={};for(const [k,v]of Object.entries(hdr)){let label=String(v).replace(/\s+/g,'').replace(/^\uFEFF/,'');for(const h of columns)if(h.replace(/\s+/g,'')===label)colMap[h]=k;}if(columns.some(h=>!colMap[h]))throw Error('첫 줄에 필수 열이 빠졌습니다: '+columns.filter(h=>!colMap[h]).join(', '));const out=[];for(let i=1;i<rows.length;i++){let o={};for(const h of columns)o[h]=rows[i][colMap[h]]||'';if(Object.values(o).some(Boolean))out.push({row:rows[i].__excelRow||i+2,...o});}return out;}
 
+function appointmentDate(value){
+ let text=String(value??'').trim();
+ if(/^\d{5}(?:\.0+)?$/.test(text)){
+  const days=Number(text);if(days<1||days>150000)return '';
+  const date=new Date(Date.UTC(1899,11,30)+days*86400000);
+  text=date.toISOString().slice(0,10);
+ }
+ const m=/^(\d{4})[-./]?(\d{1,2})[-./]?(\d{1,2})$/.exec(text);
+ if(!m)return '';
+ const y=Number(m[1]),mon=Number(m[2]),day=Number(m[3]);
+ const d=new Date(Date.UTC(y,mon-1,day));
+ if(y<1900||y>2100||d.getUTCFullYear()!==y||d.getUTCMonth()!==mon-1||d.getUTCDate()!==day)return '';
+ return String(y).padStart(4,'0')+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+}
+function appointmentSignature(r){return ['event_date','previous_department','appointed_department','appointed_position','appointed_role','change_reason'].map(k=>String(r[k]??'').trim()).join('\u241f');}
+function validateAppointments(rows,type){
+ const cfg=configs[type],errors=[],groups=new Map(),records=[];
+ for(const row of rows){
+  const no=String(row['사번']||'').trim();
+  if(!no){errors.push({row:row.row,no:'-',reason:'사번 누락'});continue;}
+  if(!/^[0-9A-Za-z_-]{1,40}$/.test(no)){errors.push({row:row.row,no,reason:'사번 형식 오류'});continue;}
+  const candidates=employees(no);
+  if(candidates.length!==1){errors.push({row:row.row,no,reason:candidates.length?'직원 명단에 동일 사번이 여러 건':'일치 직원 없음'});continue;}
+  const val=Object.fromEntries(cfg.fields.map(([key,label])=>[key,String(row[label]||'').trim()]));
+  const formatted=appointmentDate(val.event_date);
+  if(!formatted){errors.push({row:row.row,no,reason:'변동일자 누락 또는 날짜 형식 오류'});continue;}
+  val.event_date=formatted;
+  if(!cfg.fields.slice(1).some(([key])=>val[key])){errors.push({row:row.row,no,reason:'변동내용이 비어 있음'});continue;}
+  let g=groups.get(no);
+  if(!g){g={no,employee:candidates[0],rows:[],items:[],scalars:{},conflicts:[]};groups.set(no,g);}
+  g.rows.push(row.row);g.items.push({...val,__excelRow:row.row});
+ }
+ for(const g of groups.values()){
+  // The bottom-most Excel row is the earliest personnel change for each employee.
+  const existingHistory=(db.history||[]).filter(h=>String(h.employee_id)===String(g.employee.id)&&h.hr_card_appointment===true);
+  const seen=new Set(existingHistory.map(appointmentSignature));
+  const additions=[];
+  for(const item of [...g.items].reverse()){
+   const sig=appointmentSignature(item);
+   if(seen.has(sig)){errors.push({row:item.__excelRow,no:g.no,reason:'기존 또는 엑셀 내 동일 인사변동 기록'});continue;}
+   seen.add(sig);additions.push(item);
+  }
+  if(additions.length)records.push({...g,additions,changes:{}});
+ }
+ return {type,rows,records,errors};
+}
 function validate(rows,type){
+ if(type==='appointment')return validateAppointments(rows,type);
  const cfg=configs[type],errors=[],groups=new Map(),records=[];
  for(const row of rows){
   const no=String(row['사번']||'').trim();
@@ -3177,7 +3227,20 @@ function apply(){
  if(identity(fresh)!==identity(preview)){preview=fresh;draw();alert('직원 자료가 변경되었습니다. 일괄등록 결과를 다시 검토하세요.');return;}
  if(!confirm(`${configs[preview.type].title}: ${fresh.records.length}명에게 신규 내역 또는 변경된 값을 반영합니다. 진행할까요?`))return;
  const cfg=configs[preview.type];
- for(const r of fresh.records){const emp=r.employee,old=existing(emp),updated={...old,...r.changes};if(cfg.key)updated[cfg.key]=[...(Array.isArray(old[cfg.key])?old[cfg.key]:[]),...r.additions];emp.hr_record_card=updated;}
+ for(const r of fresh.records){
+  if(preview.type==='appointment'){
+   // append from bottom to top so the latest Excel entry appears first when dates tie.
+   for(const entry of r.additions){
+    db.history.unshift({id:uid(),employee_id:r.employee.id,event_date:entry.event_date,
+     event_type:'인사변동',title:'인사변동',hr_card_appointment:true,
+     previous_department:entry.previous_department,appointed_department:entry.appointed_department,
+     appointed_position:entry.appointed_position,appointed_role:entry.appointed_role,
+     change_reason:entry.change_reason,department:entry.appointed_department,
+     position:entry.appointed_position,field_leader_role:entry.appointed_role,
+     description:[entry.previous_department&&'현재부서: '+entry.previous_department,entry.appointed_department&&'발령부서: '+entry.appointed_department,entry.appointed_position&&'발령직위: '+entry.appointed_position,entry.appointed_role&&'직책: '+entry.appointed_role,entry.change_reason].filter(Boolean).join(' / ')});
+   }
+  }else{const emp=r.employee,old=existing(emp),updated={...old,...r.changes};if(cfg.key)updated[cfg.key]=[...(Array.isArray(old[cfg.key])?old[cfg.key]:[]),...r.additions];emp.hr_record_card=updated;}
+ }
  const n=fresh.records.length;document.getElementById('hrBulkCardOverlay')?.remove();preview=null;
  commit('인사기록카드 '+cfg.title,`${n}명 / 사번 대조 / ${source}`);
  alert(`${n}명 반영을 요청했습니다. 화면 상단의 공동 DB 저장 완료 표시를 확인해 주세요.`);
