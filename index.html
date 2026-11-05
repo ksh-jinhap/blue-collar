@@ -2905,4 +2905,158 @@ window.saveRetirementContractConversion=function(id){
  };
 })();
 </script>
+<style id="hrRecordCardStyles">
+.hr-record-overlay{position:fixed;inset:0;z-index:200000;background:#14213b9c;overflow:auto;padding:18px;display:flex;align-items:flex-start;justify-content:center}
+.hr-record-window,.hr-record-editor{background:#fff;color:#17243b;border-radius:12px;padding:18px;width:min(1240px,100%);box-shadow:0 14px 40px #0003}
+.hr-record-actions{display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+.hr-record-actions>div{display:flex;gap:8px;flex-wrap:wrap}
+.hr-record-sheet{background:white;color:#1c2839;font-size:11px}
+.hr-record-sheet header{text-align:center;margin-bottom:10px}.hr-record-sheet header h1{font-size:23px;letter-spacing:.65em;margin:0 0 3px}.hr-record-subtitle{font-size:10px;color:#64748b}
+.hr-record-primary{display:grid;grid-template-columns:132px minmax(0,1fr);border:1px solid #abb5c3}
+.hr-record-photo{min-height:224px;display:flex;align-items:center;justify-content:center;text-align:center;border-right:1px solid #abb5c3;color:#8692a3;background:#f7fafc;overflow:hidden}
+.hr-record-photo img{width:100%;height:100%;object-fit:contain;max-height:250px}
+.hr-record-items{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.hr-record-item{padding:5px 7px;border-right:1px solid #d3d9e1;border-bottom:1px solid #d3d9e1;min-width:0;min-height:35px}
+.hr-record-item:nth-child(4n){border-right:0}.hr-record-item span{display:block;color:#637183;font-size:9px}.hr-record-item strong{display:block;font-size:10px;margin-top:3px;white-space:normal;overflow-wrap:anywhere}
+.hr-record-note{padding:7px;border:1px solid #abb5c3;border-top:0;display:flex;gap:14px}.hr-record-note b{font-size:10px;color:#55667a;min-width:155px}.hr-record-note span{flex:1}
+.hr-record-section{margin:10px 0;break-inside:avoid}.hr-record-section h3{font-size:11px;margin:0 0 4px;border-left:3px solid #2563eb;padding:2px 0 2px 7px}
+.hr-record-section table{width:100%;min-width:0;border:1px solid #c4ccd6;table-layout:fixed;font-size:10px}
+.hr-record-section th,.hr-record-section td{padding:4px 5px;border:1px solid #d3d9e1;white-space:normal;overflow-wrap:anywhere;font-size:10px}
+.hr-record-section th{background:#f2f5fa;text-align:center;color:#24314a}.hr-record-section .hr-record-empty{text-align:center;color:#8290a0}
+.hr-record-sheet footer{text-align:right;font-size:9px;color:#66758a;padding-top:4px}
+.hr-record-edit-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.hr-record-edit-grid label,.hr-record-edit-row label{font-size:11px;font-weight:700;color:#54657c;display:flex;flex-direction:column;gap:4px;min-width:0}
+.hr-record-edit-grid input,.hr-record-edit-row input{width:100%;padding:7px 8px}.hr-record-edit-section{border-top:1px solid #e2e8f0;margin-top:16px;padding-top:12px}.hr-record-edit-head{display:flex;align-items:center;justify-content:space-between}.hr-record-edit-head h3{margin:0 0 10px;font-size:14px}
+.hr-record-edit-row{display:flex;gap:9px;align-items:end;margin:7px 0}.hr-record-edit-row label{flex:1}.hr-record-edit-row button{flex-shrink:0}
+@media(max-width:720px){.hr-record-overlay{padding:5px}.hr-record-window,.hr-record-editor{padding:9px}.hr-record-primary{grid-template-columns:85px 1fr}.hr-record-photo{min-height:225px}.hr-record-items{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-record-item:nth-child(2n){border-right:0}.hr-record-item:nth-child(4n){border-right:0}.hr-record-edit-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-record-edit-row{flex-wrap:wrap}.hr-record-edit-row label{flex:1 1 40%}}
+@media print{
+ @page{size:A4 landscape;margin:8mm}
+ html,body{background:#fff!important}
+ body *{visibility:hidden!important}
+ #hrRecordOverlay,#hrRecordOverlay *{visibility:visible!important}
+ #hrRecordOverlay{position:absolute!important;inset:0!important;padding:0!important;background:white!important;display:block!important;overflow:visible!important;z-index:999999!important}
+ .hr-record-window{width:100%!important;max-width:none!important;padding:0!important;border:0!important;box-shadow:none!important;border-radius:0!important}
+ .hr-record-actions{display:none!important}
+ .hr-record-sheet{font-size:9px!important;max-width:none!important}
+ .hr-record-sheet header h1{font-size:19px!important;margin-bottom:2px!important}
+ .hr-record-primary{grid-template-columns:110px minmax(0,1fr)!important}
+ .hr-record-photo{min-height:170px!important}.hr-record-photo img{max-height:205px!important}
+ .hr-record-item{padding:3px 5px!important;min-height:28px!important}
+ .hr-record-item span{font-size:8px!important}.hr-record-item strong{font-size:9px!important}
+ .hr-record-section{margin:6px 0!important;break-inside:avoid!important}
+ .hr-record-section h3{font-size:10px!important;margin-bottom:3px!important}
+ .hr-record-section th,.hr-record-section td{font-size:9px!important;padding:3px 4px!important}
+ .hr-record-note{padding:5px!important}
+}
+</style>
+
+<script>
+/* A4 landscape employee record card - isolated from existing modal, authentication and saving */
+(function(){
+ 'use strict';
+ const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const show=v=>safe(String(v??'').trim()||'-');
+ const fieldDefs=[
+ ['hanja_name','한문'],['marital_status','결혼구분'],['academic_category','학력구분'],['military_category','병역구분'],
+ ['military_branch','병역군별'],['military_service','병역병과'],['military_rank','병역계급'],
+ ['job_category','직종'],['job_duty','직무'],['employment_category','입사구분'],['business_site','사업장'],
+ ['appointment_date','인사변동일'],['service_description','주민등록주소 외 근무 참고사항'],
+ ['family_note','가족사항 비고']
+ ];
+ const lists=[
+ {key:'family',title:'가족사항',columns:[['name','가족성명'],['relation','관계'],['note','비고']]},
+ {key:'school',title:'학력사항',columns:[['category','학력구분'],['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']]},
+ {key:'career',title:'경력사항',columns:[['period','근무기간'],['company','회사명'],['role','직위명'],['duty','담당업무']]},
+ {key:'licenses',title:'자격/면허사항',columns:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']]}
+ ];
+ const extraOf=e=>e.hr_record_card&&typeof e.hr_record_card==='object'&&!Array.isArray(e.hr_record_card)?e.hr_record_card:{};
+ const arrOf=(extra,k)=>Array.isArray(extra[k])?extra[k]:[];
+ const getEmp=id=>(db.employees||[]).find(e=>String(e.id)===String(id));
+ let currentId=null,photoUrl=null;
+ const tenure=(start,end)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(start||'')))return '-';
+  const a=new Date(start+'T12:00:00');const b=end&&/^\d{4}-\d{2}-\d{2}$/.test(end)?new Date(end+'T12:00:00'):new Date();
+  let m=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth()-(b.getDate()<a.getDate()?1:0);
+  return m<0?'-':`${Math.floor(m/12)}년 ${m%12}개월`;
+ };
+ function cardValue(e,x,k){const values={
+  'employee_no':e.employee_no,'name':e.name,'hanja_name':x.hanja_name,'gender':e.gender,
+  'birth_date':typeof employeeBirthDate==='function'?employeeBirthDate(e):e.birth_date,
+  'marital_status':x.marital_status,'academic_category':x.academic_category||e.education,
+  'military_category':x.military_category,'military_branch':x.military_branch,'military_service':x.military_service,'military_rank':x.military_rank,
+  'work_period':tenure(e.hire_date,e.status==='퇴사'?e.exit_date:''),'corporation':e.corporation,'business_site':x.business_site,
+  'headquarters':e.headquarters,'department':e.department,'position':e.position,'grade':e.grade,
+  'job_category':x.job_category,'job_duty':x.job_duty,'employment_category':x.employment_category,
+  'employment_type':e.employment_type,'hire_date':e.hire_date,'exit_date':e.exit_date,
+  'appointment_date':x.appointment_date,'regular_conversion':window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date,
+  'manager_role':e.field_leader_role,'status':e.status,'service_description':x.service_description,
+  'family_note':x.family_note
+ };return show(values[k]);}
+ const basic=[
+  ['사번','employee_no'],['성명','name'],['한문','hanja_name'],['성별','gender'],
+  ['생년월일','birth_date'],['결혼구분','marital_status'],['학력구분','academic_category'],['병역구분','military_category'],
+  ['근무기간','work_period'],['사업장','business_site'],['본부','headquarters'],['부서','department'],
+  ['직책','manager_role'],['입사구분','employment_category'],['직종','job_category'],['직무','job_duty'],
+  ['입사일','hire_date'],['퇴사일','exit_date'],['인사변동일','appointment_date'],['정규직 전환일','regular_conversion'],
+  ['법인','corporation'],['고용형태','employment_type'],['직위','position'],['직급','grade'],
+  ['병역군별','military_branch'],['병역병과','military_service'],['병역계급','military_rank'],['현재 상태','status']
+ ];
+ function tableSection(title,cols,rows){
+  return `<section class="hr-record-section"><h3>${safe(title)}</h3><table><thead><tr>${cols.map(c=>'<th>'+safe(c)+'</th>').join('')}</tr></thead><tbody>${rows.length?rows.map(row=>'<tr>'+row.map(v=>'<td>'+show(v)+'</td>').join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}" class="hr-record-empty">내역 없음</td></tr>`}</tbody></table></section>`;
+ }
+ function overlay(){let root=document.getElementById('hrRecordOverlay');if(root)return root;root=document.createElement('div');root.id='hrRecordOverlay';root.className='hr-record-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','인사기록카드');document.body.append(root);return root;}
+ function close(){const root=document.getElementById('hrRecordOverlay');if(root)root.remove();if(photoUrl){URL.revokeObjectURL(photoUrl);photoUrl=null;}currentId=null;}
+ function renderCard(e){const x=extraOf(e),root=overlay();root.dataset.mode='view';
+  const evt=(db.history||[]).filter(h=>String(h.employee_id)===String(e.id)).slice().sort((a,b)=>String(b.event_date||'').localeCompare(String(a.event_date||'')));
+  const periods=window.hrEmployeeLeavePeriods?window.hrEmployeeLeavePeriods(e):[];
+  const items=basic.map(([label,k])=>`<div class="hr-record-item"><span>${safe(label)}</span><strong>${cardValue(e,x,k)}</strong></div>`).join('');
+  let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
+   <div class="hr-record-primary"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-items">${items}</div></div>
+   <div class="hr-record-note"><b>주민등록주소 외 근무 참고사항</b><span>${show(x.service_description)}</span></div>`;
+  for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>record[key]||''));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
+  content+=tableSection('인사변동사항',['변동일','변동사유','부서','직위','직책','내용'],evt.map(h=>[h.event_date,h.event_type||h.title,h.department,h.position||'',h.grade||'',h.description||h.title]));
+  const pr=[];for(const g of periods)for(let i=0;i<g.periods.length;i++)pr.push([g.label,(i+1)+'회차',g.periods[i].start_date,g.periods[i].end_date]);
+  content+=tableSection('휴직 · 산재 · 육아휴직',['구분','회차','시작일','종료일'],pr);
+  content+=`<footer>출력일: ${new Date().toLocaleDateString('ko-KR')}</footer></div>`;
+  root.innerHTML=`<div class="hr-record-window"><div class="hr-record-actions no-print"><b>${show(e.name)} · 인사기록카드</b><div><button class="btn" type="button" id="hrCardEdit">기록카드 추가항목 수정</button><button class="btn primary" type="button" id="hrCardPrint">가로 인쇄 / PDF</button><button class="btn" type="button" id="hrCardClose">닫기</button></div></div>${content}</div>`;
+  root.querySelector('#hrCardClose').onclick=close;
+  root.querySelector('#hrCardEdit').onclick=()=>editCard(e.id);
+  root.querySelector('#hrCardPrint').onclick=()=>window.print();
+  root.addEventListener('click',evt=>{if(evt.target===root)close()},{once:true});
+  loadPhoto(e.id);
+ }
+ async function loadPhoto(id){const target=document.getElementById('hrRecordPhoto');if(!target||!window.__hrPhotoStorage?.ready())return;
+  try{const blob=await window.__hrPhotoStorage.load(id);if(!blob||currentId!==String(id)||!target.isConnected)return;const url=URL.createObjectURL(blob);if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=url;target.innerHTML='';const image=document.createElement('img');image.alt='직원 사진';image.src=url;target.append(image);}catch(err){console.warn('인사기록카드 사진 조회:',err?.message||err);}}
+ function editCard(id){const e=getEmp(id);if(!e)return;const x=extraOf(e),root=overlay();root.dataset.mode='edit';
+  root.innerHTML=`<div class="hr-record-editor"><div class="hr-record-actions"><b>${show(e.name)} · 인사기록카드 추가항목 수정</b><button type="button" class="btn" id="hrCardEditCancel">취소</button></div><div class="notice">기존 사번·입사일·소속 등은 직원 [수정]에서 관리합니다. 이 화면은 인사기록카드의 추가 항목과 가족·학력·경력·자격 내역만 저장합니다.</div><div class="hr-record-edit-grid">${fieldDefs.map(([key,label])=>`<label>${safe(label)}<input data-card-field="${safe(key)}" value="${safe(x[key]||'')}"></label>`).join('')}</div><div id="hrRecordListEditor"></div><div class="hr-record-actions"><button type="button" class="btn" id="hrCardCancelBottom">취소</button><button type="button" class="btn primary" id="hrCardSave">추가항목 저장</button></div></div>`;
+  const listContainer=root.querySelector('#hrRecordListEditor');
+  for(const item of lists){const box=document.createElement('section');box.className='hr-record-edit-section';box.dataset.list=item.key;
+   box.innerHTML=`<div class="hr-record-edit-head"><h3>${safe(item.title)}</h3><button type="button" class="btn tiny" data-add-list="${safe(item.key)}">+ 행 추가</button></div><div class="hr-record-edit-rows"></div>`;listContainer.append(box);
+   const rows=box.querySelector('.hr-record-edit-rows');arrOf(x,item.key).forEach(rec=>addRow(rows,item,rec));if(!rows.children.length)addRow(rows,item,{});
+  }
+  root.querySelector('#hrCardEditCancel').onclick=()=>renderCard(e);
+  root.querySelector('#hrCardCancelBottom').onclick=()=>renderCard(e);
+  root.querySelectorAll('[data-add-list]').forEach(btn=>btn.onclick=()=>{const item=lists.find(x=>x.key===btn.dataset.addList);addRow(root.querySelector(`[data-list="${item.key}"] .hr-record-edit-rows`),item,{})});
+  root.querySelector('#hrCardSave').onclick=()=>{
+   const updated={...extraOf(e)};
+   root.querySelectorAll('[data-card-field]').forEach(input=>updated[input.dataset.cardField]=input.value.trim());
+   for(const item of lists){const rows=[];root.querySelectorAll(`[data-list="${item.key}"] .hr-record-edit-row`).forEach(row=>{const obj={};row.querySelectorAll('[data-column]').forEach(input=>obj[input.dataset.column]=input.value.trim());if(Object.values(obj).some(Boolean))rows.push(obj)});updated[item.key]=rows;}
+   e.hr_record_card=updated;
+   close();commit('인사기록카드 추가항목 수정',String(e.employee_no||'')+' / 인사기록카드 보완');
+   currentId=String(id);renderCard(e);
+  };
+ }
+ function addRow(target,item,data){const row=document.createElement('div');row.className='hr-record-edit-row';
+  row.innerHTML=item.columns.map(([key,label])=>`<label>${safe(label)}<input data-column="${safe(key)}" value="${safe(data[key]||'')}"></label>`).join('')+'<button type="button" class="btn tiny danger">삭제</button>';
+  row.querySelector('button').onclick=()=>row.remove();target.append(row);
+ }
+ window.__hrRecordCardOpen=function(id){if(typeof window.__hrCloudConnected==='function'&&!window.__hrCloudConnected()){alert('공동 DB 로그인 후 열 수 있습니다.');return;}
+  const e=getEmp(id);if(!e){alert('직원을 찾을 수 없습니다.');return;}currentId=String(id);renderCard(e);
+ };
+ document.addEventListener('click',function(event){const btn=event.target.closest?.('[data-employee-detail]');if(!btn)return;
+  event.preventDefault();event.stopImmediatePropagation();window.__hrRecordCardOpen(btn.getAttribute('data-employee-detail'));
+ },true);
+ document.addEventListener('keydown',event=>{if(event.key==='Escape'&&document.getElementById('hrRecordOverlay'))close()});
+})();
+
+</script>
 </body></html>
