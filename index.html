@@ -3021,9 +3021,9 @@ window.saveRetirementContractConversion=function(id){
    <div class="hr-record-primary"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-items">${items}</div></div>
    <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>`;
   for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
-  content+=tableSection('인사변동사항',['변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
-   h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
-  ]:[h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
+  content+=tableSection('인사변동사항',['발령구분','변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
+   h.appointment_category||'',h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
+  ]:[h.appointment_category||h.event_type||'',h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
   const pr=[];for(const g of periods)for(let i=0;i<g.periods.length;i++)pr.push([g.label,(i+1)+'회차',g.periods[i].start_date,g.periods[i].end_date]);
   content+=tableSection('휴직 · 산재 · 육아휴직',['구분','회차','시작일','종료일'],pr);
   content+=`<footer>출력일: ${new Date().toLocaleDateString('ko-KR')}</footer></div>`;
@@ -3099,7 +3099,7 @@ const configs={
  career:{title:'경력사항 등록',key:'career',fields:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
  licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']],required:'name'},
  basics:{title:'인사기록카드 내용 등록',key:null,fields:[['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],['job_category','직종'],['military_branch','병역군별'],['military_rank','병역계급']]},
- appointment:{title:'인사변동사항 등록',key:'appointment',fields:[['event_date','변동일자'],['previous_department','현재부서'],['appointed_department','발령부서'],['appointed_position','발령직위'],['appointed_role','직책'],['change_reason','변동사유']],required:'event_date'}
+ appointment:{title:'인사변동사항 등록',key:'appointment',fields:[['appointment_category','발령구분'],['event_date','변동일자'],['previous_department','현재부서'],['appointed_department','발령부서'],['appointed_position','발령직위'],['appointed_role','직책'],['change_reason','변동사유']],required:'event_date'}
 };
 let current=null,preview=null,source='';
 function cols(cfg){return ['사번',...cfg.fields.map(f=>f[1]),...(cfg.optional||[]).map(f=>f[1])];}
@@ -3151,7 +3151,7 @@ function appointmentDate(value){
  if(y<1900||y>2100||d.getUTCFullYear()!==y||d.getUTCMonth()!==mon-1||d.getUTCDate()!==day)return '';
  return String(y).padStart(4,'0')+'-'+String(mon).padStart(2,'0')+'-'+String(day).padStart(2,'0');
 }
-function appointmentSignature(r){return ['event_date','previous_department','appointed_department','appointed_position','appointed_role','change_reason'].map(k=>String(r[k]??'').trim()).join('\u241f');}
+function appointmentSignature(r){return ['appointment_category','event_date','previous_department','appointed_department','appointed_position','appointed_role','change_reason'].map(k=>String(r[k]??'').trim()).join('\u241f');}
 function validateAppointments(rows,type){
  const cfg=configs[type],errors=[],groups=new Map(),records=[];
  for(const row of rows){
@@ -3164,7 +3164,7 @@ function validateAppointments(rows,type){
   const formatted=appointmentDate(val.event_date);
   if(!formatted){errors.push({row:row.row,no,reason:'변동일자 누락 또는 날짜 형식 오류'});continue;}
   val.event_date=formatted;
-  if(!cfg.fields.slice(1).some(([key])=>val[key])){errors.push({row:row.row,no,reason:'변동내용이 비어 있음'});continue;}
+  if(!cfg.fields.filter(([key])=>key!=='event_date').some(([key])=>val[key])){errors.push({row:row.row,no,reason:'변동내용이 비어 있음'});continue;}
   let g=groups.get(no);
   if(!g){g={no,employee:candidates[0],rows:[],items:[],scalars:{},conflicts:[]};groups.set(no,g);}
   g.rows.push(row.row);g.items.push({...val,__excelRow:row.row});
@@ -3260,12 +3260,12 @@ function apply(){
    // append from bottom to top so the latest Excel entry appears first when dates tie.
    for(const entry of r.additions){
     db.history.unshift({id:uid(),employee_id:r.employee.id,event_date:entry.event_date,
-     event_type:'인사변동',title:'인사변동',hr_card_appointment:true,
-     previous_department:entry.previous_department,appointed_department:entry.appointed_department,
+     event_type:'인사변동',title:entry.appointment_category||'인사변동',hr_card_appointment:true,
+     appointment_category:entry.appointment_category||'',previous_department:entry.previous_department,appointed_department:entry.appointed_department,
      appointed_position:entry.appointed_position,appointed_role:entry.appointed_role,
      change_reason:entry.change_reason,department:entry.appointed_department,
      position:entry.appointed_position,field_leader_role:entry.appointed_role,
-     description:[entry.previous_department&&'현재부서: '+entry.previous_department,entry.appointed_department&&'발령부서: '+entry.appointed_department,entry.appointed_position&&'발령직위: '+entry.appointed_position,entry.appointed_role&&'직책: '+entry.appointed_role,entry.change_reason].filter(Boolean).join(' / ')});
+     description:[entry.appointment_category&&'발령구분: '+entry.appointment_category,entry.previous_department&&'현재부서: '+entry.previous_department,entry.appointed_department&&'발령부서: '+entry.appointed_department,entry.appointed_position&&'발령직위: '+entry.appointed_position,entry.appointed_role&&'직책: '+entry.appointed_role,entry.change_reason].filter(Boolean).join(' / ')});
    }
   }else{const emp=r.employee,old=existing(emp),updated={...old,...r.changes};if(cfg.key)updated[cfg.key]=[...(Array.isArray(old[cfg.key])?old[cfg.key]:[]),...r.additions];emp.hr_record_card=updated;}
  }
