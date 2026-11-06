@@ -3094,7 +3094,8 @@ window.saveRetirementContractConversion=function(id){
 const html=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const configs={
  family:{title:'가족사항 등록',key:'family',fields:[['name','가족성명'],['relation','가족관계'],['note','비고']],required:'name'},
- school:{title:'학력사항 등록',key:'school',fields:[['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']],required:'school',optional:[['resident_address','주민등록주소']]},
+ school:{title:'학력사항 등록',key:'school',fields:[['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']],required:'school'},
+ address:{title:'주소 일괄등록',key:null,fields:[['resident_address','주소']],required:'resident_address'},
  career:{title:'경력사항 등록',key:'career',fields:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
  licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']],required:'name'},
  basics:{title:'인사기록카드 내용 등록',key:null,fields:[['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],['job_category','직종'],['military_branch','병역군별'],['military_rank','병역계급']]},
@@ -3112,7 +3113,7 @@ function modalFor(type){
  let root=document.getElementById('hrBulkCardOverlay');if(root)root.remove();
  const cfg=configs[type];root=document.createElement('div');root.id='hrBulkCardOverlay';root.className='hr-bulk-backdrop';
  root.innerHTML=`<div class="hr-bulk-modal" role="dialog" aria-modal="true" aria-label="${html(cfg.title)}"><div class="hr-record-actions"><h2 style="margin:0">${html(cfg.title)}</h2><button class="btn" id="hrBulkClose">닫기</button></div>
- <div class="notice">엑셀 첫 시트의 <b>사번</b>을 직원 명단과 정확하게 대조합니다. 사번 불일치·중복 직원·값 충돌은 제외합니다. 기존 이력은 유지하고 새로운 행만 추가합니다. 빈 셀은 기존 내용을 지우지 않습니다.${type==='school'?' 이 메뉴의 엑셀에서는 주민등록주소도 함께 등록할 수 있습니다.':''}${type==='appointment'?' 같은 사번은 엑셀 맨 마지막 행이 최초 변동입니다. 아래 행부터 역순 등록하며, <b>현재 직원의 소속·직위·직책은 변경하지 않고 이력만 추가</b>합니다.':''}</div>
+ <div class="notice">엑셀 첫 시트의 <b>사번</b>을 직원 명단과 정확하게 대조합니다. 사번 불일치·중복 직원·값 충돌은 제외합니다. 기존 이력은 유지하고 새로운 행만 추가합니다. 빈 셀은 기존 내용을 지우지 않습니다.${type==='address'?' 주소 열의 값은 해당 직원 인사기록카드의 주민등록주소로 저장합니다. 같은 사번의 주소가 서로 다르면 등록을 제외합니다.':''}${type==='appointment'?' 같은 사번은 엑셀 맨 마지막 행이 최초 변동입니다. 아래 행부터 역순 등록하며, <b>현재 직원의 소속·직위·직책은 변경하지 않고 이력만 추가</b>합니다.':''}</div>
  <div class="hr-bulk-toolbar"><button class="btn" id="hrBulkTemplate">${html(cfg.title)} 엑셀 양식 다운로드</button><label class="btn" style="cursor:pointer">작성된 엑셀 선택<input id="hrBulkFile" type="file" accept=".xlsx" hidden></label><span id="hrBulkFilename" class="hr-bulk-status">선택된 파일 없음</span></div>
  <div id="hrBulkPreview"><div class="empty">작성한 엑셀을 선택하면 대상자와 제외 항목을 보여줍니다.</div></div>
  <div class="hr-record-actions"><span class="hint">검토 후 적용해 주세요. 적용 전 JSON 백업을 권장합니다.</span><button class="btn primary" id="hrBulkApply" disabled>검증된 항목 일괄 등록</button></div></div>`;
@@ -3242,7 +3243,7 @@ function validate(rows,type){
 function draw(){const root=document.getElementById('hrBulkCardOverlay');if(!root||!preview)return;
  const p=preview;root.querySelector('#hrBulkApply').disabled=!p.records.length;
  root.querySelector('#hrBulkPreview').innerHTML=`<div class="hr-bulk-summary"><span>읽은 행 <b>${p.rows.length}</b></span><span>적용 대상 <b>${p.records.length}명</b></span><span>제외 <b>${p.errors.length}행</b></span></div>
- <div class="hint" style="margin:6px 0 10px">총 추가 예정 <b>${p.records.reduce((sum,r)=>sum+r.additions.length,0)}건</b> · 같은 사번에 여러 행이 있으면 각 행을 별도 기록으로 등록합니다. 완전히 같은 내용은 중복 제외 목록에서 확인하세요.</div>
+ <div class="hint" style="margin:6px 0 10px">${p.type==='address'?'주소 변경 예정 <b>'+p.records.filter(r=>Object.keys(r.changes).length).length+'명</b> · 기존 주소와 동일한 값은 변경하지 않습니다. 같은 사번에 다른 주소가 여러 건 있으면 해당 직원은 제외합니다.':'총 추가 예정 <b>'+p.records.reduce((sum,r)=>sum+r.additions.length,0)+'건</b> · 같은 사번에 여러 행이 있으면 각 행을 별도 기록으로 등록합니다. 완전히 같은 내용은 중복 제외 목록에서 확인하세요.'}</div>
  <div class="tablewrap" style="max-height:290px"><table><thead><tr><th>사번</th><th>성명</th><th>엑셀 행</th><th>새 내역</th><th>변경 항목</th></tr></thead><tbody>${p.records.map(r=>`<tr><td>${html(r.no)}</td><td>${html(r.employee.name)}</td><td>${html(r.rows.join(', '))}</td><td>${r.additions.length}건</td><td>${html(Object.keys(r.changes).map(k=>(configs[p.type].fields.concat(configs[p.type].optional||[]).find(([id])=>id===k)||[k,k])[1]).join(', ')||'-')}</td></tr>`).join('')||'<tr><td colspan="5">적용할 자료 없음</td></tr>'}</tbody></table></div>
  ${p.errors.length?`<h3 style="margin:15px 0 6px">제외 내역</h3><div class="tablewrap" style="max-height:160px"><table><thead><tr><th>행</th><th>사번</th><th>사유</th></tr></thead><tbody>${p.errors.map(r=>`<tr><td>${html(r.row)}</td><td>${html(r.no)}</td><td>${html(r.reason)}</td></tr>`).join('')}</tbody></table></div>`:''}`;
 }
