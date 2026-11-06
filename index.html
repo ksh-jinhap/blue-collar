@@ -3050,6 +3050,26 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(5),
  #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){font-size:8px!important;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;letter-spacing:-0.35px!important;}
 }
+/* Education: school and major must both remain on one visible line. */
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(4),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(5),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){
+ white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;
+ overflow:hidden!important;padding-left:2px!important;padding-right:2px!important;
+}
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4) .hr-education-fit,
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5) .hr-education-fit{
+ display:inline-block;white-space:nowrap!important;max-width:none;transform-origin:left center;
+ vertical-align:middle;
+}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){
+  white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;
+  overflow:hidden!important;font-size:9px!important;padding-left:2px!important;padding-right:2px!important;
+ }
+}
 /* HR record card table visual optimization - shared by screen and print. */
 #hrRecordPrintArea .hr-record-centered th,
 #hrRecordPrintArea .hr-record-centered td{text-align:center;vertical-align:middle;}
@@ -3073,6 +3093,37 @@ window.saveRetirementContractConversion=function(id){
 }
 </style>
 
+<script>
+/* Scale only school / major cell text to its actual available column width. */
+(function(){
+ function fit(){
+  const root=document.getElementById('hrRecordPrintArea');if(!root)return;
+  root.querySelectorAll('.hr-record-school tbody tr').forEach(row=>{
+   [3,4].forEach(index=>{
+    const cell=row.cells[index];if(!cell)return;
+    let span=cell.querySelector('.hr-education-fit');
+    if(!span){span=document.createElement('span');span.className='hr-education-fit';span.textContent=cell.textContent;cell.replaceChildren(span);}
+    span.style.transform='none';span.style.fontSize='';
+    const usable=Math.max(1,cell.clientWidth-5);
+    const width=span.getBoundingClientRect().width;
+    if(width>usable){
+     const ratio=usable/width;
+     const base=parseFloat(getComputedStyle(span).fontSize)||10;
+     const size=Math.max(7,base*Math.min(1,ratio));
+     span.style.fontSize=size+'px';
+     const revised=span.getBoundingClientRect().width;
+     if(revised>usable)span.style.transform='scaleX('+Math.max(.1,usable/revised)+')';
+     cell.style.textAlign='left';
+    }else cell.style.textAlign='center';
+   });
+  });
+ }
+ window.__hrFitEducationCells=fit;
+ window.addEventListener('beforeprint',fit);
+ window.addEventListener('afterprint',fit);
+ window.addEventListener('resize',()=>{if(document.getElementById('hrRecordPrintArea'))fit();});
+})();
+</script>
 <script>
 /* A4 landscape employee record card - isolated from existing modal, authentication and saving */
 (function(){
@@ -3179,6 +3230,7 @@ window.saveRetirementContractConversion=function(id){
   content+=tableSection('휴직 · 산재 · 육아휴직',['구분','회차','시작일','종료일'],pr);
   content+=`<footer>출력일: ${new Date().toLocaleDateString('ko-KR')}</footer></div>`;
   root.innerHTML=`<div class="hr-record-window"><div class="hr-record-actions no-print"><b>${show(e.name)} · 인사기록카드</b><div><button class="btn" type="button" id="hrCardEdit">기록카드 추가항목 수정</button><button class="btn primary" type="button" id="hrCardPrint">가로 인쇄 / PDF</button><button class="btn" type="button" id="hrCardClose">닫기</button></div></div>${content}</div>`;
+  window.__hrFitEducationCells?.();
   root.querySelector('#hrCardClose').onclick=close;
   root.querySelector('#hrCardEdit').onclick=()=>editCard(e.id);
   root.querySelector('#hrCardPrint').onclick=()=>window.print();
