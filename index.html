@@ -1337,7 +1337,7 @@ document.addEventListener('change',ev=>{
 (function(){
 'use strict';
 const TYPES={corporation:'법인',headquarters:'본부 / 실',department:'부서 / 팀',position:'직위',grade:'직급',education:'학력',field_leader_role:'현장관리자 구분',salary_type:'급여 형태',employment_type:'고용형태'};
-const BASE={corporation:['진합','제이앤드에프','지노스','진우정공'],headquarters:['화스너생산실','정밀부품생산실','생산운영실','생산기술실','품질본부','연구개발본부','통합구매실','사업개발실','상생안전본부','상생안전본부 부','노동조합','표면처리사업부','대화공장','옥천공장','U볼트사업부문'],position:[],grade:[],education:[],field_leader_role:['그룹장','파트장','라인장'],salary_type:['월급','시급'],employment_type:['정규직','계약직']};
+const BASE={corporation:['진합','제이앤드에프','지노스','진우정공'],headquarters:['화스너생산실','정밀부품생산실','생산운영실','생산기술실','품질본부','연구개발본부','통합구매실','사업개발실','상생안전본부','상생안전본부 부','노동조합','표면처리사업부','대화공장','옥천공장','U볼트사업부문'],position:[],grade:[],education:[],field_leader_role:['미지정','그룹장','파트장','라인장'],salary_type:['월급','시급'],employment_type:['정규직','계약직']};
 const coll=()=>[...(db.employees||[]),...(db.plans||[]),...(db.recruitment||[])];
 const key=r=>[r.type,r.value,r.corporation||'',r.headquarters||''].join('\u001f');
 const record=(type,value,corporation='',headquarters='',active=true)=>({type,value,corporation,headquarters,active});
@@ -1347,8 +1347,9 @@ function derived(){const out=[];for(const [type,vals] of Object.entries(BASE)){f
 function rows(){const actual=Array.isArray(db.reference_master)?db.reference_master:[];const combined=new Map();for(const x of derived())if(!combined.has(key(x)))combined.set(key(x),x);for(const x of actual){const k=key(x);combined.set(k,x);}return [...combined.values()].filter(x=>x.deleted!==true);}
 function master(){if(!Array.isArray(db.reference_master))db.reference_master=[];return db.reference_master;}
 function candidates(type,corporation='',headquarters=''){const list=rows().filter(x=>x.type===type&&x.active!==false&&(!corporation||!['headquarters','department'].includes(type)||!x.corporation||x.corporation===corporation)&&(!headquarters||type!=='department'||!x.headquarters||x.headquarters===headquarters)).map(x=>x.value);return [...new Set(list)].sort((a,b)=>a.localeCompare(b,'ko'));}
-function usageMatches(r,x){return String(x[r.type]||'')===r.value&&(!r.corporation||x.corporation===r.corporation)&&(!r.headquarters||x.headquarters===r.headquarters);}
-function usageDetails(r){return ['employees','plans','recruitment'].flatMap(bucket=>(db[bucket]||[]).filter(x=>usageMatches(r,x)).map(x=>({bucket,item:x})));}
+function effectiveReferenceValue(x,type,bucket){const raw=String(x[type]??'').trim();if(raw)return raw;return bucket==='employees'&&type==='field_leader_role'?'미지정':raw;}
+function usageMatches(r,x,bucket=''){return effectiveReferenceValue(x,r.type,bucket)===r.value&&(!r.corporation||x.corporation===r.corporation)&&(!r.headquarters||x.headquarters===r.headquarters);}
+function usageDetails(r){return ['employees','plans','recruitment'].flatMap(bucket=>(db[bucket]||[]).filter(x=>usageMatches(r,x,bucket)).map(x=>({bucket,item:x})));}
 function actualUses(r){return usageDetails(r).length;}
 function showMasterUsage(r){
  const details=usageDetails(r),groups=[['employees','직원 인사정보'],['plans','정원관리'],['recruitment','채용진행관리']];
@@ -1373,7 +1374,7 @@ function renameReferences(before,after){
  const counts={employees:0,plans:0,recruitment:0,reference_master:0};
  const sameScope=x=> (!before.corporation||x.corporation===before.corporation)&&(!before.headquarters||x.headquarters===before.headquarters);
  for(const bucket of ['employees','plans','recruitment'])for(const x of (db[bucket]||[])){
-   if(String(x[before.type]||'')!==before.value||!sameScope(x))continue;
+   if(!usageMatches(before,x,bucket)||!sameScope(x))continue;
    x[before.type]=after.value;counts[bucket]++;
  }
  // Cascade parent names to dependent reference entries, in matching company scope.
@@ -1400,7 +1401,7 @@ function editor(source=null){const type=source?.type||filterType;const corp=sour
  // Inspect exact matches by data category before changing any record.
  // Creating a new reference or toggling its active flag NEVER renames employees.
  const impacted={employees:0,plans:0,recruitment:0};
- if(changed)for(const bucket of Object.keys(impacted))impacted[bucket]=(db[bucket]||[]).filter(x=>usageMatches(source,x)).length;
+ if(changed)for(const bucket of Object.keys(impacted))impacted[bucket]=(db[bucket]||[]).filter(x=>usageMatches(source,x,bucket)).length;
  const use=Object.values(impacted).reduce((sum,n)=>sum+n,0);
  if(changed){
    const summary=`[${TYPES[t]}] ${source.value} → ${v}\n\n`+
@@ -1408,10 +1409,8 @@ function editor(source=null){const type=source?.type||filterType;const corp=sour
      `적용 범위: 법인 ${source.corporation||'전체'}, 본부 ${source.headquarters||'전체'}\n\n`+
      '기존 항목의 [수정]은 위 자료의 명칭을 함께 바꿉니다.\n'+
      '과거 월말 기록과 과거 개인별 발령 이력은 바꾸지 않습니다.';
-   if(use===0){
-     alert(summary+'\n\n일치하는 현재 자료가 0건입니다. 기존 직원정보를 바꾸지 않고 기준 명칭만 변경하는 실수를 막기 위해 중단했습니다. [사용 건수]에서 등록값과 소속 범위를 확인하세요.');
-     return;
-   }
+   // A reference may be a legitimate selectable option even when no records use it.
+   // A zero-use rename still updates its canonical label and all future choices.
    // A destination already in use in this exact scope is ambiguous: never silently merge.
    const collision=rows().some(x=>key(x)===key(next)&&key(x)!==key(source));
    if(collision){alert('동일한 분류·소속에 변경하려는 명칭이 이미 있습니다. 임의 병합을 방지하기 위해 중단했습니다.');return;}
@@ -1426,7 +1425,7 @@ function editor(source=null){const type=source?.type||filterType;const corp=sour
        throw Error('변경 후 처리 건수가 변경 전 예상 건수와 다릅니다.');
      }
      for(const bucket of Object.keys(impacted)){
-       const remaining=(db[bucket]||[]).filter(x=>usageMatches(source,x)).length;
+       const remaining=(db[bucket]||[]).filter(x=>usageMatches(source,x,bucket)).length;
        if(remaining!==0)throw Error('기존 명칭이 남아 있는 자료가 발견되었습니다: '+bucket);
      }
    }catch(error){
@@ -3484,6 +3483,115 @@ document.addEventListener('input',ev=>{if(ev.target.id!=='hrStatusSearch'||view!
 });
 
 install();
+})();
+</script>
+<script>
+/* Reference-master UI bridge (2026-11): changes in master data drive all current selectors.
+   Existing cloud saving, employee persistence, historical records and UI handlers are retained. */
+(function(){
+ 'use strict';
+ const supported=['corporation','headquarters','department','position','grade','education','field_leader_role','salary_type','employment_type'];
+ const list=(type,corporation='',headquarters='')=>{
+   const fn=window.__hrMasterCandidates;
+   if(typeof fn!=='function')return [];
+   return [...new Set(fn(type,corporation,headquarters).filter(Boolean))];
+ };
+ const currentValue=(employee,type)=>{
+   if(type==='field_leader_role')return employee?.field_leader_role||'미지정';
+   if(type==='salary_type')return employee?.salary_type||'미지정';
+   if(type==='employment_type')return employee?.employment_type||'미확인';
+   return employee?.[type]||'';
+ };
+ function choices(type,current='',allowBlank=false){
+   const values=list(type);
+   if(current&&!values.includes(current))values.push(current); // Retain legacy selections to avoid silent data loss.
+   return [...new Set((allowBlank?['']:[]).concat(values))];
+ }
+ function updateSelect(node,values,selected,blankLabel){
+   if(!node)return;
+   const old=selected===undefined?node.value:selected;
+   const all=[...new Set(values.concat(old&&!values.includes(old)?[old]:[]))];
+   node.replaceChildren();
+   if(blankLabel!==undefined){const option=new Option(blankLabel,'');node.add(option);}
+   for(const name of all){if(!name)continue;node.add(new Option(name,name));}
+   node.value=old??'';
+ }
+ function updateEmployeeModal(){
+   const body=document.getElementById('modalBody');
+   if(!body||!document.getElementById('eNo'))return;
+   const number=document.getElementById('eNo').value;
+   const employee=(db.employees||[]).find(x=>String(x.employee_no)===String(number));
+   for(const [id,type,blank] of [
+     ['eLeader','field_leader_role',undefined],
+     ['eSalaryType','salary_type','미지정'],
+     ['eEmploymentType','employment_type',undefined]
+   ]){
+     const node=document.getElementById(id);
+     if(node)updateSelect(node,choices(type,currentValue(employee,type)),node.value,blank);
+   }
+   for(const [id,type] of [['ePosition','position'],['eGrade','grade'],['eEducation','education']]){
+     const el=document.getElementById(id);if(!el)continue;
+     const dlid='dl-'+type;el.setAttribute('list',dlid);
+     let dl=document.getElementById(dlid);
+     if(!dl){dl=document.createElement('datalist');dl.id=dlid;body.appendChild(dl);}
+     dl.replaceChildren(...choices(type,el.value).map(v=>{const op=document.createElement('option');op.value=v;return op;}));
+   }
+ }
+ // The latest employee editor is composed of wrappers, so decorate the final result only.
+ const originalOpen=window.openEmployee;
+ window.openEmployee=function(){const result=originalOpen.apply(this,arguments);updateEmployeeModal();return result;};
+ // Refresh the employee filter and mass editor each time the current screen changes.
+ const originalRender=window.render;
+ window.render=function(){const output=originalRender.apply(this,arguments);
+   if(view==='employees'){
+     for(const [id,type] of [['ef_field_leader_role','field_leader_role'],['ef_salary_type','salary_type'],['ef_employment_type','employment_type'],['ef_position','position'],['ef_grade','grade'],['ef_education','education']]){
+       const node=document.getElementById(id);if(node)updateSelect(node,list(type),node.value,'전체');
+     }
+   }
+   return output;
+ };
+ // Mass-edit dialog is opened by an existing event listener. Do not replace that handler.
+ document.addEventListener('click',event=>{
+   if(!event.target.closest('#empOpenMassEdit'))return;
+   for(const [id,type] of [['mass_field_leader_role','field_leader_role'],['mass_salary_type','salary_type'],['mass_employment_type','employment_type']]){
+     const node=document.getElementById(id);if(node)updateSelect(node,list(type),node.value,'변경 안 함');
+   }
+   for(const type of ['position','grade','education']){
+     const dl=document.getElementById('mass-list-'+type);
+     if(dl)dl.replaceChildren(...list(type).map(v=>{const op=document.createElement('option');op.value=v;return op;}));
+   }
+ });
+ // Make an already-broken previous "미지정" -> "팀원" rename explicitly repairable.
+ // No silent employee modifications on sign-in or load.
+ const priorRenderForRepair=window.render;
+ window.render=function(){const output=priorRenderForRepair.apply(this,arguments);
+   if(view==='master'&&document.getElementById('masterType')?.value==='field_leader_role'){
+     const old=(db.reference_master||[]).some(x=>x.type==='field_leader_role'&&x.value==='미지정'&&x.deleted===true);
+     const newRole=list('field_leader_role').includes('팀원');
+     const missing=(db.employees||[]).filter(x=>!x.field_leader_role||x.field_leader_role==='미지정').length;
+     if(old&&newRole&&missing){
+       const bar=document.querySelector('#content .report-head');
+       if(bar&&!document.getElementById('repairFieldLeaderReference')){
+         const btn=document.createElement('button');btn.id='repairFieldLeaderReference';btn.type='button';btn.className='btn';
+         btn.textContent='이전 명칭 변경 누락 복구 ('+missing+'명)';bar.appendChild(btn);
+       }
+     }
+   }
+   return output;
+ };
+ document.addEventListener('click',ev=>{
+   if(!ev.target.closest('#repairFieldLeaderReference'))return;
+   if(!window.__hrCloudConnected?.()){alert('공유 DB에 로그인한 후 복구하세요.');return;}
+   const entries=(db.employees||[]).filter(x=>!x.field_leader_role||x.field_leader_role==='미지정');
+   const obsolete=(db.reference_master||[]).some(x=>x.type==='field_leader_role'&&x.value==='미지정'&&x.deleted===true);
+   if(!obsolete||!list('field_leader_role').includes('팀원')||!entries.length){alert('복구 대상이 없습니다.');return;}
+   if(!confirm('기존 기준정보 변경이 직원에게 적용되지 않은 '+entries.length+'명을 확인했습니다.\n현장관리자 구분을 미지정에서 팀원으로 변경하시겠습니까?\n과거 인사발령 이력과 월별 저장 실적은 유지합니다.'))return;
+   for(const e of entries)e.field_leader_role='팀원';
+   commit('기준정보 이전 변경 복구','현장관리자 구분 미지정 → 팀원 / '+entries.length+'명');
+   alert(entries.length+'명의 화면 값 변경을 공동 DB에 저장 요청했습니다. 공유 저장 완료를 확인하세요.');
+ });
+ // Old employee editor saves the updated reference value already; this bridge only
+ // ensures the displayed candidates are the same canonical reference values.
 })();
 </script>
 </body></html>
