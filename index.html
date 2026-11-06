@@ -3002,6 +3002,28 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section{margin:3px 0!important}
  #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section tr{break-inside:avoid}
 }
+
+/* HR record card table visual optimization - shared by screen and print. */
+#hrRecordPrintArea .hr-record-centered th,
+#hrRecordPrintArea .hr-record-centered td{text-align:center;vertical-align:middle;}
+#hrRecordPrintArea .hr-record-section table{table-layout:fixed;width:100%;}
+#hrRecordPrintArea .hr-record-section th,
+#hrRecordPrintArea .hr-record-section td{overflow-wrap:anywhere;word-break:normal;line-height:1.28;}
+#hrRecordPrintArea .hr-record-appointments th,
+#hrRecordPrintArea .hr-record-appointments td{text-align:center;vertical-align:middle;}
+#hrRecordPrintArea .hr-record-appointments td:last-child{text-align:left;overflow-wrap:break-word;word-break:keep-all;}
+#hrRecordPrintArea .hr-record-appointments th:nth-child(5),
+#hrRecordPrintArea .hr-record-appointments td:nth-child(5),
+#hrRecordPrintArea .hr-record-appointments th:nth-child(6),
+#hrRecordPrintArea .hr-record-appointments td:nth-child(6){padding-left:2px;padding-right:2px;}
+#hrRecordPrintArea .hr-record-right .hr-record-section th,
+#hrRecordPrintArea .hr-record-right .hr-record-section td{padding-left:3px;padding-right:3px;}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-centered th,
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-centered td{text-align:center!important;vertical-align:middle!important;}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments td:last-child{text-align:left!important;}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section{break-inside:auto!important;}
+}
 </style>
 
 <script>
@@ -3057,7 +3079,27 @@ window.saveRetirementContractConversion=function(id){
  ];
  function tableSection(title,cols,rows){
   rows=rows.filter(row=>row.some(v=>String(v??'').trim()!==''));
-  return `<section class="hr-record-section${rows.length?'':' hr-record-no-data'}"><h3>${safe(title)}</h3><table><thead><tr>${cols.map(c=>'<th>'+safe(c)+'</th>').join('')}</tr></thead><tbody>${rows.length?rows.map(row=>'<tr>'+row.map(v=>'<td>'+show(v)+'</td>').join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}" class="hr-record-empty">내역 없음</td></tr>`}</tbody></table></section>`;
+  // Fixed column proportions apply to both on-screen cards and A4 landscape print.
+  // Keep the export/record values unchanged: only add section classes and col widths.
+  const layouts={
+   '학력사항':['16%','19%','19%','26%','20%'],
+   '경력사항':['19%','19%','21%','15%','26%'],
+   '가족사항':['34%','24%','42%'],
+   '자격/면허사항':['30%','23%','20%','27%'],
+   '인사변동사항':['11%','13%','15%','15%','10%','9%','27%'],
+   '휴직 · 산재 · 육아휴직':['23%','13%','32%','32%']
+  };
+  const sectionClasses={
+   '학력사항':'hr-record-centered hr-record-school',
+   '경력사항':'hr-record-centered hr-record-career',
+   '가족사항':'hr-record-centered hr-record-family',
+   '자격/면허사항':'hr-record-centered hr-record-licenses',
+   '인사변동사항':'hr-record-appointments',
+   '휴직 · 산재 · 육아휴직':'hr-record-leave'
+  };
+  const widths=layouts[title];
+  const colgroup=widths&&widths.length===cols.length?'<colgroup>'+widths.map(w=>'<col style="width:'+w+'">').join('')+'</colgroup>':'';
+  return `<section class="hr-record-section ${sectionClasses[title]||''}${rows.length?'':' hr-record-no-data'}"><h3>${safe(title)}</h3><table>${colgroup}<thead><tr>${cols.map(c=>'<th>'+safe(c)+'</th>').join('')}</tr></thead><tbody>${rows.length?rows.map(row=>'<tr>'+row.map(v=>'<td>'+show(v)+'</td>').join('')+'</tr>').join(''):`<tr><td colspan="${cols.length}" class="hr-record-empty">내역 없음</td></tr>`}</tbody></table></section>`;
  }
  function overlay(){let root=document.getElementById('hrRecordOverlay');if(root)return root;root=document.createElement('div');root.id='hrRecordOverlay';root.className='hr-record-overlay';root.setAttribute('role','dialog');root.setAttribute('aria-modal','true');root.setAttribute('aria-label','인사기록카드');document.body.append(root);return root;}
  function close(){const root=document.getElementById('hrRecordOverlay');if(root)root.remove();if(photoUrl){URL.revokeObjectURL(photoUrl);photoUrl=null;}currentId=null;}
