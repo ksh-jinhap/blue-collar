@@ -3281,8 +3281,63 @@ function install(){
  const parent=document.createElement('button');parent.type='button';parent.id='hrCardBulkMenu';parent.className='nav';parent.textContent='▤ 인사기록카드 일괄등록';parent.setAttribute('aria-expanded','false');
  const submenu=document.createElement('div');submenu.id='hrCardBulkSubmenu';submenu.className='hr-card-submenu';submenu.hidden=true;
  for(const [key,cfg] of Object.entries(configs)){const button=document.createElement('button');button.type='button';button.className='nav';button.textContent=cfg.title;button.addEventListener('click',()=>modalFor(key));submenu.append(button);}
- parent.addEventListener('click',()=>window.__hrCardBulkOpen());target.append(parent,submenu);
+ parent.addEventListener('click',()=>{if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용할 수 있습니다.');return;}submenu.hidden=false;parent.setAttribute('aria-expanded','true');setView('hrCardBulkStatus');});target.append(parent,submenu);
 }
+// Dashboard for registration completeness. This is read-only: never mutates db.
+const statusView='hrCardBulkStatus';
+names[statusView]=['인사기록카드 일괄등록 현황','등록 유형별 완료 인원과 미등록 명단을 조회합니다.'];
+let statusScope='active',statusCategory='family',statusKind='registered',statusSearch='';
+const statusOrder=['family','school','career','licenses','basics','appointment','address'];
+function statusPeople(){return (db.employees||[]).filter(e=>statusScope==='all'||e.status!=='퇴사');}
+function statusNonempty(v){return String(v??'').trim()!=='';}
+function statusHas(e,type){
+ const x=existing(e);
+ if(type==='address')return statusNonempty(x.resident_address);
+ if(type==='basics')return configs.basics.fields.some(([k])=>statusNonempty(x[k]));
+ if(type==='appointment')return (db.history||[]).some(h=>String(h.employee_id)===String(e.id)&&(
+   h.hr_card_appointment===true||statusNonempty(h.event_date)||statusNonempty(h.event_type)||statusNonempty(h.title)));
+ const cfg=configs[type];const entries=Array.isArray(x[cfg.key])?x[cfg.key]:[];
+ // A value in at least one substantive field counts. An empty placeholder does not.
+ return entries.some(item=>item&&typeof item==='object'&&cfg.fields.some(([k])=>statusNonempty(item[k])));
+}
+function statusCounts(type){let yes=0,no=0;for(const e of statusPeople())statusHas(e,type)?yes++:no++;return {yes,no};}
+function statusRows(){const term=statusSearch.trim().toLocaleLowerCase('ko');return statusPeople().filter(e=>statusHas(e,statusCategory)===(statusKind==='registered')&&(!term||[e.employee_no,e.name,e.corporation,e.headquarters,e.department].some(x=>String(x||'').toLocaleLowerCase('ko').includes(term))));}
+function statusDashboard(){
+ const all=statusPeople(),registeredKinds=statusOrder.map(t=>statusCounts(t));
+ const allDone=all.filter(e=>statusOrder.every(t=>statusHas(e,t))).length;
+ const title=configs[statusCategory].title;
+ const found=statusRows();
+ const color=statusKind==='registered'?'positive':'negative';
+ return `<div class="notice"><b>집계 기준:</b> ${statusScope==='active'?'퇴사자 제외 현재 인원':'퇴사자 포함 전체 등록 직원'} ${all.length}명 · 항목별 자료가 하나 이상 있으면 등록으로 분류합니다. 인사변동사항은 기존 개인별 연혁도 포함합니다. 값이 전부 비어 있는 내역은 미등록으로 봅니다.</div>
+ <div class="toolbar"><label for="hrStatusScope"><b>조회 범위</b></label><select id="hrStatusScope"><option value="active" ${statusScope==='active'?'selected':''}>퇴사자 제외</option><option value="all" ${statusScope==='all'?'selected':''}>퇴사자 포함 전체</option></select><button class="btn" id="hrStatusRefresh">현황 새로고침</button></div>
+ <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(180px,1fr))">${card('집계 직원',all.length,'선택한 조회 범위')}${card('7종 전부 등록',allDone,'등록 항목 기준')}${card('1종 이상 미등록',all.length-allDone,'보완 필요 직원')}</div>
+ <section class="panel"><h2>유형별 등록 현황</h2><div class="tablewrap"><table><thead><tr><th>일괄등록 유형</th><th class="right">등록 인원</th><th class="right">미등록 인원</th><th class="right">등록률</th><th>등록 화면</th></tr></thead><tbody>${statusOrder.map((type,i)=>{const c=registeredKinds[i],pct=all.length?(100*c.yes/all.length).toFixed(1)+'%':'-';return `<tr><td><b>${html(configs[type].title)}</b></td><td class="right"><button type="button" class="btn tiny ${statusCategory===type&&statusKind==='registered'?'primary':''}" data-hr-status-type="${type}" data-hr-status-kind="registered">${fmt(c.yes)}명</button></td><td class="right"><button type="button" class="btn tiny ${statusCategory===type&&statusKind==='missing'?'primary':''}" data-hr-status-type="${type}" data-hr-status-kind="missing">${fmt(c.no)}명</button></td><td class="right">${pct}</td><td><button class="btn tiny" data-hr-status-import="${type}">엑셀 등록</button></td></tr>`}).join('')}</tbody></table></div></section>
+ <section class="panel" id="hrStatusRoster"><div class="report-head"><h2 id="hrStatusRosterTitle">${html(title)} · ${statusKind==='registered'?'등록':'미등록'} 명단 (${fmt(found.length)}명)</h2><button type="button" class="btn tiny" id="hrStatusClearSearch">검색 초기화</button></div><div class="toolbar"><input id="hrStatusSearch" placeholder="사번·성명·법인·부서 검색" value="${html(statusSearch)}" style="width:min(380px,100%)"><span class="hint">명단은 조회 범위와 검색 조건을 반영합니다.</span></div><div class="tablewrap" style="max-height:540px;overflow:auto"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부</th><th>부서</th><th>상태</th><th>인사기록카드</th></tr></thead><tbody>${found.map(e=>`<tr><td>${html(e.employee_no)}</td><td>${html(e.name)}</td><td>${html(e.corporation)}</td><td>${html(e.headquarters)}</td><td>${html(e.department)}</td><td>${html(e.status)}</td><td><button type="button" class="btn tiny" data-hr-status-card="${html(String(e.id))}">보기</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">해당 직원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+}
+function renderStatus(){
+ document.getElementById('heading').textContent=names[statusView][0];
+ document.getElementById('subheading').textContent=names[statusView][1];
+ document.getElementById('content').innerHTML=statusDashboard();
+ const parent=document.getElementById('hrCardBulkMenu');if(parent)parent.classList.add('active');
+}
+const renderBeforeStatus=render;
+render=function(){if(view===statusView){if(!window.__hrCloudConnected?.()){view='cloud';return renderBeforeStatus();}renderStatus();return;}renderBeforeStatus();};
+document.addEventListener('change',ev=>{if(ev.target.id==='hrStatusScope'){statusScope=ev.target.value;statusSearch='';render();}});
+document.addEventListener('click',ev=>{
+ const typeButton=ev.target.closest?.('[data-hr-status-type]');
+ if(typeButton){statusCategory=typeButton.dataset.hrStatusType;statusKind=typeButton.dataset.hrStatusKind;statusSearch='';render();document.getElementById('hrStatusRoster')?.scrollIntoView({block:'nearest'});return;}
+ const importButton=ev.target.closest?.('[data-hr-status-import]');if(importButton){modalFor(importButton.dataset.hrStatusImport);return;}
+ const cardButton=ev.target.closest?.('[data-hr-status-card]');if(cardButton){window.__hrRecordCardOpen?.(cardButton.dataset.hrStatusCard);return;}
+ if(ev.target.id==='hrStatusRefresh'){render();return;}
+ if(ev.target.id==='hrStatusClearSearch'){statusSearch='';render();return;}
+});
+// Only refresh the roster tbody on search to avoid Korean IME input interruption.
+document.addEventListener('input',ev=>{if(ev.target.id!=='hrStatusSearch'||view!==statusView)return;statusSearch=ev.target.value;
+ const list=statusRows();const tbody=document.querySelector('#hrStatusRoster tbody');
+ if(tbody)tbody.innerHTML=list.map(e=>`<tr><td>${html(e.employee_no)}</td><td>${html(e.name)}</td><td>${html(e.corporation)}</td><td>${html(e.headquarters)}</td><td>${html(e.department)}</td><td>${html(e.status)}</td><td><button type="button" class="btn tiny" data-hr-status-card="${html(String(e.id))}">보기</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">해당 직원이 없습니다.</td></tr>';
+ const title=document.getElementById('hrStatusRosterTitle');if(title)title.textContent=configs[statusCategory].title+' · '+(statusKind==='registered'?'등록':'미등록')+' 명단 ('+fmt(list.length)+'명)';
+});
+
 install();
 })();
 </script>
