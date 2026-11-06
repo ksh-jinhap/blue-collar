@@ -582,7 +582,7 @@ function dateFirstEmployeeSort(a,b,kind){
 }
 function filteredEmployees(){return db.employees.filter(employeeMatches).sort(employeePrioritySort)}
 function employeeFilterSelect(id,label,options,value){return `<label class="emp-filter-label">${esc(label)}${select(id,options,value,'전체')}</label>`}
-function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role')return ['그룹장','파트장','라인장','미지정'];if(key==='gender')return ['남','여'];if(key==='salary_type')return ['월급','시급','미지정'];if(key==='employment_type')return ['정규직','계약직','미확인'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
+function extraChoices(key){if(key==='decade')return ['10','20','30','40','50','60','70','80'];if(key==='hireYear')return [...new Set(db.employees.map(e=>String(e.hire_date||'').slice(0,4)).filter(v=>/^\d{4}$/.test(v)))].sort((a,b)=>b.localeCompare(a));if(key==='union_status')return ['가입','미가입','미확인'];if(key==='field_leader_role'){const preferred=['라인장','미지정','팀원','파트장','그룹장'];const fromMaster=typeof window.__hrMasterCandidates==='function'?window.__hrMasterCandidates('field_leader_role'):[];const assigned=db.employees.map(e=>e.field_leader_role||'미지정');const values=[...new Set([...fromMaster,...assigned].filter(Boolean))];return values.sort((a,b)=>{const ai=preferred.indexOf(a),bi=preferred.indexOf(b);return (ai<0?preferred.length:ai)-(bi<0?preferred.length:bi)||a.localeCompare(b,'ko')});}if(key==='gender')return ['남','여'];if(key==='salary_type')return ['월급','시급','미지정'];if(key==='employment_type')return ['정규직','계약직','미확인'];return [...new Set(db.employees.map(e=>cleanVal(e[key])).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'))}
 const empLabels={position:'직위',grade:'직급',gender:'성별',decade:'연령대',hireYear:'입사연도',education:'학력',union_status:'노조 가입 여부',field_leader_role:'현장관리자',salary_type:'급여 형태',employment_type:'고용형태'};
 // Display only date of birth, never the underlying national identity number.
 
@@ -619,7 +619,7 @@ function openEmployeeMassEdit(){
  const selected=db.employees.filter(e=>empSelected.has(String(e.id)));
  if(!selected.length)return alert('변경할 직원을 먼저 체크해 주세요.');
  const countByCorp={};selected.forEach(e=>countByCorp[e.corporation]=(countByCorp[e.corporation]||0)+1);
- const fields=Object.entries(massAllowed).map(([key,label])=>{const opts={status:['재직','휴직','파견','대기','산재','육아휴직','퇴사'],union_status:['가입','미가입','미확인'],field_leader_role:['그룹장','파트장','라인장','미지정'],gender:['남','여'],salary_type:['월급','시급'],employment_type:['정규직','계약직','미확인']}[key];return `<label>${esc(label)}${opts?select('mass_'+key,opts,'','변경 안 함'):`<input id="mass_${key}" placeholder="변경 안 함" list="mass-list-${key}"><datalist id="mass-list-${key}">${extraChoices(key).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`}</label>`}).join('');
+ const fields=Object.entries(massAllowed).map(([key,label])=>{const opts={status:['재직','휴직','파견','대기','산재','육아휴직','퇴사'],union_status:['가입','미가입','미확인'],field_leader_role:extraChoices('field_leader_role'),gender:['남','여'],salary_type:['월급','시급'],employment_type:['정규직','계약직','미확인']}[key];return `<label>${esc(label)}${opts?select('mass_'+key,opts,'','변경 안 함'):`<input id="mass_${key}" placeholder="변경 안 함" list="mass-list-${key}"><datalist id="mass-list-${key}">${extraChoices(key).map(v=>`<option value="${esc(v)}"></option>`).join('')}</datalist>`}</label>`}).join('');
  modal('선택 인원 일괄 수정',`<div class="notice"><b>선택 인원 ${selected.length}명</b> · ${Object.entries(countByCorp).map(([a,b])=>`${esc(a)} ${b}명`).join(' / ')}<br>변경할 항목만 선택하세요. 비워 둔 항목은 변경되지 않습니다. 퇴사 처리 시 현재 TO가 자동 갱신됩니다.</div><div class="formgrid">${fields}</div><div class="hint">가입 여부는 확인된 정보만 변경하세요. 한 번에 변경한 결과는 공동 DB에 저장 요청되며, 변경 기록에 남습니다.</div><div class="modalactions"><button class="btn" onclick="closeModal()">취소</button><button class="btn primary" onclick="applyEmployeeMassEdit()">${selected.length}명 일괄 변경</button></div>`);
 }
 window.applyEmployeeMassEdit=function(){
@@ -3494,7 +3494,15 @@ install();
  const list=(type,corporation='',headquarters='')=>{
    const fn=window.__hrMasterCandidates;
    if(typeof fn!=='function')return [];
-   return [...new Set(fn(type,corporation,headquarters).filter(Boolean))];
+   const values=fn(type,corporation,headquarters).filter(Boolean);
+   if(type==='field_leader_role'){
+     // Keep employee filters identical to the values displayed in the roster/editor.
+     // Empty legacy values are displayed as '미지정'.
+     for(const e of db.employees||[])values.push(e.field_leader_role||'미지정');
+     const preferred=['라인장','미지정','팀원','파트장','그룹장'];
+     return [...new Set(values)].sort((a,b)=>{const ai=preferred.indexOf(a),bi=preferred.indexOf(b);return (ai<0?preferred.length:ai)-(bi<0?preferred.length:bi)||a.localeCompare(b,'ko');});
+   }
+   return [...new Set(values)];
  };
  const currentValue=(employee,type)=>{
    if(type==='field_leader_role')return employee?.field_leader_role||'미지정';
