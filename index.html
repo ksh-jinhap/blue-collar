@@ -2954,6 +2954,46 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay .hr-record-note.hr-record-no-data{display:none!important}
  #hrRecordOverlay .hr-record-sheet footer{break-inside:avoid}
 }
+
+/* Compact HR card: left photo/basic details, right education/career; aligned address. */
+#hrRecordPrintArea .hr-record-top{display:grid;grid-template-columns:minmax(0,1.06fr) minmax(0,1fr);gap:12px;align-items:start}
+#hrRecordPrintArea .hr-record-primary{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;align-items:start;min-width:0}
+#hrRecordPrintArea .hr-record-left-details{min-width:0}
+#hrRecordPrintArea .hr-record-photo{width:92px;height:120px}
+#hrRecordPrintArea .hr-record-items{grid-template-columns:repeat(3,minmax(0,1fr))}
+#hrRecordPrintArea .hr-record-item{padding:3px 5px;min-height:29px}
+#hrRecordPrintArea .hr-record-item strong{margin-top:1px}
+#hrRecordPrintArea .hr-record-note{margin-top:6px;padding:5px;display:block;min-width:0;overflow-wrap:anywhere}
+#hrRecordPrintArea .hr-record-note b{display:block;min-width:0;margin-bottom:2px}
+#hrRecordPrintArea .hr-record-right{min-width:0}
+#hrRecordPrintArea .hr-record-right .hr-record-section:first-child{margin-top:0}
+#hrRecordPrintArea .hr-record-mid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+#hrRecordPrintArea .hr-record-mid>.hr-record-section{min-width:0}
+#hrRecordPrintArea .hr-record-section{margin:7px 0}
+#hrRecordPrintArea .hr-record-section th,#hrRecordPrintArea .hr-record-section td{padding:3px 4px}
+@media screen and (max-width:900px){
+ #hrRecordPrintArea .hr-record-top{grid-template-columns:1fr}
+ #hrRecordPrintArea .hr-record-mid{grid-template-columns:1fr}
+}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-top{grid-template-columns:minmax(0,1.06fr) minmax(0,1fr)!important;gap:7px!important;align-items:start!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-top-no-right{grid-template-columns:1fr!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-primary{grid-template-columns:78px minmax(0,1fr)!important;gap:6px!important;break-inside:auto!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-photo{width:78px!important;height:104px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-items{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-item{padding:2px 4px!important;min-height:25px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-item strong{margin-top:1px!important;line-height:1.18!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-item span{line-height:1.12!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-note{margin-top:4px!important;padding:4px!important;display:block!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-note b{min-width:0!important;display:block!important;margin-bottom:1px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-mid{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-section{margin:4px 0!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-section h3{padding:1px 0 1px 5px!important;margin-bottom:2px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-section th,#hrRecordOverlay #hrRecordPrintArea .hr-record-section td{padding:2px 3px!important;line-height:1.18!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-sheet header{margin-bottom:5px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section:first-child{margin-top:0!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-top-no-right .hr-record-right{display:none!important}
+}
 </style>
 
 <script>
@@ -3017,10 +3057,24 @@ window.saveRetirementContractConversion=function(id){
   const evt=(db.history||[]).filter(h=>String(h.employee_id)===String(e.id)).slice().sort((a,b)=>String(b.event_date||'').localeCompare(String(a.event_date||'')));
   const periods=window.hrEmployeeLeavePeriods?window.hrEmployeeLeavePeriods(e):[];
   const items=basic.map(([label,k])=>`<div class="hr-record-item"><span>${safe(label)}</span><strong>${cardValue(e,x,k)}</strong></div>`).join('');
+  const sectionHtml={};
+  for(const item of lists){
+   const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));
+   sectionHtml[item.key]=tableSection(item.title,item.columns.map(c=>c[1]),rows);
+  }
+  const hasEducationCareer=['school','career'].some(key=>arrOf(x,key).some(record=>Object.values(record||{}).some(v=>String(v??'').trim())));
   let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
-   <div class="hr-record-primary"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-items">${items}</div></div>
-   <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>`;
-  for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
+   <div class="hr-record-top${hasEducationCareer?'':' hr-record-top-no-right'}">
+    <div class="hr-record-primary">
+     <div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div>
+     <div class="hr-record-left-details">
+      <div class="hr-record-items">${items}</div>
+      <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>
+     </div>
+    </div>
+    <div class="hr-record-right">${sectionHtml.school}${sectionHtml.career}</div>
+   </div>
+   <div class="hr-record-mid">${sectionHtml.family}${sectionHtml.licenses}</div>`;
   content+=tableSection('인사변동사항',['발령구분','변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
    h.appointment_category||'',h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
   ]:[h.appointment_category||h.event_type||'',h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
