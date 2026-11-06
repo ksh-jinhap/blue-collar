@@ -3208,7 +3208,7 @@ const configs={
  address:{title:'주소 일괄등록',key:null,fields:[['resident_address','주소']],required:'resident_address'},
  career:{title:'경력사항 등록',key:'career',fields:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
  licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']],required:'name'},
- basics:{title:'인사기록카드 내용 등록',key:null,fields:[['marital_status','결혼구분']]},
+ basics:{title:'인사기록카드 내용 등록',key:null,fields:[['marital_status','결혼구분'],['military_category','병역구분'],['employment_category','입사구분']]},
  appointment:{title:'인사변동사항 등록',key:'appointment',fields:[['appointment_category','발령구분'],['event_date','변동일자'],['previous_department','현재부서'],['appointed_department','발령부서'],['appointed_position','발령직위'],['appointed_role','직책'],['change_reason','변동사유']],required:'event_date'}
 };
 let current=null,preview=null,source='';
