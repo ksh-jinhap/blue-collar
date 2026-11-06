@@ -3043,6 +3043,13 @@ window.saveRetirementContractConversion=function(id){
 @media screen and (max-width:650px){
  #hrRecordPrintArea .hr-record-items{grid-template-columns:repeat(2,minmax(0,1fr));}
 }
+/* Education row: narrower school name and a single-line major (screen and print). */
+#hrRecordPrintArea .hr-record-school th:nth-child(5),
+#hrRecordPrintArea .hr-record-school td:nth-child(5){white-space:nowrap;word-break:keep-all;overflow-wrap:normal;font-size:clamp(8px,0.66vw,11px);letter-spacing:-0.25px;}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(5),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){font-size:8px!important;white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;letter-spacing:-0.35px!important;}
+}
 /* HR record card table visual optimization - shared by screen and print. */
 #hrRecordPrintArea .hr-record-centered th,
 #hrRecordPrintArea .hr-record-centered td{text-align:center;vertical-align:middle;}
@@ -3119,7 +3126,7 @@ window.saveRetirementContractConversion=function(id){
   // Fixed column proportions apply to both on-screen cards and A4 landscape print.
   // Keep the export/record values unchanged: only add section classes and col widths.
   const layouts={
-   '학력사항':['16%','19%','19%','26%','20%'],
+   '학력사항':['14%','18%','18%','16%','34%'],
    '경력사항':['19%','19%','21%','15%','26%'],
    '가족사항':['34%','24%','42%'],
    '자격/면허사항':['30%','23%','20%','27%'],
