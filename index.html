@@ -2994,6 +2994,14 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section:first-child{margin-top:0!important}
  #hrRecordOverlay #hrRecordPrintArea .hr-record-top-no-right .hr-record-right{display:none!important}
 }
+/* Right-column record sections: education, career, family and licenses. */
+#hrRecordPrintArea .hr-record-right .hr-record-section{margin:5px 0}
+#hrRecordPrintArea .hr-record-right .hr-record-section:first-child{margin-top:0}
+#hrRecordPrintArea .hr-record-right .hr-record-section table{width:100%;table-layout:fixed}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section{margin:3px 0!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section tr{break-inside:avoid}
+}
 </style>
 
 <script>
@@ -3062,7 +3070,7 @@ window.saveRetirementContractConversion=function(id){
    const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));
    sectionHtml[item.key]=tableSection(item.title,item.columns.map(c=>c[1]),rows);
   }
-  const hasEducationCareer=['school','career'].some(key=>arrOf(x,key).some(record=>Object.values(record||{}).some(v=>String(v??'').trim())));
+  const hasEducationCareer=['school','career','family','licenses'].some(key=>arrOf(x,key).some(record=>Object.values(record||{}).some(v=>String(v??'').trim())));
   let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
    <div class="hr-record-top${hasEducationCareer?'':' hr-record-top-no-right'}">
     <div class="hr-record-primary">
@@ -3072,9 +3080,8 @@ window.saveRetirementContractConversion=function(id){
       <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>
      </div>
     </div>
-    <div class="hr-record-right">${sectionHtml.school}${sectionHtml.career}</div>
-   </div>
-   <div class="hr-record-mid">${sectionHtml.family}${sectionHtml.licenses}</div>`;
+    <div class="hr-record-right">${sectionHtml.school}${sectionHtml.career}${sectionHtml.family}${sectionHtml.licenses}</div>
+   </div>`;
   content+=tableSection('인사변동사항',['발령구분','변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
    h.appointment_category||'',h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
   ]:[h.appointment_category||h.event_type||'',h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
