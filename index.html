@@ -2960,7 +2960,7 @@ window.saveRetirementContractConversion=function(id){
 #hrRecordPrintArea .hr-record-primary{display:grid;grid-template-columns:92px minmax(0,1fr);gap:8px;align-items:start;min-width:0}
 #hrRecordPrintArea .hr-record-left-details{min-width:0}
 #hrRecordPrintArea .hr-record-photo{width:92px;height:120px}
-#hrRecordPrintArea .hr-record-items{grid-template-columns:repeat(3,minmax(0,1fr))}
+#hrRecordPrintArea .hr-record-items{grid-template-columns:repeat(3,minmax(0,1fr));grid-auto-rows:minmax(0,auto);align-content:start}
 #hrRecordPrintArea .hr-record-item{padding:3px 5px;min-height:29px}
 #hrRecordPrintArea .hr-record-item strong{margin-top:1px}
 #hrRecordPrintArea .hr-record-note{margin-top:6px;padding:5px;display:block;min-width:0;overflow-wrap:anywhere}
@@ -3003,6 +3003,12 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section tr{break-inside:avoid}
 }
 
+/* Compact the reduced set of basic fields without touching other system tables. */
+#hrRecordPrintArea .hr-record-items{align-content:start;gap:3px;}
+#hrRecordPrintArea .hr-record-item{min-width:0;}
+@media screen and (max-width:650px){
+ #hrRecordPrintArea .hr-record-items{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
 /* HR record card table visual optimization - shared by screen and print. */
 #hrRecordPrintArea .hr-record-centered th,
 #hrRecordPrintArea .hr-record-centered td{text-align:center;vertical-align:middle;}
@@ -3033,10 +3039,8 @@ window.saveRetirementContractConversion=function(id){
  const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const show=v=>safe(String(v??'').trim()||'-');
  const fieldDefs=[
- ['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],
- ['military_branch','병역군별'],['military_service','병역병과'],['military_rank','병역계급'],
- ['job_category','직종'],['job_duty','직무'],['employment_category','입사구분'],['business_site','사업장'],
- ['appointment_date','인사변동일'],['resident_address','주민등록주소'],
+ ['marital_status','결혼구분'],['military_category','병역구분'],
+ ['employment_category','입사구분'],['resident_address','주민등록주소'],
  ['family_note','가족사항 비고']
  ];
  const lists=[
@@ -3055,7 +3059,7 @@ window.saveRetirementContractConversion=function(id){
   let m=(b.getFullYear()-a.getFullYear())*12+b.getMonth()-a.getMonth()-(b.getDate()<a.getDate()?1:0);
   return m<0?'-':`${Math.floor(m/12)}년 ${m%12}개월`;
  };
- function cardValue(e,x,k){const values={
+ function cardValue(e,x,k,latestChangeDate=''){const values={
   'employee_no':e.employee_no,'name':e.name,'hanja_name':x.hanja_name,'gender':e.gender,
   'birth_date':typeof employeeBirthDate==='function'?employeeBirthDate(e):e.birth_date,
   'marital_status':x.marital_status,'academic_category':e.education,
@@ -3064,18 +3068,17 @@ window.saveRetirementContractConversion=function(id){
   'headquarters':e.headquarters,'department':e.department,'position':e.position,'grade':e.grade,
   'job_category':x.job_category,'job_duty':x.job_duty,'employment_category':x.employment_category,
   'employment_type':e.employment_type,'hire_date':e.hire_date,'exit_date':e.exit_date,
-  'appointment_date':x.appointment_date,'regular_conversion':window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date,
+  'appointment_date':latestChangeDate,'regular_conversion':window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date,
   'manager_role':e.field_leader_role,'status':e.status,'resident_address':x.resident_address,
   'family_note':x.family_note
  };return show(values[k]);}
  const basic=[
-  ['사번','employee_no'],['성명','name'],['한문','hanja_name'],['성별','gender'],
+  ['사번','employee_no'],['성명','name'],['성별','gender'],
   ['생년월일','birth_date'],['결혼구분','marital_status'],['학력구분','academic_category'],['병역구분','military_category'],
-  ['근무기간','work_period'],['사업장','business_site'],['본부','headquarters'],['부서','department'],
-  ['직책','manager_role'],['입사구분','employment_category'],['직종','job_category'],['직무','job_duty'],
+  ['근무기간','work_period'],['본부','headquarters'],['부서','department'],
+  ['직책','manager_role'],['입사구분','employment_category'],
   ['입사일','hire_date'],['퇴사일','exit_date'],['인사변동일','appointment_date'],['정규직 전환일','regular_conversion'],
-  ['법인','corporation'],['고용형태','employment_type'],['직위','position'],['직급','grade'],
-  ['병역군별','military_branch'],['병역병과','military_service'],['병역계급','military_rank'],['현재 상태','status']
+  ['법인','corporation'],['고용형태','employment_type'],['직위','position'],['직급','grade'],['현재 상태','status']
  ];
  function tableSection(title,cols,rows){
   rows=rows.filter(row=>row.some(v=>String(v??'').trim()!==''));
@@ -3106,7 +3109,11 @@ window.saveRetirementContractConversion=function(id){
  function renderCard(e){const x=extraOf(e),root=overlay();root.dataset.mode='view';
   const evt=(db.history||[]).filter(h=>String(h.employee_id)===String(e.id)).slice().sort((a,b)=>String(b.event_date||'').localeCompare(String(a.event_date||'')));
   const periods=window.hrEmployeeLeavePeriods?window.hrEmployeeLeavePeriods(e):[];
-  const items=basic.map(([label,k])=>`<div class="hr-record-item"><span>${safe(label)}</span><strong>${cardValue(e,x,k)}</strong></div>`).join('');
+  // Use the newest real event date in the displayed personnel-change history.
+  // Do not use the historical manually entered card field as a fallback.
+  const latestChangeDate=evt.map(h=>String(h.event_date||'').slice(0,10))
+   .find(d=>/^\d{4}-\d{2}-\d{2}$/.test(d))||'';
+  const items=basic.map(([label,k])=>`<div class="hr-record-item"><span>${safe(label)}</span><strong>${cardValue(e,x,k,latestChangeDate)}</strong></div>`).join('');
   const sectionHtml={};
   for(const item of lists){
    const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));
@@ -3201,7 +3208,7 @@ const configs={
  address:{title:'주소 일괄등록',key:null,fields:[['resident_address','주소']],required:'resident_address'},
  career:{title:'경력사항 등록',key:'career',fields:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
  licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']],required:'name'},
- basics:{title:'인사기록카드 내용 등록',key:null,fields:[['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],['job_category','직종'],['military_branch','병역군별'],['military_rank','병역계급']]},
+ basics:{title:'인사기록카드 내용 등록',key:null,fields:[['marital_status','결혼구분']]},
  appointment:{title:'인사변동사항 등록',key:'appointment',fields:[['appointment_category','발령구분'],['event_date','변동일자'],['previous_department','현재부서'],['appointed_department','발령부서'],['appointed_position','발령직위'],['appointed_role','직책'],['change_reason','변동사유']],required:'event_date'}
 };
 let current=null,preview=null,source='';
