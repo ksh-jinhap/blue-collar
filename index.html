@@ -2963,7 +2963,7 @@ window.saveRetirementContractConversion=function(id){
  const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
  const show=v=>safe(String(v??'').trim()||'-');
  const fieldDefs=[
- ['hanja_name','한문'],['marital_status','결혼구분'],['academic_category','학력구분'],['military_category','병역구분'],
+ ['hanja_name','한문'],['marital_status','결혼구분'],['military_category','병역구분'],
  ['military_branch','병역군별'],['military_service','병역병과'],['military_rank','병역계급'],
  ['job_category','직종'],['job_duty','직무'],['employment_category','입사구분'],['business_site','사업장'],
  ['appointment_date','인사변동일'],['resident_address','주민등록주소'],
@@ -2988,7 +2988,7 @@ window.saveRetirementContractConversion=function(id){
  function cardValue(e,x,k){const values={
   'employee_no':e.employee_no,'name':e.name,'hanja_name':x.hanja_name,'gender':e.gender,
   'birth_date':typeof employeeBirthDate==='function'?employeeBirthDate(e):e.birth_date,
-  'marital_status':x.marital_status,'academic_category':x.academic_category||e.education,
+  'marital_status':x.marital_status,'academic_category':e.education,
   'military_category':x.military_category,'military_branch':x.military_branch,'military_service':x.military_service,'military_rank':x.military_rank,
   'work_period':tenure(e.hire_date,e.status==='퇴사'?e.exit_date:''),'corporation':e.corporation,'business_site':x.business_site,
   'headquarters':e.headquarters,'department':e.department,'position':e.position,'grade':e.grade,
@@ -3020,7 +3020,7 @@ window.saveRetirementContractConversion=function(id){
   let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
    <div class="hr-record-primary"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-items">${items}</div></div>
    <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>`;
-  for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
+  for(const item of lists){const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));content+=tableSection(item.title,item.columns.map(c=>c[1]),rows);}
   content+=tableSection('인사변동사항',['변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
    h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
   ]:[h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
@@ -3056,7 +3056,7 @@ window.saveRetirementContractConversion=function(id){
   };
  }
  function addRow(target,item,data){const row=document.createElement('div');row.className='hr-record-edit-row';
-  row.innerHTML=item.columns.map(([key,label])=>`<label>${safe(label)}<input data-column="${safe(key)}" value="${safe(data[key]||'')}"></label>`).join('')+(item.key==='career'&&data.period?`<input type="hidden" data-column="period" value="${safe(data.period)}">`:'')+'<button type="button" class="btn tiny danger">삭제</button>';
+  row.innerHTML=item.columns.map(([key,label])=>`<label>${safe(label)}<input data-column="${safe(key)}" value="${safe(item.key==='school'&&key==='category'?(getEmp(currentId)?.education||''):(data[key]||''))}" ${item.key==='school'&&key==='category'?'readonly title="생산직 인원관리의 학력 항목에서 자동 반영"':''}></label>`).join('')+(item.key==='career'&&data.period?`<input type="hidden" data-column="period" value="${safe(data.period)}">`:'')+'<button type="button" class="btn tiny danger">삭제</button>';
   row.querySelector('button').onclick=()=>row.remove();target.append(row);
  }
  window.__hrRecordCardOpen=function(id){if(typeof window.__hrCloudConnected==='function'&&!window.__hrCloudConnected()){alert('공동 DB 로그인 후 열 수 있습니다.');return;}
