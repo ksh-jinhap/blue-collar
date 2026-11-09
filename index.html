@@ -3089,6 +3089,26 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4),
  #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){font-size:9px!important;}
 }
+/* School / major: same default type size as adjacent cells; shrink only on overflow. */
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(4),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(5),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){
+  width:25%;font-size:calc(10px + 2pt)!important;letter-spacing:normal!important;
+  white-space:nowrap!important;overflow:hidden!important;
+}
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td .hr-education-fit{
+  font-size:inherit;letter-spacing:inherit;white-space:nowrap;
+  display:inline-block;max-width:none;transform-origin:center center;
+}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(4),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(5),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){
+  font-size:calc(9px + 2pt)!important;
+ }
+}
 /* HR record card table visual optimization - shared by screen and print. */
 #hrRecordPrintArea .hr-record-centered th,
 #hrRecordPrintArea .hr-record-centered td{text-align:center;vertical-align:middle;}
@@ -3113,7 +3133,7 @@ window.saveRetirementContractConversion=function(id){
 </style>
 
 <script>
-/* Scale only school / major cell text to its actual available column width. */
+/* Match surrounding cells at default size; fit only overflowing school/major text. */
 (function(){
  function fit(){
   const root=document.getElementById('hrRecordPrintArea');if(!root)return;
@@ -3122,18 +3142,16 @@ window.saveRetirementContractConversion=function(id){
     const cell=row.cells[index];if(!cell)return;
     let span=cell.querySelector('.hr-education-fit');
     if(!span){span=document.createElement('span');span.className='hr-education-fit';span.textContent=cell.textContent;cell.replaceChildren(span);}
-    span.style.transform='none';span.style.fontSize='';
-    const usable=Math.max(1,cell.clientWidth-5);
-    const width=span.getBoundingClientRect().width;
-    if(width>usable){
-     const ratio=usable/width;
-     const base=parseFloat(getComputedStyle(span).fontSize)||10;
-     const size=Math.max(7,base*Math.min(1,ratio));
-     span.style.fontSize=size+'px';
-     const revised=span.getBoundingClientRect().width;
-     if(revised>usable)span.style.transform='scaleX('+Math.max(.1,usable/revised)+')';
-     cell.style.textAlign='left';
-    }else cell.style.textAlign='center';
+    span.style.fontSize='';span.style.transform='none';
+    const available=Math.max(1,cell.clientWidth-6);
+    const actual=span.getBoundingClientRect().width;
+    if(actual<=available)return; // Ordinary names keep the same font size as other cells.
+    const normal=parseFloat(getComputedStyle(cell).fontSize)||12;
+    const proposed=Math.min(normal,normal*available/actual);
+    const fitted=Math.max(8,proposed);
+    span.style.fontSize=fitted+'px';
+    const after=span.getBoundingClientRect().width;
+    if(after>available)span.style.transform='scaleX('+Math.max(.1,available/after)+')';
    });
   });
  }
