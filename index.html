@@ -96,7 +96,7 @@
 <style id="hr-alert-trend-20261109">
 .hr-alert-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.hr-alert-tile{border:1px solid #e2e8f0;border-left:5px solid;border-radius:10px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:7px}.hr-alert-tile strong{font-size:25px}.hr-alert-tile small{color:#64748b}.hr-alert-label{display:inline-block;border-radius:20px;font-weight:700;padding:5px 10px;border:1px solid currentColor;background:#fff;white-space:nowrap;font-size:12px}.hr-alert-overdue{color:#b91c1c;border-color:#b91c1c;background:#fef2f2}.hr-alert-urgent{color:#c2410c;border-color:#c2410c;background:#fff7ed}.hr-alert-soon{color:#a16207;border-color:#a16207;background:#fefce8}.hr-alert-info{color:#2563eb;border-color:#2563eb;background:#eff6ff}.hr-alert-tile.hr-alert-overdue{border-left-color:#b91c1c}.hr-alert-tile.hr-alert-urgent{border-left-color:#c2410c}.hr-alert-tile.hr-alert-soon{border-left-color:#a16207}.hr-alert-tile.hr-alert-info{border-left-color:#2563eb}.hr-dashboard-alerts{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.hr-trend-filters{display:grid;grid-template-columns:110px repeat(3,minmax(125px,1fr)) 130px auto;gap:8px;align-items:end;margin:15px 0}.hr-trend-filters label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#64748b}.hr-trend-filters select,.hr-trend-filters input{width:100%}.hr-trend-mini{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:15px 0}.hr-trend-selected td{background:#eff6ff!important;font-weight:700}@media(max-width:1100px){.hr-trend-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:720px){.hr-alert-summary,.hr-trend-mini{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-trend-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
-</head><body><div class="shell"><aside class="sidebar"><div class="brand">생산직 인사관리</div><div class="subtitle">WORKFORCE · TO CONTROL</div><div class="navs"><button class="nav active" data-view="dashboard">▣ 대시보드</button><button class="nav" data-view="employees">♙ 생산직 인원관리</button><button class="nav" data-view="plans">▤ 사업계획 정원 · TO</button><button class="nav" data-view="recruitment">▦ 채용 진행관리</button><button class="nav" data-view="executive">▣ 경영진 보고서</button><button class="nav" data-view="organization">◫ 부서별 · 성별</button><button class="nav" data-view="history">◷ 개인별 연혁</button><button class="nav" data-view="audit">≡ 변경 기록</button><button class="nav" data-view="backup">⇩ 저장 · 백업</button></div></aside><main class="main"><div class="top"><div><h1 id="heading">대시보드</h1><div class="desc" id="subheading">생산직 인력 운영 현황을 한눈에 확인하세요.</div></div><div class="actions"><span class="pill" id="saveBadge">저장 상태 확인 중</span><button class="btn primary" id="saveNow">현재 내용 저장</button></div></div><div id="content"></div></main></div><div class="modalwrap" id="modalWrap"><div class="modal"><h2 id="modalTitle"></h2><div id="modalBody"></div></div></div>
+</head><body><div class="shell"><aside class="sidebar"><div class="brand">생산직 인사관리</div><div class="subtitle">WORKFORCE · TO CONTROL</div><div class="navs"><button class="nav active" data-view="dashboard">대시보드</button><button class="nav" data-view="employees">♙ 생산직 인원관리</button><button class="nav" data-view="plans">▤ 사업계획 정원 · TO</button><button class="nav" data-view="recruitment">▦ 채용 진행관리</button><button class="nav" data-view="executive">▣ 경영진 보고서</button><button class="nav" data-view="organization">◫ 부서별 · 성별</button><button class="nav" data-view="history">◷ 개인별 연혁</button><button class="nav" data-view="audit">≡ 변경 기록</button><button class="nav" data-view="backup">⇩ 저장 · 백업</button></div></aside><main class="main"><div class="top"><div><h1 id="heading">대시보드</h1><div class="desc" id="subheading">생산직 인력 운영 현황을 한눈에 확인하세요.</div></div><div class="actions"><span class="pill" id="saveBadge">저장 상태 확인 중</span><button class="btn primary" id="saveNow">현재 내용 저장</button></div></div><div id="content"></div></main></div><div class="modalwrap" id="modalWrap"><div class="modal"><h2 id="modalTitle"></h2><div id="modalBody"></div></div></div>
 <script>const SEED={employees:[],plans:[],history:[],audit:[],recruitment:[],snapshots:[],settings:{retirementAge:60}};
 const KEY='production-hr-single-html-v1';const today=()=>new Date().toISOString().slice(0,10);const year=()=>new Date().getFullYear();const $=s=>document.querySelector(s);const fmt=n=>Number(n||0).toLocaleString('ko-KR');const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const uid=()=>Math.floor(Date.now()*1000+Math.random()*1000);const occupied=e=>e.status!=='퇴사';const keyOf=x=>[x.corporation||'',x.headquarters||'',x.department||''].join('␟');
 let db=structuredClone(SEED),view='dashboard',search='',filters={},planYear=year(),historyEmployee='';for(const k of ['employees','plans','history','audit'])db[k]??=[]; db.plans.forEach(p=>p.year=Number(p.year));
@@ -1913,7 +1913,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  for(const item of plan){
    const group=document.createElement('div');group.className='nav-folder';
    const head=document.createElement('button');head.type='button';head.className='folder-head';
-   head.setAttribute('aria-expanded','false');head.innerHTML='<span>'+item.icon+' '+item.title+'</span><span class="folder-chevron" aria-hidden="true">▸</span>';
+   head.setAttribute('aria-expanded','false');head.innerHTML='<span>▣ '+item.title+'</span><span class="folder-chevron" aria-hidden="true">▸</span>';
    const contents=document.createElement('div');contents.className='folder-items';contents.hidden=true;
    for(const [id,label] of item.items){
      const btn=byView.get(id)||aliases[id]?.map(k=>byView.get(k)).find(Boolean);
@@ -1935,6 +1935,10 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    const sys=Array.from(navs.querySelectorAll('.nav-folder')).find(g=>g.querySelector('.folder-head')?.textContent.includes('시스템 관리'));
    const target=sys?.querySelector('.folder-items');
    for(const b of left)(target||navs).appendChild(b);
+ }
+ // Remove decorative symbols from every submenu, including legacy entries.
+ for(const button of navs.querySelectorAll('.folder-items button.nav')){
+   button.textContent=button.textContent.replace(/^[^\p{L}\p{N}]+/u,'').trim();
  }
  // Expand the active group and keep selected items visible.
  function sync(){
@@ -3797,7 +3801,7 @@ if(nav){
  for(const [key,content,target] of [['quality','▤ 인사 데이터 점검',system],['changes','◷ 인사변동 비교',personnel],['trends','▥ 인력 증감 분석',personnel]]){
   let b=nav.querySelector(`[data-view="${key}"]`);
   if(!b){b=document.createElement('button');b.className='nav';b.type='button';b.dataset.view=key;b.addEventListener('click',()=>setView(key));}
-  b.textContent=content;
+  b.textContent=content.replace(/^[^\p{L}\p{N}]+/u,'');
   if(target){if(key==='quality')target.prepend(b);else target.appendChild(b);}else nav.appendChild(b);
  }
  // Alerts are opened from the dashboard only; avoid an extra sidebar entry.
