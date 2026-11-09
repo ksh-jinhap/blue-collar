@@ -3887,4 +3887,88 @@ dashboard=function(){const html=previousDashboard();if((db.employees||[]).length
  document.addEventListener('click',e=>{if(e.target.closest('[data-hr-go-trends]'))setView('trends');});
 })();
 </script>
+<script id="historicalMonthlyRosterImportV1">
+/* Historical monthly roster import. Scoped entirely to existing shared-state snapshots. */
+(function(){
+'use strict';
+const $id=id=>document.getElementById(id);
+const clean=s=>String(s??'').trim();
+const html=s=>esc(clean(s));
+const HEADERS=['자료구분','기준월','사번','성명','법인','본부','부서','직위','직급','성별','재직상태','입사일','퇴사일','고용형태','현장관리자구분','학력','자료출처'];
+const statusAllowed=new Set(['재직','휴직','파견','대기','산재','육아휴직']);
+let staged=null;
+function validDay(v){if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const [y,m,d]=v.split('-').map(Number),x=new Date(Date.UTC(y,m-1,d));return x.getUTCFullYear()===y&&x.getUTCMonth()===m-1&&x.getUTCDate()===d;}
+function monthEnd(code){const [y,m]=code.split('-').map(Number);return new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);}
+function pastMonth(code){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(code))return false;const current=new Date(),thisMonth=current.getFullYear()+'-'+String(current.getMonth()+1).padStart(2,'0');return code<thisMonth&&(code==='2025-12'||code.startsWith('2026-'));}
+function excelDay(v){let t=clean(v);if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;if(/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(t)){const [y,m,d]=t.split('/').map(Number);return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}if(/^\d{5}(?:\.0+)?$/.test(t)){const n=Number(t);if(n>20000&&n<100000)return new Date(Date.UTC(1899,11,30)+n*86400000).toISOString().slice(0,10);}return t;}
+function getText(root,tag){return root.getElementsByTagName(tag)[0]?.textContent||'';}
+async function inflate(data){if(typeof DecompressionStream==='undefined')throw Error('이 브라우저는 XLSX 압축 해제를 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용하세요.');let stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));let buf=await new Response(stream).arrayBuffer();if(buf.byteLength>60*1024*1024)throw Error('엑셀 압축 해제 크기가 제한을 초과했습니다.');return new Uint8Array(buf);}
+function u16(v,i){return v[i]|(v[i+1]<<8)}
+function u32(v,i){return (v[i]|(v[i+1]<<8)|(v[i+2]<<16)|(v[i+3]<<24))>>>0}
+async function zipFiles(file){if(file.size>20*1024*1024)throw Error('엑셀 파일이 20MB를 넘습니다. 분할해서 등록하세요.');let b=new Uint8Array(await file.arrayBuffer()),files=new Map(),dec=new TextDecoder();let end=-1;for(let i=b.length-22;i>=Math.max(0,b.length-65557);i--)if(u32(b,i)===0x06054b50){end=i;break}if(end<0)throw Error('정상적인 XLSX ZIP 파일이 아닙니다.');let n=u16(b,end+10),pos=u32(b,end+16);if(n>300)throw Error('엑셀 파일에 항목이 너무 많습니다.');for(let j=0;j<n;j++){if(u32(b,pos)!==0x02014b50)throw Error('압축 파일 색인이 손상되었습니다.');let method=u16(b,pos+10),size=u32(b,pos+20),nameLen=u16(b,pos+28),extra=u16(b,pos+30),comment=u16(b,pos+32),start=u32(b,pos+42),name=dec.decode(b.slice(pos+46,pos+46+nameLen));if(name.startsWith('xl/')&&(name==='xl/sharedStrings.xml'||name==='xl/workbook.xml'||name==='xl/_rels/workbook.xml.rels'||/^xl\/worksheets\/sheet\d+\.xml$/.test(name))){if(size>40*1024*1024)throw Error('엑셀 시트가 너무 큽니다.');let off=start;if(u32(b,off)!==0x04034b50)throw Error('엑셀 데이터가 손상되었습니다.');let dataStart=off+30+u16(b,off+26)+u16(b,off+28);let chunk=b.slice(dataStart,dataStart+size);files.set(name,method===0?chunk:method===8?await inflate(chunk):(()=>{throw Error('지원하지 않는 압축 형식입니다.')})());}pos+=46+nameLen+extra+comment;}return files;}
+function xmlDoc(buf){const doc=new DOMParser().parseFromString(new TextDecoder().decode(buf),'application/xml');if(doc.querySelector('parsererror'))throw Error('엑셀 XML 형식을 읽을 수 없습니다.');return doc;}
+
+async function readRoster(file){
+ if(!/\.xlsx$/i.test(file.name))throw Error('제공된 양식의 XLSX 파일을 선택하세요.');
+ const files=await zipFiles(file),buf=files.get('xl/worksheets/sheet1.xml');if(!buf)throw Error('첫 번째 월말직원명부 시트를 찾을 수 없습니다.');
+ let shared=[];if(files.has('xl/sharedStrings.xml')){const doc=xmlDoc(files.get('xl/sharedStrings.xml'));shared=[...doc.getElementsByTagName('si')].map(x=>[...x.getElementsByTagName('t')].map(n=>n.textContent||'').join(''));}
+ const doc=xmlDoc(buf),raw=[];
+ for(const node of [...doc.getElementsByTagName('row')]){
+  const values={};for(const c of [...node.getElementsByTagName('c')]){const ref=c.getAttribute('r')||'',key=(ref.match(/^[A-Z]+/)||[])[0];if(!key)continue;const t=c.getAttribute('t');let v=t==='inlineStr'?[...c.getElementsByTagName('t')].map(n=>n.textContent||'').join(''):getText(c,'v');if(t==='s')v=shared[Number(v)]??'';values[key]=clean(v);}
+  if(Object.keys(values).length)raw.push({line:Number(node.getAttribute('r')||0),values});
+  if(raw.length>30000)throw Error('30,000행을 초과합니다. 파일을 나누어 등록하세요.');
+ }
+ if(!raw.length)throw Error('엑셀에 입력된 자료가 없습니다.');
+ const columns={};for(const [k,v] of Object.entries(raw[0].values)){const standard=clean(v).replace(/\s+/g,'');for(const h of HEADERS)if(h.replace(/\s+/g,'')===standard)columns[h]=k;}
+ const needed=HEADERS.slice(0,11);if(needed.some(h=>!columns[h]))throw Error('월말직원명부의 필수 열이 없습니다: '+needed.filter(h=>!columns[h]).join(', '));
+ return raw.slice(1).map(row=>{const rec={_row:row.line};for(const h of HEADERS)rec[h]=row.values[columns[h]]||'';return rec;}).filter(row=>HEADERS.some(h=>row[h]));
+}
+function stage(rows){
+ const months=new Map(),errors=[],excluded=[];
+ for(const r of rows){
+  const kind=clean(r['자료구분']);if(kind==='예시'){excluded.push(r._row);continue;}
+  if(kind!=='실제'){errors.push(`행 ${r._row}: 자료구분은 '실제'로 입력하세요.`);continue;}
+  const m=clean(r['기준월']),no=clean(r['사번']),name=clean(r['성명']),corp=clean(r['법인']),hq=clean(r['본부']),dept=clean(r['부서']),st=clean(r['재직상태']);
+  if(!pastMonth(m)){errors.push(`행 ${r._row}: 현재 월 이전의 2026년 기록 또는 2025-12만 허용합니다.`);continue;}
+  if(!no||!name||!corp||!hq||!dept){errors.push(`행 ${r._row}: 사번·성명·법인·본부·부서는 필수입니다.`);continue;}
+  if(!statusAllowed.has(st)){errors.push(`행 ${r._row}: 퇴사자는 해당 월말 재직 명부에 등록할 수 없습니다. 상태를 확인하세요.`);continue;}
+  const hire=excelDay(r['입사일']),exit=excelDay(r['퇴사일']);
+  if(hire&&!validDay(hire)){errors.push(`행 ${r._row}: 입사일 형식이 올바르지 않습니다.`);continue;}
+  if(exit&&!validDay(exit)){errors.push(`행 ${r._row}: 퇴사일 형식이 올바르지 않습니다.`);continue;}
+  if(hire&&hire>monthEnd(m)){errors.push(`행 ${r._row}: 입사일이 해당 월말보다 늦습니다.`);continue;}
+  if(exit&&exit<=monthEnd(m)){errors.push(`행 ${r._row}: 월말 이전에 퇴사한 직원입니다.`);continue;}
+  if(!months.has(m))months.set(m,{people:[],seen:new Set(),org:new Map()});
+  const g=months.get(m);if(g.seen.has(no)){errors.push(`행 ${r._row}: ${m}에 동일한 사번 ${no}가 중복됩니다.`);continue;}
+  g.seen.add(no);
+  const employee={id:no,employee_no:no,name,corporation:corp,headquarters:hq,department:dept,position:clean(r['직위']),grade:clean(r['직급']),gender:clean(r['성별']),status:st,hire_date:hire,exit_date:exit,employment_type:clean(r['고용형태']),field_leader_role:clean(r['현장관리자구분'])||'미지정',education:clean(r['학력']),union_status:'미확인'};
+  g.people.push(employee);const key=[corp,hq,dept].join('␟');g.org.set(key,(g.org.get(key)||0)+1);
+ }
+ for(const [m,g] of months)if((db.snapshots||[]).some(s=>Number(s.year)===Number(m.slice(0,4))&&Number(s.month)===Number(m.slice(5))))errors.push(`${m}: 이미 월말 기록이 존재하므로 기존 기록 보호를 위해 제외됩니다. (이 파일 전체는 저장할 수 없습니다.)`);
+ if(months.size===0)errors.push('등록 가능한 실제 데이터가 없습니다. 예시 행은 자동 제외됩니다.');
+ return {months,errors,excluded,rowsCount:rows.length};
+}
+function statusBox(s){const summaries=[...s.months].sort(([a],[b])=>a.localeCompare(b)).map(([m,g])=>`<tr><td>${html(m)}</td><td class="right">${g.people.length}명</td><td class="right">${g.org.size}개</td><td>${html((db.snapshots||[]).some(x=>Number(x.year)===Number(m.slice(0,4))&&Number(x.month)===Number(m.slice(5)))?'기존 기록 존재':'신규 기록')}</td></tr>`).join('');
+ return `<div class="notice">읽은 행 ${s.rowsCount}행 · 예시 제외 ${s.excluded.length}행 · 등록 예정 ${s.months.size}개월 / ${[...s.months.values()].reduce((n,g)=>n+g.people.length,0)}명-월 · 오류 ${s.errors.length}건</div><div class="tablewrap" style="max-height:230px"><table><thead><tr><th>월</th><th class="right">인원</th><th class="right">조직 수</th><th>구분</th></tr></thead><tbody>${summaries}</tbody></table></div>${s.errors.length?`<div class="notice" style="background:#fff1f0;color:#a02323;border-color:#ffcccc"><b>등록 불가 — 오류 ${s.errors.length}건</b><div style="max-height:170px;overflow:auto;white-space:pre-wrap">${html(s.errors.slice(0,100).join('\n'))}${s.errors.length>100?'\n... 그 외 오류 있음':''}</div></div>`:'<p class="hint">검증 통과: 아직 저장되지 않았습니다. 매월 전체 대상자의 명부가 빠짐없는지 직접 확인해 주세요.</p>'}`;
+}
+function rosterMarkup(){return `<section class="panel"><h2>과거 월말 직원명부 일괄등록</h2><div class="notice"><b>입력 범위:</b> 2025년 12월 및 2026년의 완료된 월말 자료. 엑셀의 첫 번째 '월말직원명부' 시트만 읽습니다. 나머지 6개 시트는 자료 정리용이며 이 메뉴에서 자동 반영하지 않습니다.</div><p class="hint">월말 당시 재직·휴직·파견 등 인원으로 집계된 <b>직원 전체 명부</b>를 월별로 작성하세요. 명단 일부만 등록하면 그 달의 인원 전체가 잘못 기록됩니다. 현재 직원 명부·인사발령 이력·계획 정원은 변경하지 않습니다.</p><div class="toolbar"><a class="btn" href="#" id="pastTemplateInfo">엑셀 작성 방법</a><label class="btn primary" style="cursor:pointer">엑셀 파일 선택<input id="pastRosterFile" type="file" accept=".xlsx" hidden></label><span class="muted" id="pastFilename">파일 선택 전</span></div><div id="pastPreview" class="hint">파일을 선택하면 등록 전 검사 결과가 표시됩니다.</div><label style="display:flex;align-items:flex-start;gap:8px;margin:16px 0"><input type="checkbox" id="pastRosterComplete" style="width:auto;margin:3px 0"><span>등록 대상 <b>각 월말의 전체 인원 명부가 완전하고 정확함</b>을 확인했습니다. 일부 직원만 포함한 파일은 확정 기록으로 저장하지 않습니다.</span></label><button class="btn primary" id="pastRosterApply" disabled>검증된 과거 월말 기록 저장</button><p class="hint">기존 월말 기록이 있는 달은 덮어쓰지 않습니다. 로그인된 공동 DB에 저장 요청 후 최종 저장 완료 표시를 확인하세요. 대용량 파일은 월별로 나누어 등록하세요.</p></section>`;}
+function renderPage(){document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view==='pastRoster'));$id('heading').textContent='과거 월말 데이터 일괄등록';$id('subheading').textContent='엑셀 월말직원명부 검증 후 과거 확정 인원 저장';$id('content').innerHTML=rosterMarkup();
+ $id('pastTemplateInfo').onclick=e=>{e.preventDefault();alert('제공된 7개 시트 엑셀 양식에서 첫 번째 월말직원명부를 작성하세요. 자료구분은 실제, 기준월은 YYYY-MM이며 각 월말 전체 재직 대상자를 한 명당 한 행으로 입력합니다. 예시 행은 저장 대상에서 제외됩니다. 날짜는 YYYY-MM-DD로 입력하세요.');};
+ $id('pastRosterFile').onchange=async e=>{staged=null;$id('pastRosterApply').disabled=true;$id('pastRosterComplete').checked=false;const f=e.target.files?.[0];if(!f)return;$id('pastFilename').textContent=f.name;$id('pastPreview').textContent='엑셀 검사 중...';try{staged=stage(await readRoster(f));$id('pastPreview').innerHTML=statusBox(staged);$id('pastRosterApply').disabled=Boolean(staged.errors.length);}catch(err){$id('pastPreview').textContent='파일 검사 실패: '+err.message;}};
+ $id('pastRosterApply').onclick=apply;
+}
+function apply(){if(!staged||staged.errors.length||!staged.months.size)return alert('검증된 자료가 없습니다.');if(!window.__hrCloudConnected?.())return alert('공동 DB 로그인 후 등록하세요.');if(!$id('pastRosterComplete').checked)return alert('월별 전체 명부 완결 여부를 확인하고 체크해 주세요.');
+ const stale=[...staged.months.keys()].filter(m=>(db.snapshots||[]).some(s=>Number(s.year)===Number(m.slice(0,4))&&Number(s.month)===Number(m.slice(5))));if(stale.length)return alert('다른 사용자가 해당 월을 먼저 저장했거나 기존 기록이 있습니다: '+stale.join(', ')+'\n다시 파일을 검사하세요.');
+ const total=[...staged.months.values()].reduce((n,g)=>n+g.people.length,0);if(!confirm(`${staged.months.size}개월 / ${total}명-월의 과거 월말 인원을 새로 등록합니다.\n현재 직원·계획 정원·기존 월말 기록은 변경하지 않습니다.\n\n이 자료가 매월 전체 인원 명부가 맞습니까?`))return;
+ const moment=new Date().toISOString(),added=[];
+ for(const [m,g] of [...staged.months].sort(([a],[b])=>a.localeCompare(b))){const [y,mm]=m.split('-').map(Number);added.push({year:y,month:mm,units:Object.fromEntries(g.org),total:g.people.length,employee_details:g.people,captured:`${m} 월말 과거자료 소급등록`,imported_at:moment,source:'월말직원명부 XLSX',historical_import:true});}
+ db.snapshots??=[];db.snapshots.push(...added);staged=null;commit('과거 월말 명부 일괄등록',`${added.length}개월 / ${total}명-월 / 확인된 전체 월말 명부`);alert('월말 기록 등록을 공동 DB에 저장 요청했습니다. 상단 공동 DB 저장 완료를 확인하세요.');renderPage();}
+const folders=[...document.querySelectorAll('.nav-folder')];const sys=folders.find(f=>f.querySelector('.folder-head')?.textContent.includes('시스템 관리'))?.querySelector('.folder-items');
+if(sys&&!sys.querySelector('[data-view="pastRoster"]')){const btn=document.createElement('button');btn.className='nav';btn.dataset.view='pastRoster';btn.type='button';btn.textContent='과거 월말 데이터 일괄등록';btn.addEventListener('click',()=>setView('pastRoster'));const quality=sys.querySelector('[data-view="quality"]');if(quality)quality.insertAdjacentElement('afterend',btn);else sys.prepend(btn);}
+names.pastRoster=['과거 월말 데이터 일괄등록','엑셀 월말직원명부를 검증하여 과거 스냅샷 생성'];
+const formerRender=render;
+render=function(){if(view==='pastRoster')return renderPage();return formerRender.apply(this,arguments);};
+const formerSetView=setView;
+setView=function(v){if(v==='pastRoster'){view=v;renderPage();return;}return formerSetView.apply(this,arguments);};
+})();
+</script>
 </body></html>
