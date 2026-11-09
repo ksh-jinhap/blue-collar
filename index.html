@@ -3070,6 +3070,25 @@ window.saveRetirementContractConversion=function(id){
   overflow:hidden!important;font-size:9px!important;padding-left:2px!important;padding-right:2px!important;
  }
 }
+/* School and major: equal column widths, identical base typography, single-line fitting. */
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(4),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(5),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4),
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){
+  width:25%;font-size:10px!important;letter-spacing:0!important;
+  white-space:nowrap!important;word-break:keep-all!important;overflow-wrap:normal!important;
+  overflow:hidden!important;padding-left:2px!important;padding-right:2px!important;
+}
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4) .hr-education-fit,
+#hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5) .hr-education-fit{
+  display:inline-block;white-space:nowrap!important;transform-origin:left center;
+}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(4),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school th:nth-child(5),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(4),
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-school td:nth-child(5){font-size:9px!important;}
+}
 /* HR record card table visual optimization - shared by screen and print. */
 #hrRecordPrintArea .hr-record-centered th,
 #hrRecordPrintArea .hr-record-centered td{text-align:center;vertical-align:middle;}
@@ -3177,7 +3196,7 @@ window.saveRetirementContractConversion=function(id){
   // Fixed column proportions apply to both on-screen cards and A4 landscape print.
   // Keep the export/record values unchanged: only add section classes and col widths.
   const layouts={
-   '학력사항':['14%','18%','18%','16%','34%'],
+   '학력사항':['14%','18%','18%','25%','25%'],
    '경력사항':['19%','19%','21%','15%','26%'],
    '가족사항':['34%','24%','42%'],
    '자격/면허사항':['30%','23%','20%','27%'],
