@@ -1847,7 +1847,9 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
      if(actual!==null)g.actual+=actualFor(p);
      groups.set(k,g);
    }
-   const groupRows=[...groups.values()].sort((a,b)=>(b.target-(b.actual||0))-(a.target-(a.actual||0))).map(g=>[g.name,val(g.target),g.actual===null?'미기록':val(g.actual),g.actual===null?'—':val(g.target-g.actual),g.actual===null?'—':rate(g.actual,g.target)]);
+   const execCorpOrder=['진합','제이앤드에프','지노스','진우정공'];
+   const execCorpRank=name=>{const i=execCorpOrder.indexOf(String(name||'').split(' / ')[0]);return i<0?execCorpOrder.length:i;};
+   const groupRows=[...groups.values()].sort((a,b)=>execCorpRank(a.name)-execCorpRank(b.name)||String(a.name).localeCompare(String(b.name),'ko')).map(g=>[g.name,val(g.target),g.actual===null?'미기록':val(g.actual),g.actual===null?'—':val(g.target-g.actual),g.actual===null?'—':rate(g.actual,g.target)]);
    const nextMonth=m===12?1:m+1,nextMonthYear=m===12?y+1:y,nextYear=y+1;
    const nextMonthPlans=plansOf(nextMonthYear),nextYearPlans=plansOf(nextYear);
    const annualBudget=nextYearPlans.length?nextYearPlans.reduce((s,p)=>s+n(p.target),0):null;
@@ -4080,6 +4082,16 @@ setView=function(v){if(v==='pastRoster'){view=v;renderPage();return;}return form
 'use strict';
 const byId=id=>document.getElementById(id),safe=x=>esc(String(x??''));
 const orgKey=(r)=>[r.corporation,r.headquarters,r.department].join('␟');
+// The parent label is a display prefix, not part of the headquarters key in plans/snapshots.
+// Normalize only the four known manufacturing divisions; never merge other organization names.
+const manufacturingHQ=new Set(['화스너생산실','생산운영실','정밀부품생산실','생산기술실']);
+function normalizedHQ(raw){
+ const text=String(raw??'').trim();
+ const match=/^제조본부\s*[/／]\s*(.+)$/.exec(text);
+ if(!match)return text;
+ const child=match[1].trim();
+ return manufacturingHQ.has(child)?child:text;
+}
 function flow(s,c='',h='',d=''){
  if(!s||s.source!=='간편 월별인원 XLSX'||!s.flow_units)return null;
  let hires=0,exits=0;
@@ -4103,7 +4115,7 @@ function stage(rows){
   const val=k=>String(r[k]??'').trim(),kind=val('자료구분');
   if(kind==='예시'){skipped.push(r.line);continue;}
   if(kind!=='실제'){errors.push(`행 ${r.line}: 자료구분을 '실제'로 입력하세요.`);continue;}
-  const m=val('기준월'),corp=val('법인'),hq=val('본부'),dept=val('부서');
+  const m=val('기준월'),corp=val('법인'),hq=normalizedHQ(val('본부')),dept=val('부서');
   if(!pastMonth(m)){errors.push(`행 ${r.line}: 등록 가능 월은 2025-12 또는 완료된 2026년 월입니다.`);continue;}
   if(!corp||!hq||!dept){errors.push(`행 ${r.line}: 법인·본부·부서는 필수입니다.`);continue;}
   const nums=[];
@@ -4136,7 +4148,7 @@ function stage(rows){
 }
 const previewWarnings=new Map();
 function markup(){return `<section class="panel"><h2>과거 월별 인원 간편 일괄등록</h2>
- <div class="notice"><b>입력:</b> 월별 법인·본부·부서별 월말인원·입사인원·퇴사인원만 등록합니다. 사번 또는 직원별 명부는 필요하지 않습니다.<br><b>반영:</b> 대시보드, 인력 증감 분석(표·그래프), 과거 월별 경영진 보고서 및 정원 대비 분석.</div>
+ <div class="notice"><b>입력:</b> 월별 법인·본부·부서별 월말인원·입사인원·퇴사인원만 등록합니다. 사번 또는 직원별 명부는 필요하지 않습니다. 본부는 <b>제조본부 / 화스너생산실</b>로 입력해도 <b>화스너생산실</b>로 자동 연결됩니다. 부서는 사업계획과 동일하게 <b>생산1팀(단조)</b>, <b>생산1팀(전조)</b>를 각각 입력하세요.<br><b>반영:</b> 대시보드, 인력 증감 분석(표·그래프), 과거 월별 경영진 보고서 및 정원 대비 분석.</div>
  <p class="hint">2025년 12월 및 2026년 완료된 월만 등록합니다. 기존 월말 기록은 변경하지 않습니다. 현재 직원 명부, 입퇴사자 명단, 인사기록카드, 계획 정원은 변경되지 않습니다. 입사·퇴사 수는 직원별 명부로 변환되지 않습니다.</p>
  <div class="toolbar"><label class="btn primary" style="cursor:pointer">간편 엑셀 파일 선택 <input type="file" id="simpleExcelFile" accept=".xlsx" hidden></label><span id="simpleFileName" class="muted">파일을 선택해 주세요.</span></div>
  <div id="simplePreview" class="hint">파일을 선택하면 검증 결과와 월별 합계를 표시합니다.</div>
@@ -4204,7 +4216,9 @@ executiveView=function(){
  const plans=plansFor(planYear),registered=new Map(plans.map(p=>[orgKey(p),p])),keys=new Set([...registered.keys(),...Object.keys(s.units||{})]);
  const data=[...keys].map(k=>{const [corp,hq,dept]=k.split('␟'),p=registered.get(k),target=p?monthTarget(p,planMonth):null,actual=Number(s.units?.[k]||0);return {corp,hq,dept,target,actual};});
  const target=data.reduce((n,r)=>n+Number(r.target||0),0),actual=Number(s.total||0),short=data.reduce((n,r)=>n+(r.target===null?0:Math.max(0,r.target-r.actual)),0),extra=data.reduce((n,r)=>n+(r.target===null?0:Math.max(0,r.actual-r.target)),0);
- const flowTotal=flow(s),rows=data.sort((a,b)=>a.corp.localeCompare(b.corp,'ko')||a.hq.localeCompare(b.hq,'ko')||a.dept.localeCompare(b.dept,'ko')).map(r=>`<tr><td>${safe(r.corp)}</td><td>${safe(r.hq)}</td><td>${safe(r.dept)}</td><td class="right">${r.target===null?'미등록':fmt(r.target)}</td><td class="right">${fmt(r.actual)}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.target-r.actual))}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.actual-r.target))}</td></tr>`).join('');
+ const execCorpOrder=['진합','제이앤드에프','지노스','진우정공'];
+ const execCorpRank=corp=>{const i=execCorpOrder.indexOf(corp);return i<0?execCorpOrder.length:i;};
+ const flowTotal=flow(s),rows=data.sort((a,b)=>execCorpRank(a.corp)-execCorpRank(b.corp)||a.corp.localeCompare(b.corp,'ko')||a.hq.localeCompare(b.hq,'ko')||a.dept.localeCompare(b.dept,'ko')).map(r=>`<tr><td>${safe(r.corp)}</td><td>${safe(r.hq)}</td><td>${safe(r.dept)}</td><td class="right">${r.target===null?'미등록':fmt(r.target)}</td><td class="right">${fmt(r.actual)}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.target-r.actual))}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.actual-r.target))}</td></tr>`).join('');
  return yearPicker()+`<section class="panel"><div class="report-head"><div><h2>${planYear}년 ${planMonth}월 생산직 월말 인원 보고</h2><p class="hint">간편 월별인원 자료 기준 · 직원별 명부 복원 불가</p></div><button class="btn primary no-print" onclick="window.print()">인쇄 / PDF 저장</button></div></section>
  <div class="cards">${card('월말 인원',actual,'확정 자료')}${card('계획 정원',target,'등록된 부서 합계')}${card('부족 TO',short,'부서별 합계','negative')}${card('초과 TO',extra,'등록된 부서 기준','warning')}${card('입퇴사 순증감',flowTotal.hires-flowTotal.exits,`입사 ${flowTotal.hires} / 퇴사 ${flowTotal.exits}`)}</div>
  <div class="notice">등록된 조직의 계획 정원과 해당 월말 인원을 비교합니다. 계획이 미등록된 조직은 정원 차이 계산에서 제외합니다. 입퇴사 순증감과 전월 대비 인원 차이는 이동 등으로 다를 수 있습니다.</div>
