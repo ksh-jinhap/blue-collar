@@ -1461,7 +1461,12 @@ function editor(source=null){const type=source?.type||filterType;const corp=sour
  if(changed){
    for(let i=arr.length-1;i>=0;i--)if(key(arr[i])===key(next))arr.splice(i,1);
    for(let i=arr.length-1;i>=0;i--)if(key(arr[i])===key(source))arr.splice(i,1);
-   arr.push({...next,deleted:false,active:next.active!==false});
+   // Preserve report order across repeated department renames (A -> B -> C).
+   // Other reference types and historical snapshots are unchanged.
+   const reportIdentity=t==='department'
+     ?(source.executive_order_identity||window.__hrExecOriginalOrderKey?.([source.corporation,source.headquarters,source.value]))
+     :null;
+   arr.push({...next,deleted:false,active:next.active!==false,...(reportIdentity?{executive_order_identity:reportIdentity}:{})});
    // Keep only the old label suppressed; employee/plan/recruitment data is already renamed.
    arr.push({...source,active:false,deleted:true});
  }else{
@@ -1835,6 +1840,17 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  const cleanHQ=v=>clean(v).replace(/^제조본부\//,'');
  const key=v=>[clean(v[0]),cleanHQ(v[1]),clean(v[2])].join('␟');
  const order=new Map(requested.map((r,i)=>[key(r),i]));
+ // Keep the original section-02 position when a department is renamed through
+ // reference management. Identity is stored with the active reference entry.
+ window.__hrExecOriginalOrderKey=parts=>order.has(key(parts))?key(parts):null;
+ const savedOrderIdentity=parts=>{
+  const currentKey=key(parts);
+  const refs=Array.isArray(db.reference_master)?db.reference_master:[];
+  const matched=refs.find(r=>r.type==='department'&&r.deleted!==true&&
+   key([r.corporation,r.headquarters,r.value])===currentKey);
+  return matched&&typeof matched.executive_order_identity==='string'&&order.has(matched.executive_order_identity)
+   ?order.get(matched.executive_order_identity):undefined;
+ };
  const corporations=['진합','제이앤드에프','지노스','진우정공'].map(clean);
  const asParts=v=>{
   if(Array.isArray(v))return v;
@@ -1844,6 +1860,8 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
  const rank=r=>{
   const exact=order.get(key(r));
   if(exact!==undefined)return exact;
+  const inherited=savedOrderIdentity(r);
+  if(inherited!==undefined)return inherited;
   const corp=corporations.indexOf(clean(r[0]));
   // Unlisted units remain visible, appended after the 25 fixed rows.
   return 25+(corp===-1?corporations.length:corp)*10000;
