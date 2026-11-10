@@ -1799,6 +1799,62 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
 .exec-section{margin-top:18px}.exec-section h2{margin-bottom:12px}.exec-kicker{font-size:12px;color:#64748b;margin:0 0 8px}.exec-report-actions{display:flex;gap:8px;justify-content:space-between;align-items:center;flex-wrap:wrap}.exec-report-table th,.exec-report-table td{white-space:nowrap}.exec-report-table td:first-child{white-space:normal;min-width:130px}.exec-report-note{font-size:12px;color:#64748b;margin-top:10px}
 @media print{.sidebar,.top,.no-print{display:none!important}.main{padding:0!important}.exec-section{break-inside:avoid}}
 </style>
+<script id="hrExecutiveOrgOrder2026">
+/* Only ordering of executive report section 02: 25 fixed organization rows from supplied list. */
+(function(){
+ 'use strict';
+ const requested=[
+  ['진합','화스너생산실','생산1팀(단조)'],
+  ['진합','화스너생산실','생산1팀(전조)'],
+  ['진합','화스너생산실','생산2팀(열처리)'],
+  ['진합','화스너생산실','생산2팀(GEO)'],
+  ['진합','정밀부품생산실','정밀생산팀'],
+  ['진합','생산운영실','생산관리팀'],
+  ['진합','생산운영실','물류운영팀'],
+  ['진합','생산운영실','외주협력팀'],
+  ['진합','생산기술실','양산생산기술팀'],
+  ['진합','품질본부','품질관리팀'],
+  ['진합','품질본부','품질보증팀'],
+  ['진합','연구개발본부','연구개발팀'],
+  ['진합','제조/개발총괄','구매팀'],
+  ['진합','영업본부/사업개발실','사업개발1팀'],
+  ['진합','상생안전본부','안전환경팀'],
+  ['진합','상생안전본부 부','상생안전본부'],
+  ['진합','노동조합','노동조합'],
+  ['제이앤드에프','대화공장','대화생산팀'],
+  ['제이앤드에프','대화공장','대화관리팀'],
+  ['제이앤드에프','옥천공장','옥천생산팀'],
+  ['제이앤드에프','옥천공장','개발품질팀'],
+  ['제이앤드에프','옥천공장','옥천관리팀'],
+  ['지노스','표면처리사업부','(표면)연구개발팀'],
+  ['지노스','표면처리사업부','생산/기술팀'],
+  ['진우정공','U볼트사업부','(U볼트)생산팀']
+ ];
+ const clean=v=>String(v??'').normalize('NFKC').replace(/\s+/g,'').toLowerCase();
+ // A saved HQ may include the broader '제조본부 /' path; it is still the same HQ.
+ const cleanHQ=v=>clean(v).replace(/^제조본부\//,'');
+ const key=v=>[clean(v[0]),cleanHQ(v[1]),clean(v[2])].join('␟');
+ const order=new Map(requested.map((r,i)=>[key(r),i]));
+ const corporations=['진합','제이앤드에프','지노스','진우정공'].map(clean);
+ const asParts=v=>{
+  if(Array.isArray(v))return v;
+  const tokens=String(v??'').split(/\s+\/\s+/);
+  return [tokens[0]||'',tokens.slice(1,-1).join(' / '),tokens[tokens.length-1]||''];
+ };
+ const rank=r=>{
+  const exact=order.get(key(r));
+  if(exact!==undefined)return exact;
+  const corp=corporations.indexOf(clean(r[0]));
+  // Unlisted units remain visible, appended after the 25 fixed rows.
+  return 25+(corp===-1?corporations.length:corp)*10000;
+ };
+ window.__hrExecOrgCompare=(left,right)=>{
+  const a=asParts(left),b=asParts(right),ra=rank(a),rb=rank(b);
+  return ra-rb||a.map(clean).join('/').localeCompare(b.map(clean).join('/'),'ko');
+ };
+ window.__hrExecOrgOrderCount=requested.length;
+})();
+</script>
 <script>
 /* Executive report v2: a summary-only report linked from dashboard. No shared database migration. */
 (function(){
@@ -1847,9 +1903,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
      if(actual!==null)g.actual+=actualFor(p);
      groups.set(k,g);
    }
-   const execCorpOrder=['진합','제이앤드에프','지노스','진우정공'];
-   const execCorpRank=name=>{const i=execCorpOrder.indexOf(String(name||'').split(' / ')[0]);return i<0?execCorpOrder.length:i;};
-   const groupRows=[...groups.values()].sort((a,b)=>execCorpRank(a.name)-execCorpRank(b.name)||String(a.name).localeCompare(String(b.name),'ko')).map(g=>[g.name,val(g.target),g.actual===null?'미기록':val(g.actual),g.actual===null?'—':val(g.target-g.actual),g.actual===null?'—':rate(g.actual,g.target)]);
+   const groupRows=[...groups.values()].sort((a,b)=>window.__hrExecOrgCompare(a.name,b.name)).map(g=>[g.name,val(g.target),g.actual===null?'미기록':val(g.actual),g.actual===null?'—':val(g.target-g.actual),g.actual===null?'—':rate(g.actual,g.target)]);
    const nextMonth=m===12?1:m+1,nextMonthYear=m===12?y+1:y,nextYear=y+1;
    const nextMonthPlans=plansOf(nextMonthYear),nextYearPlans=plansOf(nextYear);
    const annualBudget=nextYearPlans.length?nextYearPlans.reduce((s,p)=>s+n(p.target),0):null;
@@ -4216,9 +4270,7 @@ executiveView=function(){
  const plans=plansFor(planYear),registered=new Map(plans.map(p=>[orgKey(p),p])),keys=new Set([...registered.keys(),...Object.keys(s.units||{})]);
  const data=[...keys].map(k=>{const [corp,hq,dept]=k.split('␟'),p=registered.get(k),target=p?monthTarget(p,planMonth):null,actual=Number(s.units?.[k]||0);return {corp,hq,dept,target,actual};});
  const target=data.reduce((n,r)=>n+Number(r.target||0),0),actual=Number(s.total||0),short=data.reduce((n,r)=>n+(r.target===null?0:Math.max(0,r.target-r.actual)),0),extra=data.reduce((n,r)=>n+(r.target===null?0:Math.max(0,r.actual-r.target)),0);
- const execCorpOrder=['진합','제이앤드에프','지노스','진우정공'];
- const execCorpRank=corp=>{const i=execCorpOrder.indexOf(corp);return i<0?execCorpOrder.length:i;};
- const flowTotal=flow(s),rows=data.sort((a,b)=>execCorpRank(a.corp)-execCorpRank(b.corp)||a.corp.localeCompare(b.corp,'ko')||a.hq.localeCompare(b.hq,'ko')||a.dept.localeCompare(b.dept,'ko')).map(r=>`<tr><td>${safe(r.corp)}</td><td>${safe(r.hq)}</td><td>${safe(r.dept)}</td><td class="right">${r.target===null?'미등록':fmt(r.target)}</td><td class="right">${fmt(r.actual)}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.target-r.actual))}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.actual-r.target))}</td></tr>`).join('');
+ const flowTotal=flow(s),rows=data.sort((a,b)=>window.__hrExecOrgCompare([a.corp,a.hq,a.dept],[b.corp,b.hq,b.dept])).map(r=>`<tr><td>${safe(r.corp)}</td><td>${safe(r.hq)}</td><td>${safe(r.dept)}</td><td class="right">${r.target===null?'미등록':fmt(r.target)}</td><td class="right">${fmt(r.actual)}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.target-r.actual))}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.actual-r.target))}</td></tr>`).join('');
  return yearPicker()+`<section class="panel"><div class="report-head"><div><h2>${planYear}년 ${planMonth}월 생산직 월말 인원 보고</h2><p class="hint">간편 월별인원 자료 기준 · 직원별 명부 복원 불가</p></div><button class="btn primary no-print" onclick="window.print()">인쇄 / PDF 저장</button></div></section>
  <div class="cards">${card('월말 인원',actual,'확정 자료')}${card('계획 정원',target,'등록된 부서 합계')}${card('부족 TO',short,'부서별 합계','negative')}${card('초과 TO',extra,'등록된 부서 기준','warning')}${card('입퇴사 순증감',flowTotal.hires-flowTotal.exits,`입사 ${flowTotal.hires} / 퇴사 ${flowTotal.exits}`)}</div>
  <div class="notice">등록된 조직의 계획 정원과 해당 월말 인원을 비교합니다. 계획이 미등록된 조직은 정원 차이 계산에서 제외합니다. 입퇴사 순증감과 전월 대비 인원 차이는 이동 등으로 다를 수 있습니다.</div>
