@@ -4212,4 +4212,38 @@ executiveView=function(){
 };
 })();
 </script>
+<script>
+/* New-hire reference default: do not save a retired field-leader label.
+   Recruitment and ordinary new-employee forms share this editor. */
+(function(){
+ 'use strict';
+ const priorOpen=window.openEmployee;
+ window.openEmployee=function(id=null,encoded=''){
+  const result=priorOpen.apply(this,arguments);
+  const select=document.getElementById('eLeader');
+  if(!select)return result;
+  if(id!==null&&id!==undefined){
+   // Render the saved value faithfully: an obsolete option must not override it.
+   const existing=(db.employees||[]).find(x=>String(x.id)===String(id));
+   if(existing){
+    const stored=String(existing.field_leader_role||'').trim();
+    if(stored){
+     if(![...select.options].some(option=>option.value===stored))select.add(new Option(stored,stored));
+     select.value=stored;
+    }
+   }
+   return result;
+  }
+  if(select.value!=='미지정')return result;
+  const entries=Array.isArray(db.reference_master)?db.reference_master:[];
+  const retired=entries.some(x=>x.type==='field_leader_role'&&x.value==='미지정'&&(x.deleted===true||x.active===false));
+  if(!retired)return result;
+  const active=typeof window.__hrMasterCandidates==='function'?window.__hrMasterCandidates('field_leader_role'):[];
+  if(!active.includes('팀원'))return result;
+  if(![...select.options].some(option=>option.value==='팀원'))select.add(new Option('팀원','팀원'));
+  select.value='팀원';
+  return result;
+ };
+})();
+</script>
 </body></html>
