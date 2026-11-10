@@ -3303,6 +3303,30 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments td:last-child{text-align:left!important;}
  #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section{break-inside:auto!important;}
 }
+/* HR card approved single-page composition: identity + appointments, then full-width supporting history. */
+#hrRecordPrintArea .hr-record-top{grid-template-columns:minmax(0,0.94fr) minmax(0,1.06fr);gap:10px;align-items:start}
+#hrRecordPrintArea .hr-record-bottom{display:block;min-width:0}
+#hrRecordPrintArea .hr-record-bottom-pair{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:start}
+#hrRecordPrintArea .hr-record-bottom-pair>.hr-record-section{min-width:0}
+#hrRecordPrintArea .hr-record-right .hr-record-section{margin-top:0}
+#hrRecordPrintArea .hr-record-right .hr-record-appointments{margin-top:0}
+#hrRecordPrintArea .hr-record-appointments table{table-layout:fixed}
+#hrRecordPrintArea .hr-record-appointments th,#hrRecordPrintArea .hr-record-appointments td{font-size:11px;padding:3px 2px;line-height:1.23}
+@media screen and (max-width:900px){
+ #hrRecordPrintArea .hr-record-top{grid-template-columns:1fr}
+ #hrRecordPrintArea .hr-record-bottom-pair{grid-template-columns:1fr}
+}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-top{grid-template-columns:minmax(0,0.94fr) minmax(0,1.06fr)!important;gap:7px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-bottom-pair{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:7px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-bottom{break-before:avoid!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments th,
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments td{font-size:8.4px!important;padding:2px 2px!important;line-height:1.13!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments td:last-child{word-break:break-all!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-bottom .hr-record-section{margin:3px 0!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-bottom .hr-record-section th,
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-bottom .hr-record-section td{font-size:9.3px!important;padding:2px 3px!important;line-height:1.15!important}
+}
 </style>
 
 <script>
@@ -3416,9 +3440,14 @@ window.saveRetirementContractConversion=function(id){
    const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));
    sectionHtml[item.key]=tableSection(item.title,item.columns.map(c=>c[1]),rows);
   }
-  const hasEducationCareer=['school','career','family','licenses'].some(key=>arrOf(x,key).some(record=>Object.values(record||{}).some(v=>String(v??'').trim())));
+  // A4 landscape: primary identity on the left, complete appointment history on the right.
+  // Education/career occupy full-width rows below; family/licenses share the final row.
+  // Read-only presentation change: do not alter source records or the employee editor.
+  const appointmentTable=tableSection('인사변동사항',['발령구분','변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
+   h.appointment_category||'',h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
+  ]:[h.appointment_category||h.event_type||'',h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
   let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
-   <div class="hr-record-top${hasEducationCareer?'':' hr-record-top-no-right'}">
+   <div class="hr-record-top">
     <div class="hr-record-primary">
      <div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div>
      <div class="hr-record-left-details">
@@ -3426,11 +3455,13 @@ window.saveRetirementContractConversion=function(id){
       <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>
      </div>
     </div>
-    <div class="hr-record-right">${sectionHtml.school}${sectionHtml.career}${sectionHtml.family}${sectionHtml.licenses}</div>
+    <div class="hr-record-right">${appointmentTable}</div>
+   </div>
+   <div class="hr-record-bottom">
+    ${sectionHtml.school}
+    ${sectionHtml.career}
+    <div class="hr-record-bottom-pair">${sectionHtml.family}${sectionHtml.licenses}</div>
    </div>`;
-  content+=tableSection('인사변동사항',['발령구분','변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
-   h.appointment_category||'',h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
-  ]:[h.appointment_category||h.event_type||'',h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
   const pr=[];for(const g of periods)for(let i=0;i<g.periods.length;i++)pr.push([g.label,(i+1)+'회차',g.periods[i].start_date,g.periods[i].end_date]);
   content+=tableSection('휴직 · 산재 · 육아휴직',['구분','회차','시작일','종료일'],pr);
   content+=`<footer>출력일: ${new Date().toLocaleDateString('ko-KR')}</footer></div>`;
