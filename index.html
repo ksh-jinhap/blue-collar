@@ -2435,10 +2435,36 @@ window.saveRetirementContractConversion=function(id){
    const add=event.target.closest('[data-hr-add]');if(add){const i=Number(add.dataset.hrAdd);panel.__periods[i].push({start_date:'',end_date:''});redraw(i);return;}
    const del=event.target.closest('[data-hr-delete]');if(del){const i=Number(del.dataset.hrDelete),j=Number(del.dataset.hrRoundidx);panel.__periods[i].splice(j,1);redraw(i);}
   });
-  // Hide previous single-period editors; keep input nodes for legacy save wrappers.
+  // Display the appropriate date editor for the selected status.
+  // The previous implementation forced the exit-date row hidden for every status.
+  // Preserve legacy inputs for downstream save wrappers, but show exit date/reason
+  // for exit and the multi-round date editor for leave, accident and parental leave.
   const previousFields=[el('employmentStatusDates'),el('hrAdditionalLeaveDates'),el('parentalLeavePeriod')];
-  function hide(){previousFields.forEach(node=>{if(node)node.style.setProperty('display','none','important')});}
-  hide();status.addEventListener('change',hide);
+  const sections=[...panel.querySelectorAll('.hr-period-section')];
+  function updateStatusDates(){
+   const current=status.value;
+   const roundIndex={'휴직':0,'산재':1,'육아휴직':2}[current];
+   const isExit=current==='퇴사';
+   const exitRow=el('employmentStatusDates');
+   // Never conceal the exit-date and reason inputs needed by the existing save logic.
+   if(exitRow){
+    exitRow.style.removeProperty('display');
+    exitRow.style.display=isExit?'grid':'none';
+    const exitLabel=el('exitDateLabel'),reasonLabel=el('hrExitReasonWrap'),leaveLabel=el('leaveDateLabel');
+    if(exitLabel)exitLabel.style.display=isExit?'flex':'none';
+    if(reasonLabel)reasonLabel.style.display=isExit?'flex':'none';
+    if(leaveLabel)leaveLabel.style.display='none';
+   }
+   for(const node of previousFields.slice(1))if(node)node.style.display='none';
+   panel.style.display=roundIndex===undefined?'none':'block';
+   sections.forEach((section,i)=>{section.style.display=i===roundIndex?'block':'none';});
+   if(roundIndex!==undefined&&!panel.__periods[roundIndex].length){
+    panel.__periods[roundIndex].push({start_date:'',end_date:''});
+    redraw(roundIndex);
+   }
+  }
+  status.addEventListener('change',updateStatusDates);
+  updateStatusDates();
   return result;
  };
  const previousSave=window.saveEmployee;
@@ -2446,7 +2472,7 @@ window.saveRetirementContractConversion=function(id){
   const panel=el('hrMultiPeriodPanel');if(!panel)return previousSave(id);
   // Pick up last edited value even when the date field has not blurred.
   panel.querySelectorAll('[data-hr-field]').forEach(node=>{const i=Number(node.dataset.hrIdx),j=Number(node.dataset.hrRoundidx);if(panel.__periods[i]?.[j])panel.__periods[i][j][node.dataset.hrField]=node.value;});
-  const newLists=panel.__periods.map(rows=>rows.map(normalize));
+  const newLists=panel.__periods.map(rows=>rows.map(normalize).filter(p=>p.start_date||p.end_date));
   for(let i=0;i<groups.length;i++){
    let lastEnd='';
    const sorted=[...newLists[i]].sort((a,b)=>a.start_date.localeCompare(b.start_date));
