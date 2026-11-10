@@ -3327,6 +3327,25 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-bottom .hr-record-section th,
  #hrRecordOverlay #hrRecordPrintArea .hr-record-bottom .hr-record-section td{font-size:9.3px!important;padding:2px 3px!important;line-height:1.15!important}
 }
+/* HR record card: fixed independent columns so long personnel history stays at right. */
+#hrRecordPrintArea .hr-record-top{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px;align-items:start}
+#hrRecordPrintArea .hr-record-left-column,#hrRecordPrintArea .hr-record-right{min-width:0}
+#hrRecordPrintArea .hr-record-left-column .hr-record-bottom{display:block;margin-top:8px}
+#hrRecordPrintArea .hr-record-left-column .hr-record-bottom .hr-record-section{margin:6px 0}
+#hrRecordPrintArea .hr-record-left-column .hr-record-bottom .hr-record-section:first-child{margin-top:0}
+#hrRecordPrintArea .hr-record-right .hr-record-appointments{margin-top:0}
+#hrRecordPrintArea .hr-record-left-column .hr-record-section table{width:100%;table-layout:fixed}
+@media screen and (max-width:760px){#hrRecordPrintArea .hr-record-top{grid-template-columns:1fr}}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-top{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:7px!important;align-items:start!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-left-column .hr-record-bottom{margin-top:5px!important;break-before:auto!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-left-column .hr-record-bottom .hr-record-section{margin:3px 0!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-left-column .hr-record-bottom .hr-record-section th,
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-left-column .hr-record-bottom .hr-record-section td{font-size:8.4px!important;padding:2px 2px!important;line-height:1.13!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments th,
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments td{font-size:8.4px!important;padding:2px 2px!important;line-height:1.13!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section{break-inside:auto!important}
+}
 </style>
 
 <script>
@@ -3440,31 +3459,35 @@ window.saveRetirementContractConversion=function(id){
    const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));
    sectionHtml[item.key]=tableSection(item.title,item.columns.map(c=>c[1]),rows);
   }
-  // A4 landscape: primary identity on the left, complete appointment history on the right.
-  // Education/career occupy full-width rows below; family/licenses share the final row.
+  // A4 landscape: left column holds primary information and all supplementary sections;
+  // right column is reserved for the complete, vertically continuing appointment history.
   // Read-only presentation change: do not alter source records or the employee editor.
   const appointmentTable=tableSection('인사변동사항',['발령구분','변동일자','현재부서','발령부서','발령직위','직책','변동사유'],evt.map(h=>h.hr_card_appointment?[
    h.appointment_category||'',h.event_date,h.previous_department||'',h.appointed_department||'',h.appointed_position||'',h.appointed_role||'',h.change_reason||''
   ]:[h.appointment_category||h.event_type||'',h.event_date,h.previous_department||'',h.department||'',h.position||'',h.field_leader_role||'',h.description||h.title||h.event_type||'']));
+  const pr=[];for(const g of periods)for(let i=0;i<g.periods.length;i++)pr.push([g.label,(i+1)+'회차',g.periods[i].start_date,g.periods[i].end_date]);
+  const leaveTable=tableSection('휴직 · 산재 · 육아휴직',['구분','회차','시작일','종료일'],pr);
   let content=`<div class="hr-record-sheet" id="hrRecordPrintArea"><header><h1>인 사 기 록 카 드</h1><div class="hr-record-subtitle">${show(e.headquarters)} · ${show(e.department)}</div></header>
    <div class="hr-record-top">
-    <div class="hr-record-primary">
-     <div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div>
-     <div class="hr-record-left-details">
-      <div class="hr-record-items">${items}</div>
-      <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>
+    <div class="hr-record-left-column">
+     <div class="hr-record-primary">
+      <div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div>
+      <div class="hr-record-left-details">
+       <div class="hr-record-items">${items}</div>
+       <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>
+      </div>
+     </div>
+     <div class="hr-record-bottom">
+      ${sectionHtml.school}
+      ${sectionHtml.career}
+      ${sectionHtml.family}
+      ${sectionHtml.licenses}
+      ${leaveTable}
      </div>
     </div>
     <div class="hr-record-right">${appointmentTable}</div>
    </div>
-   <div class="hr-record-bottom">
-    ${sectionHtml.school}
-    ${sectionHtml.career}
-    <div class="hr-record-bottom-pair">${sectionHtml.family}${sectionHtml.licenses}</div>
-   </div>`;
-  const pr=[];for(const g of periods)for(let i=0;i<g.periods.length;i++)pr.push([g.label,(i+1)+'회차',g.periods[i].start_date,g.periods[i].end_date]);
-  content+=tableSection('휴직 · 산재 · 육아휴직',['구분','회차','시작일','종료일'],pr);
-  content+=`<footer>출력일: ${new Date().toLocaleDateString('ko-KR')}</footer></div>`;
+   <footer>출력일: ${new Date().toLocaleDateString('ko-KR')}</footer></div>`;
   root.innerHTML=`<div class="hr-record-window"><div class="hr-record-actions no-print"><b>${show(e.name)} · 인사기록카드</b><div><button class="btn" type="button" id="hrCardEdit">기록카드 추가항목 수정</button><button class="btn primary" type="button" id="hrCardPrint">가로 인쇄 / PDF</button><button class="btn" type="button" id="hrCardClose">닫기</button></div></div>${content}</div>`;
   window.__hrFitEducationCells?.();
   root.querySelector('#hrCardClose').onclick=close;
