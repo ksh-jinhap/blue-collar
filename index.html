@@ -1965,10 +1965,9 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    const monthExits=exited.filter(e=>exitOn(e).slice(0,7)===monthKey).length;
    const yearExits=exited.filter(e=>exitOn(e).slice(0,4)===String(y)&&exitOn(e).slice(0,7)<=monthKey).length;
    const historicalDetails=Array.isArray(snap?.employee_details)?snap.employee_details:null;
-   const historicalMonthHires=typeof snap?.hire_count==='number'?snap.hire_count:null;
-   const historicalMonthExits=typeof snap?.exit_count==='number'?snap.exit_count:null;
-   const hiresDisplay=isCurrent?hireInMonth:historicalMonthHires;
-   const exitsDisplay=isCurrent?monthExits:historicalMonthExits;
+   const selectedFlow=window.__hrExecMonthFlow?.(y,m);
+   const hiresDisplay=selectedFlow?selectedFlow.hires:(isCurrent?hireInMonth:null);
+   const exitsDisplay=selectedFlow?selectedFlow.exits:(isCurrent?monthExits:null);
    const hiresText=hiresDisplay===null?'미기록':val(hiresDisplay)+'명';
    const exitsText=exitsDisplay===null?'미기록':val(exitsDisplay)+'명';
    const yearlyText=isCurrent?val(yearExits)+'명':'기록 확인 필요';
@@ -4441,21 +4440,34 @@ executiveView=function(){
  };
  // Month-level snapshot figures are authoritative. Where absent, show employee-record dates
  // only for the selected/current month, with explicit reference labeling; other months stay unrecorded.
- const monthFlow=(y,m,selectedMonth)=>{
-  const snap=(db.snapshots||[]).find(s=>Number(s.year)===Number(y)&&Number(s.month)===m);
+ const monthFlow=(y,m)=>{
+  const snap=(db.snapshots||[]).find(s=>Number(s.year)===Number(y)&&Number(s.month)===Number(m));
   if(snap){
    if(snap.flow_units&&typeof snap.flow_units==='object'){
-    const entries=Object.values(snap.flow_units);return {hires:entries.reduce((sum,v)=>sum+numeric(v?.hires),0),exits:entries.reduce((sum,v)=>sum+numeric(v?.exits),0),source:'월별 확정'};
+    const entries=Object.values(snap.flow_units);
+    return {hires:entries.reduce((sum,v)=>sum+numeric(v?.hires),0),exits:entries.reduce((sum,v)=>sum+numeric(v?.exits),0),source:'월별 등록 실적'};
    }
-   if(snap.hire_count!=null&&snap.exit_count!=null)return {hires:numeric(snap.hire_count),exits:numeric(snap.exit_count),source:'월별 확정'};
+   if(snap.hire_count!=null&&snap.exit_count!=null)
+    return {hires:numeric(snap.hire_count),exits:numeric(snap.exit_count),source:'월별 확정'};
   }
-  const now=new Date(),isCurrent=Number(y)===now.getFullYear()&&m===now.getMonth()+1;
-  if(isCurrent){
-   const key=monthKey(y,m),people=db.employees||[];
-   return {hires:people.filter(e=>String(e.hire_date||'').slice(0,7)===key).length,exits:people.filter(e=>e.status==='퇴사'&&String(e.exit_date||e.retirement_date||'').slice(0,7)===key).length,source:'직원 등록기록(참고)'};
-  }
+  // A month-end headcount snapshot does NOT necessarily include hire/exit counts.
+  // When counts were not saved, show dated personnel-record counts as reference,
+  // never claim that they are historical, finalized HR flow numbers.
+  const nowKey=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}).slice(0,7);
+  const key=monthKey(y,m);
+  if(key>nowKey)return null;
+  const people=db.employees||[];
+  const hires=people.filter(e=>String(e.hire_date||'').slice(0,7)===key).length;
+  const exits=people.filter(e=>{
+   const day=String(e.exit_date||e.retirement_date||'').slice(0,10);
+   return /^\d{4}-\d{2}-\d{2}$/.test(day)&&day.slice(0,7)===key&&
+    (e.status==='퇴사'||(day<=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'})));
+  }).length;
+  if(key===nowKey||snap||hires>0||exits>0)
+   return {hires,exits,source:'직원 등록기록(참고)'};
   return null;
  };
+ window.__hrExecMonthFlow=monthFlow;
  window.__hrExecFlowPanel=(y,selectedMonth)=>{
   y=Number(y);selectedMonth=Number(selectedMonth);
   const rows=Array.from({length:12},(_,i)=>({month:i+1,info:monthFlow(y,i+1,selectedMonth)}));
