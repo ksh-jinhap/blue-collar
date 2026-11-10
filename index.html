@@ -3309,7 +3309,7 @@ window.saveRetirementContractConversion=function(id){
  {key:'family',title:'가족사항',columns:[['name','가족성명'],['relation','관계'],['note','비고']]},
  {key:'school',title:'학력사항',columns:[['category','학력구분'],['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']]},
  {key:'career',title:'경력사항',columns:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']]},
- {key:'licenses',title:'자격/면허사항',columns:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']]}
+ {key:'licenses',title:'자격/면허사항',columns:[['name','자격/면허명'],['issuer','발급기관']]}
  ];
  const extraOf=e=>e.hr_record_card&&typeof e.hr_record_card==='object'&&!Array.isArray(e.hr_record_card)?e.hr_record_card:{};
  const arrOf=(extra,k)=>Array.isArray(extra[k])?extra[k]:[];
@@ -3350,7 +3350,7 @@ window.saveRetirementContractConversion=function(id){
    '학력사항':['14%','18%','18%','25%','25%'],
    '경력사항':['19%','19%','21%','15%','26%'],
    '가족사항':['34%','24%','42%'],
-   '자격/면허사항':['30%','23%','20%','27%'],
+   '자격/면허사항':['55%','45%'],
    '인사변동사항':['11%','13%','15%','15%','10%','9%','27%'],
    '휴직 · 산재 · 육아휴직':['23%','13%','32%','32%']
   };
@@ -3470,7 +3470,7 @@ const configs={
  school:{title:'학력사항 등록',key:'school',fields:[['admission','입학일자'],['graduation','졸업일자'],['school','학교명'],['major','전공명']],required:'school'},
  address:{title:'주소 일괄등록',key:null,fields:[['resident_address','주소']],required:'resident_address'},
  career:{title:'경력사항 등록',key:'career',fields:[['start_date','경력시작일'],['end_date','경력종료일'],['company','회사명'],['role','직위명'],['duty','담당업무']],required:'company'},
- licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['number','자격번호'],['date','취득일자'],['issuer','발급기관']],required:'name'},
+ licenses:{title:'자격/면허사항 등록',key:'licenses',fields:[['name','자격/면허명'],['issuer','발급기관']],required:'name'},
  basics:{title:'인사기록카드 내용 등록',key:null,fields:[['marital_status','결혼구분'],['military_category','병역구분'],['employment_category','입사구분']]},
  appointment:{title:'인사변동사항 등록',key:'appointment',fields:[['appointment_category','발령구분'],['event_date','변동일자'],['previous_department','현재부서'],['appointed_department','발령부서'],['appointed_position','발령직위'],['appointed_role','직책'],['change_reason','변동사유']],required:'event_date'}
 };
