@@ -1913,6 +1913,8 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    const actualFor=p=>recorded?n(recorded[keyOf(p)]):isCurrent?unitCount(p):null;
    const actual=recorded?planRows.reduce((s,p)=>s+actualFor(p),0):isCurrent?planRows.reduce((s,p)=>s+unitCount(p),0):null;
    const shortage=actual===null?null:planRows.reduce((s,p)=>s+Math.max(0,monthly(p,m)-actualFor(p)),0);
+   const excess=actual===null?null:planRows.reduce((s,p)=>s+Math.max(0,actualFor(p)-monthly(p,m)),0);
+   const toRows=actual===null?[]:planRows.map(p=>({p,diff:actualFor(p)-monthly(p,m)}));
    const groups=new Map();
    for(const p of planRows){
      const key=[p.corporation||'미지정',p.headquarters||'미지정',p.department||'미지정'].join(' / ');
@@ -1921,7 +1923,7 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
      if(actual!==null)g.actual+=actualFor(p);
      groups.set(k,g);
    }
-   const groupRows=[...groups.values()].sort((a,b)=>window.__hrExecOrgCompare(a.name,b.name)).map(g=>[g.name,val(g.target),g.actual===null?'미기록':val(g.actual),g.actual===null?'—':val(g.target-g.actual),g.actual===null?'—':rate(g.actual,g.target)]);
+   const groupRows=[...groups.values()].sort((a,b)=>window.__hrExecOrgCompare(a.name,b.name)).map(g=>[g.name,val(g.target),g.actual===null?'미기록':val(g.actual),g.actual===null?'—':val(g.actual-g.target),g.actual===null?'—':rate(g.actual,g.target)]);
    const nextMonth=m===12?1:m+1,nextMonthYear=m===12?y+1:y,nextYear=y+1;
    const nextMonthPlans=plansOf(nextMonthYear),nextYearPlans=plansOf(nextYear);
    const annualBudget=nextYearPlans.length?nextYearPlans.reduce((s,p)=>s+n(p.target),0):null;
@@ -1949,11 +1951,11 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
    const office=isCurrent?(Array.isArray(db.office_union_members)?db.office_union_members.length:0):n(snap?.office_union_count);
    const officeKnown=isCurrent||snap?.office_union_count!=null;
    const header='<div class="report-head panel"><div><div class="smallcaps">WORKFORCE · EXECUTIVE SUMMARY</div><h2>'+safe(y+'년 '+m+'월 인력 운영 보고')+'</h2><span class="muted">작성일 '+safe(today())+' · '+(recorded?'월말 확정 인원':isCurrent?'현재 운영인원':'월말 기록 없음')+'</span></div><div class="no-print"><button type="button" class="btn" id="returnToDashboard">대시보드로 돌아가기</button> <button type="button" class="btn primary" onclick="window.print()">인쇄 / PDF 저장</button></div></div>';
-   const summary='<div class="cards" style="grid-template-columns:repeat(4,minmax(0,1fr))">'+metric('계획 정원',val(target),'선택월 사업계획')+metric('현재 운영인원',actual===null?'미기록':val(actual),recorded?'월말 확정':isCurrent?'계획 등록 조직 기준':'월말 기록 없음')+metric('부족 TO',shortage===null?'미기록':val(shortage),'조직별 부족 합계','negative')+metric('충족률',actual===null?'미산정':rate(actual,target),'현재 운영 ÷ 계획 정원')+'</div>';
+   const summary='<div class="cards exec-five-metrics">'+metric('계획 정원',val(target),'선택월 사업계획')+metric('현재 운영인원',actual===null?'미기록':val(actual),recorded?'월말 확정':isCurrent?'계획 등록 조직 기준':'월말 기록 없음')+metric('부족 TO',shortage===null?'미기록':val(shortage),'부족 조직 아래 표시','negative')+metric('초과 TO',excess===null?'미기록':val(excess),'초과 조직 아래 표시','warning')+metric('충족률',actual===null?'미산정':rate(actual,target),'현재 운영 ÷ 계획 정원')+'</div>'+window.__hrExecToLists(toRows,actual!==null);
    const body=[
      section('01 · 인력 현황 요약',summary,'계획 미등록 조직의 운영 인원은 정원 충족률에 포함되지 않습니다. 계획 정원이 0명일 경우 충족률은 미산정으로 표시합니다.'),
-     section('02 · 공정별 정/현원 및 변동현황',table(['법인 / 본부 / 부서','계획 정원','운영인원','차이(계획-운영)','충족률'],groupRows,'해당 연도에 등록된 사업계획이 없습니다.'),'조직별 계획과 실제 운영을 비교합니다. 양수 차이는 부족, 음수 차이는 초과입니다.'),
-     section('03 · 입퇴사 현황','<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+metric('당월 입사자',hiresText,'입사일 기준')+metric('당월 퇴사자',exitsText,'퇴사일 기준')+metric('당해년도 누적 퇴사자',yearlyText,'연초~선택월 누적')+'</div>',isCurrent?'퇴사 예정자는 실제 퇴사 상태로 전환된 후 집계됩니다.':'과거 월은 확정된 입퇴사 건수가 확인되지 않으면 미기록으로 표시합니다.'),
+     section('02 · 공정별 정/현원 및 변동현황',table(['법인 / 본부 / 부서','계획 정원','운영인원','차이(운영-계획)','충족률'],groupRows,'해당 연도에 등록된 사업계획이 없습니다.'),'조직별 계획과 실제 운영을 비교합니다. 양수(+)는 계획 초과, 음수(−)는 계획 대비 부족입니다.'),
+     section('03 · 월간 입퇴사 현황','<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">'+metric('당월 입사자',hiresText,'입사일 기준')+metric('당월 퇴사자',exitsText,'퇴사일 기준')+metric('당해년도 누적 퇴사자',yearlyText,'연초~선택월 누적')+'</div>'+window.__hrExecFlowPanel(y,m),'왼쪽은 월별 그래프, 오른쪽은 월별 현황표입니다. 월말 확정 입퇴사 수가 없는 달은 미기록으로 표시하며 직원 등록기록에 따른 참고 수치는 별도로 구분합니다.'),
      section('04 · 향후 인력 운영 계획',table(['구분','기준 기간','사업계획 정원'],planRowsFuture),'다음 달은 해당 월의 등록 정원, 다음 연도는 다음 연도에 등록된 연간 기본 정원을 사용합니다. 실제 예상 인원을 임의로 추정하지 않습니다.'),
      section('05 · 현장관리자 인원 현황',table(['직책','운영 인원'],leaderNames.map((r,i)=>[r,leaderCounts?val(leaderCounts[i])+'명':'미기록']).concat([['현장관리자 합계',leaderCounts?val(leaderCounts.reduce((s,v)=>s+v,0))+'명':'미기록']])),'그룹장·파트장·라인장 중 등록된 직책을 기준으로 중복 없이 집계합니다.'),
      section('06 · 노동조합 인원 현황',table(['구분','인원'],[['생산직 노조 가입자',enrolled===null?'미기록':val(enrolled)+'명'],['생산직 운영 인원',eligible===null?'미기록':val(eligible)+'명'],['생산직 가입률',enrolled===null?'미산정':rate(enrolled,eligible)],['사무직 조합원',officeKnown?val(office)+'명':'미기록'],['전체 조합원',enrolled===null||!officeKnown?'미기록':val(enrolled+office)+'명']]),'노동조합 집계는 명단을 포함하지 않으며, 생산직은 직위가 계약직인 인원을 제외하고 가입 상태가 확인된 인원만 조합원으로 계산합니다.')
@@ -4288,11 +4290,12 @@ executiveView=function(){
  const plans=plansFor(planYear),registered=new Map(plans.map(p=>[orgKey(p),p])),keys=new Set([...registered.keys(),...Object.keys(s.units||{})]);
  const data=[...keys].map(k=>{const [corp,hq,dept]=k.split('␟'),p=registered.get(k),target=p?monthTarget(p,planMonth):null,actual=Number(s.units?.[k]||0);return {corp,hq,dept,target,actual};});
  const target=data.reduce((n,r)=>n+Number(r.target||0),0),actual=Number(s.total||0),short=data.reduce((n,r)=>n+(r.target===null?0:Math.max(0,r.target-r.actual)),0),extra=data.reduce((n,r)=>n+(r.target===null?0:Math.max(0,r.actual-r.target)),0);
- const flowTotal=flow(s),rows=data.sort((a,b)=>window.__hrExecOrgCompare([a.corp,a.hq,a.dept],[b.corp,b.hq,b.dept])).map(r=>`<tr><td>${safe(r.corp)}</td><td>${safe(r.hq)}</td><td>${safe(r.dept)}</td><td class="right">${r.target===null?'미등록':fmt(r.target)}</td><td class="right">${fmt(r.actual)}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.target-r.actual))}</td><td class="right">${r.target===null?'-':fmt(Math.max(0,r.actual-r.target))}</td></tr>`).join('');
+ const toRows=data.filter(r=>r.target!==null).map(r=>({p:{corporation:r.corp,headquarters:r.hq,department:r.dept},diff:r.actual-r.target}));
+ const flowTotal=flow(s),rows=data.sort((a,b)=>window.__hrExecOrgCompare([a.corp,a.hq,a.dept],[b.corp,b.hq,b.dept])).map(r=>`<tr><td>${safe(r.corp)}</td><td>${safe(r.hq)}</td><td>${safe(r.dept)}</td><td class="right">${r.target===null?'미등록':fmt(r.target)}</td><td class="right">${fmt(r.actual)}</td><td class="right">${r.target===null?'미산정':fmt(r.actual-r.target)}</td></tr>`).join('');
  return yearPicker()+`<section class="panel"><div class="report-head"><div><h2>${planYear}년 ${planMonth}월 생산직 월말 인원 보고</h2><p class="hint">간편 월별인원 자료 기준 · 직원별 명부 복원 불가</p></div><button class="btn primary no-print" onclick="window.print()">인쇄 / PDF 저장</button></div></section>
- <div class="cards">${card('월말 인원',actual,'확정 자료')}${card('계획 정원',target,'등록된 부서 합계')}${card('부족 TO',short,'부서별 합계','negative')}${card('초과 TO',extra,'등록된 부서 기준','warning')}${card('입퇴사 순증감',flowTotal.hires-flowTotal.exits,`입사 ${flowTotal.hires} / 퇴사 ${flowTotal.exits}`)}</div>
- <div class="notice">등록된 조직의 계획 정원과 해당 월말 인원을 비교합니다. 계획이 미등록된 조직은 정원 차이 계산에서 제외합니다. 입퇴사 순증감과 전월 대비 인원 차이는 이동 등으로 다를 수 있습니다.</div>
- <section class="panel"><h2>법인·본부·부서별 월말 실적 및 정원 비교</h2><div class="tablewrap"><table><thead><tr><th>법인</th><th>본부</th><th>부서</th><th class="right">계획 정원</th><th class="right">월말 인원</th><th class="right">부족</th><th class="right">초과</th></tr></thead><tbody>${rows||'<tr><td colspan="7">기록 없음</td></tr>'}</tbody></table></div></section>`;
+ <div class="cards">${card('월말 인원',actual,'확정 자료')}${card('계획 정원',target,'등록된 부서 합계')}${card('부족 TO',short,'부족 조직 아래 표시','negative')}${card('초과 TO',extra,'초과 조직 아래 표시','warning')}${card('입퇴사 순증감',flowTotal.hires-flowTotal.exits,`입사 ${flowTotal.hires} / 퇴사 ${flowTotal.exits}`)}</div>
+ ${window.__hrExecToLists(toRows,true)}<div class="notice">등록된 조직의 계획 정원과 해당 월말 인원을 비교합니다. 계획이 미등록된 조직은 정원 차이 계산에서 제외합니다. 입퇴사 순증감과 전월 대비 인원 차이는 이동 등으로 다를 수 있습니다.</div>
+ <section class="panel exec-section"><h2>02 · 공정별 정/현원 및 변동현황</h2><div class="tablewrap"><table><thead><tr><th>법인</th><th>본부</th><th>부서</th><th class="right">계획 정원</th><th class="right">월말 인원</th><th class="right">차이(운영-계획)</th></tr></thead><tbody>${rows||'<tr><td colspan="6">기록 없음</td></tr>'}</tbody></table></div><div class="exec-report-note">양수(+)는 계획 초과, 음수(−)는 부족입니다. 계획 미등록 조직은 차이를 산정하지 않습니다.</div></section><section class="panel exec-section"><h2>03 · 월간 입퇴사 현황</h2>${window.__hrExecFlowPanel(planYear,planMonth)}</section>`;
 };
 })();
 </script>
@@ -4327,6 +4330,101 @@ executiveView=function(){
   if(![...select.options].some(option=>option.value==='팀원'))select.add(new Option('팀원','팀원'));
   select.value='팀원';
   return result;
+ };
+})();
+</script>
+
+<style id="hrExecFlowAndToStyle">
+.exec-five-metrics{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+.exec-to-lists{display:grid;grid-template-columns:1fr 1fr;gap:13px;margin:14px 0}
+.exec-to-group{background:#f8fafc;border:1px solid #dce4ee;border-radius:10px;padding:14px;min-width:0}
+.exec-to-group h3{margin:0 0 10px;font-size:17px}
+.exec-to-tags{display:flex;flex-wrap:wrap;gap:7px}
+.exec-to-tag{font-size:13px;background:#fff;border:1px solid #d7e1ee;border-radius:7px;padding:6px 8px;line-height:1.45;overflow-wrap:anywhere}
+.exec-to-tag strong{white-space:nowrap;margin-left:4px}
+.exec-to-empty{color:#64748b;font-size:13px}
+.exec-flow-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;margin-top:15px}
+.exec-flow-pane{min-width:0;border:1px solid #dce4ee;border-radius:10px;padding:15px}
+.exec-flow-pane h3{margin:0 0 12px;font-size:17px}
+.exec-flow-legend{display:flex;gap:15px;font-size:13px;margin-bottom:12px}
+.exec-flow-dot{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px}
+.exec-flow-row{display:grid;grid-template-columns:30px 1fr;gap:7px;align-items:center;margin:8px 0;font-size:12px}
+.exec-flow-bars{display:flex;flex-direction:column;gap:3px;min-width:0}
+.exec-flow-track{height:10px;background:#eef2f7;border-radius:4px;overflow:hidden}
+.exec-flow-fill{height:100%;display:block;border-radius:4px}
+.exec-flow-table td,.exec-flow-table th{padding:6px 8px!important;font-size:13px!important}
+.exec-flow-table{width:100%}
+.exec-flow-source{font-size:11px;color:#64748b}
+.dashboard-to-teams{margin:10px 0 0;border-top:1px solid #e2e8f0;padding-top:9px;font-size:12px;line-height:1.7;overflow-wrap:anywhere}
+@media(max-width:1000px){.exec-five-metrics{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:750px){.exec-flow-grid,.exec-to-lists{grid-template-columns:1fr}.exec-five-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media print{.exec-flow-grid,.exec-to-lists{grid-template-columns:1fr 1fr!important}.exec-flow-pane{break-inside:avoid}.exec-flow-row{margin:4px 0}.exec-flow-table td,.exec-flow-table th{font-size:11px!important}.exec-to-tag{font-size:11px}}
+</style>
+<script id="hrExecFlowAndTo20261110">
+(function(){
+ 'use strict';
+ const escapeText=x=>esc(String(x??''));
+ const numeric=v=>Number.isFinite(Number(v))?Number(v):0;
+ const monthKey=(y,m)=>String(y)+'-'+String(m).padStart(2,'0');
+ window.__hrExecToLists=(rows,known)=>{
+  const render=(title,items,kind)=>'<div class="exec-to-group"><h3>'+title+' · '+(known?items.length+'개 조직':'미기록')+'</h3>'+
+   (known?(items.length?'<div class="exec-to-tags">'+items.map(r=>'<span class="exec-to-tag">'+escapeText(r.p.corporation)+' / '+escapeText(r.p.headquarters)+' / '+escapeText(r.p.department)+' <strong>'+(kind==='short'?'−':'+')+fmt(Math.abs(r.diff))+'명</strong></span>').join('')+'</div>':'<div class="exec-to-empty">해당 조직 없음</div>'):'<div class="exec-to-empty">해당 월의 운영인원 기록 없음</div>')+'</div>';
+  return '<div class="exec-to-lists">'+render('부족 TO 팀',rows.filter(r=>r.diff<0).sort((a,b)=>a.diff-b.diff),'short')+render('초과 TO 팀',rows.filter(r=>r.diff>0).sort((a,b)=>b.diff-a.diff),'extra')+'</div>';
+ };
+ // Month-level snapshot figures are authoritative. Where absent, show employee-record dates
+ // only for the selected/current month, with explicit reference labeling; other months stay unrecorded.
+ const monthFlow=(y,m,selectedMonth)=>{
+  const snap=(db.snapshots||[]).find(s=>Number(s.year)===Number(y)&&Number(s.month)===m);
+  if(snap){
+   if(snap.flow_units&&typeof snap.flow_units==='object'){
+    const entries=Object.values(snap.flow_units);return {hires:entries.reduce((sum,v)=>sum+numeric(v?.hires),0),exits:entries.reduce((sum,v)=>sum+numeric(v?.exits),0),source:'월별 확정'};
+   }
+   if(snap.hire_count!=null&&snap.exit_count!=null)return {hires:numeric(snap.hire_count),exits:numeric(snap.exit_count),source:'월별 확정'};
+  }
+  const now=new Date(),isCurrent=Number(y)===now.getFullYear()&&m===now.getMonth()+1;
+  if(isCurrent){
+   const key=monthKey(y,m),people=db.employees||[];
+   return {hires:people.filter(e=>String(e.hire_date||'').slice(0,7)===key).length,exits:people.filter(e=>e.status==='퇴사'&&String(e.exit_date||e.retirement_date||'').slice(0,7)===key).length,source:'직원 등록기록(참고)'};
+  }
+  return null;
+ };
+ window.__hrExecFlowPanel=(y,selectedMonth)=>{
+  y=Number(y);selectedMonth=Number(selectedMonth);
+  const rows=Array.from({length:12},(_,i)=>({month:i+1,info:monthFlow(y,i+1,selectedMonth)}));
+  const peak=Math.max(1,...rows.flatMap(r=>r.info?[r.info.hires,r.info.exits]:[]));
+  const barRows=rows.map(r=>{
+   const a=r.info;
+   return '<div class="exec-flow-row"><b>'+r.month+'월</b><div class="exec-flow-bars">'+
+    '<div class="exec-flow-track">'+(a?'<span class="exec-flow-fill" style="width:'+a.hires/peak*100+'%;background:#2563eb" title="입사 '+a.hires+'명"></span>':'')+'</div>'+
+    '<div class="exec-flow-track">'+(a?'<span class="exec-flow-fill" style="width:'+a.exits/peak*100+'%;background:#d97706" title="퇴사 '+a.exits+'명"></span>':'')+'</div></div></div>';
+  }).join('');
+  const tableRows=rows.map(r=>'<tr><td>'+r.month+'월</td><td class="right">'+(r.info?fmt(r.info.hires):'—')+'</td><td class="right">'+(r.info?fmt(r.info.exits):'—')+'</td><td class="right">'+(r.info?fmt(r.info.hires-r.info.exits):'—')+'</td><td class="exec-flow-source">'+escapeText(r.info?.source||'미기록')+'</td></tr>').join('');
+  return '<div class="exec-flow-grid"><div class="exec-flow-pane"><h3>월별 입사·퇴사 그래프</h3><div class="exec-flow-legend"><span><i class="exec-flow-dot" style="background:#2563eb"></i>입사</span><span><i class="exec-flow-dot" style="background:#d97706"></i>퇴사</span></div>'+barRows+'</div><div class="exec-flow-pane"><h3>월별 입퇴사 현황표</h3><div class="tablewrap"><table class="exec-flow-table"><thead><tr><th>월</th><th class="right">입사</th><th class="right">퇴사</th><th class="right">순증감</th><th>자료 구분</th></tr></thead><tbody>'+tableRows+'</tbody></table></div></div></div>';
+ };
+ function teamSummary(y,m,snap){
+  const plans=plansFor(y),units=snap?.units;
+  return plans.map(p=>({p,diff:(units&&typeof units==='object'?numeric(units[keyOf(p)]):unitCount(p))-Number(monthTarget(p,m)||0)}));
+ }
+ const previousSummary=summaryCards;
+ summaryCards=function(){
+  const html=previousSummary.apply(this,arguments);
+  const m=Number(planMonth),y=Number(planYear),total=(db.employees||[]).filter(occupied).length;
+  const target=plansFor(y).reduce((sum,p)=>sum+Number(monthTarget(p,m)||0),0);
+  if(total<=target)return html;
+  const teams=teamSummary(y,m,null).filter(x=>x.diff>0).sort((a,b)=>b.diff-a.diff);
+  const labels=teams.length?teams.map(x=>escapeText(x.p.headquarters)+' / '+escapeText(x.p.department)+' +'+fmt(x.diff)+'명').join(' · '):'등록된 계획 조직 중 초과 팀 없음';
+  return html.replace('전체 인원이 계획 정원을 초과</div>','전체 인원이 계획 정원을 초과<div class="dashboard-to-teams"><b>초과 팀:</b> '+labels+'</div></div>');
+ };
+ const previousDashboard=dashboard;
+ dashboard=function(){
+  let html=previousDashboard.apply(this,arguments);
+  const s=(db.snapshots||[]).find(item=>Number(item.year)===Number(planYear)&&Number(item.month)===Number(planMonth));
+  if(!s)return html;
+  const allTotal=numeric(s.total),totalTarget=plansFor(planYear).reduce((v,p)=>v+Number(monthTarget(p,planMonth)||0),0);
+  if(allTotal<=totalTarget)return html;
+  const rows=teamSummary(planYear,planMonth,s).filter(x=>x.diff>0).sort((a,b)=>b.diff-a.diff);
+  const names=rows.length?rows.map(x=>escapeText(x.p.corporation)+' / '+escapeText(x.p.headquarters)+' / '+escapeText(x.p.department)+' +'+fmt(x.diff)+'명').join(' · '):'등록된 계획 조직 중 초과 팀 없음';
+  return html.replace('전체 기준 계획 초과 인원</div>','전체 기준 계획 초과 인원<div class="dashboard-to-teams"><b>초과 팀:</b> '+names+'</div></div>');
  };
 })();
 </script>
