@@ -4478,4 +4478,81 @@ executiveView=function(){
  document.head.appendChild(style);
 })();
 </script>
+<style id="hrDashboardKpiTooltipLayout20261110">
+/* Applies only to dashboard KPI row; all other summary cards retain original styles. */
+#content .hr-dashboard-six-kpis {grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+#content .hr-dashboard-six-kpis>.card {min-width:0;padding:15px 11px}
+#content .hr-dashboard-six-kpis>.card .label {display:flex;gap:5px;align-items:center;white-space:nowrap;font-size:clamp(11px,0.9vw,13px);letter-spacing:-.45px;font-weight:700}
+#content .hr-dashboard-six-kpis>.card .num {font-size:clamp(23px,2vw,31px);white-space:nowrap}
+#content .hr-dashboard-six-kpis>.card .note {font-size:11px;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#content .hr-dashboard-six-kpis .hr-to-info {position:relative;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;flex:none;width:17px;height:17px;border:1.5px solid #7293bc;border-radius:50%;background:#eff6ff;color:#1d4d85;font:700 11px/1 Arial,sans-serif;cursor:help;outline-offset:3px}
+#content .hr-dashboard-six-kpis .hr-to-info::after{content:attr(data-tip);position:absolute;bottom:calc(100% + 9px);left:0;min-width:240px;width:max-content;max-width:min(340px,75vw);white-space:normal;overflow-wrap:anywhere;padding:11px 13px;border-radius:9px;background:#213752;color:#fff;font:400 12px/1.65 'Malgun Gothic',sans-serif;box-shadow:0 8px 26px #101c3840;visibility:hidden;opacity:0;pointer-events:none;z-index:30;transition:opacity .12s}
+#content .hr-dashboard-six-kpis .hr-to-info:is(:hover,:focus-visible)::after{visibility:visible;opacity:1}
+#content .hr-dashboard-six-kpis>.card:nth-last-child(-n+2) .hr-to-info::after{left:auto;right:0}
+@media(max-width:1000px){#content .hr-dashboard-six-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}#content .hr-dashboard-six-kpis>.card .label{font-size:13px}}
+@media(max-width:760px){#content .hr-dashboard-six-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#content .hr-dashboard-six-kpis>.card .label{font-size:12px}#content .hr-dashboard-six-kpis .hr-to-info::after{max-width:min(270px,75vw)}}
+@media print{#content .hr-dashboard-six-kpis{grid-template-columns:repeat(6,minmax(0,1fr))!important}#content .hr-dashboard-six-kpis>.card{padding:8px 6px}#content .hr-dashboard-six-kpis>.card .label{font-size:10px}#content .hr-dashboard-six-kpis>.card .num{font-size:20px}#content .hr-dashboard-six-kpis .hr-to-info{display:none}}
+</style>
+<script id="hrDashboardKpiTooltipLayout20261110">
+(function(){
+ 'use strict';
+ const earlierDashboard=dashboard;
+ dashboard=function(){
+  const raw=earlierDashboard.apply(this,arguments);
+  const root=document.createElement('div');root.innerHTML=raw;
+  const cards=root.querySelector('.cards');
+  if(!cards)return raw; // No monthly snapshot or current-month detail: retain explanatory empty view.
+  const labels=()=>[...cards.children].filter(node=>node.classList.contains('card'));
+  const getLabel=node=>node.querySelector('.label')?.textContent.trim()||'';
+  const existing=labels();
+  const surplus=existing.find(node=>getLabel(node)==='초과 TO');
+  if(!surplus)return raw;
+  const y=Number(planYear),m=Number(planMonth),snap=typeof snapshotMonth==='function'?snapshotMonth(y,m):null;
+  const plans=plansFor(y);
+  const nums=snap?.units;
+  // Match the executive report's shortage definition (sum of shortages by registered plan organization).
+  const shortage=plans.reduce((sum,p)=>{
+    const actual=nums&&typeof nums==='object'?Number(nums[keyOf(p)]||0):unitCount(p);
+    const goal=Number(monthTarget(p,m)||0);
+    return sum+Math.max(0,goal-(Number.isFinite(actual)?actual:0));
+  },0);
+  const newCard=document.createElement('div');
+  newCard.className='card';
+  newCard.innerHTML='<div class="label">부족 TO</div><div class="num negative">'+fmt(shortage)+'</div><div class="note">조직별 부족 인원 합계</div>';
+  surplus.before(newCard);
+  cards.classList.add('hr-dashboard-six-kpis');
+  const current=new Date(),isCurrent=y===current.getFullYear()&&m===current.getMonth()+1;
+  const descriptions={
+    '현재 인원':'당월 잠정 현황 · 월말 확정 전. 퇴사자를 제외한 재직·휴직·파견·대기·산재·육아휴직 인원을 포함합니다. 월말 기록 저장 후 확정 현황으로 전환됩니다.',
+    '선택월 말 인원':'해당 월에 저장된 월말 확정 인원입니다. 과거 직원별 상태를 현재 기준으로 다시 계산하지 않습니다.',
+    '사업계획 정원':'선택한 연도·월에 등록된 조직별 사업계획 정원을 합산합니다. 정원이 등록되지 않은 팀은 비교 대상에서 제외됩니다.',
+    '부족 TO':'TO 산정 기준: 계획 정원보다 운영 인원이 적은 조직의 부족분을 각각 구해 합산합니다. 계획 미등록 부서는 제외하며, 전체 인원 차이와 같지 않을 수 있습니다.',
+    '초과 TO':'TO 산정 기준: 전체 운영 인원 − 전체 사업계획 정원이 양수인 경우에만 표시합니다. 조직별 초과 TO 합계와 다를 수 있습니다.',
+    '당월 입사자':'당월 직원별 입사일을 기준으로 계산한 참고 인원입니다.',
+    '당월 퇴사자':'당월 직원별 퇴사일을 기준으로 계산한 참고 인원입니다.'
+  };
+  for(const node of labels()){
+    const name=getLabel(node),lbl=node.querySelector('.label');
+    if(name==='초과 TO'){
+      const note=node.querySelector('.note');
+      if(note)note.textContent='전체 기준 계획 초과';
+    }
+    const cardNote=node.querySelector('.note');if(cardNote)cardNote.title=cardNote.textContent.trim();
+    if(!lbl||!descriptions[name])continue;
+    const explanation=name==='현재 인원'&&!isCurrent?'현재 입력 인원 기준입니다.':descriptions[name];
+    const info=document.createElement('span');
+    info.className='hr-to-info';info.tabIndex=0;info.textContent='!';info.setAttribute('role','img');
+    info.setAttribute('aria-label',name+' 안내: '+explanation);
+    info.dataset.tip=explanation;
+    lbl.appendChild(info);
+  }
+  // Move only the two superseded pale-blue dashboard explanations into KPI tooltips.
+  for(const notice of root.querySelectorAll('.notice')){
+    const content=notice.textContent.trim();
+    if(content.startsWith('당월 잠정 현황 · 월말 확정 전')||content.startsWith('TO 산정 기준'))notice.remove();
+  }
+  return root.innerHTML;
+ };
+})();
+</script>
 </body></html>
