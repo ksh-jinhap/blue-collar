@@ -2495,6 +2495,23 @@ window.saveRetirementContractConversion=function(id){
  };
 })();
 </script>
+<style id="sameNameRosterAlignmentStyle">
+/* Keep all same-name groups on one shared column grid. */
+.same-name-roster .same-name-group{margin:18px 0 22px}
+.same-name-roster .same-name-group h3{margin:0 0 8px}
+.same-name-roster .same-name-table{width:100%;min-width:920px;table-layout:fixed;border-collapse:collapse}
+.same-name-roster .same-name-table th,.same-name-roster .same-name-table td{box-sizing:border-box;padding:11px 10px;vertical-align:middle;text-align:left;line-height:1.5;overflow-wrap:anywhere}
+.same-name-roster .same-name-table th:nth-child(1),.same-name-roster .same-name-table td:nth-child(1){width:12%}
+.same-name-roster .same-name-table th:nth-child(2),.same-name-roster .same-name-table td:nth-child(2){width:10%}
+.same-name-roster .same-name-table th:nth-child(3),.same-name-roster .same-name-table td:nth-child(3){width:11%}
+.same-name-roster .same-name-table th:nth-child(4),.same-name-roster .same-name-table td:nth-child(4){width:17%}
+.same-name-roster .same-name-table th:nth-child(5),.same-name-roster .same-name-table td:nth-child(5){width:18%}
+.same-name-roster .same-name-table th:nth-child(6),.same-name-roster .same-name-table td:nth-child(6){width:12%}
+.same-name-roster .same-name-table th:nth-child(7),.same-name-roster .same-name-table td:nth-child(7){width:12%}
+.same-name-roster .same-name-table th:nth-child(8),.same-name-roster .same-name-table td:nth-child(8){width:8%}
+.same-name-roster .same-name-table th:nth-child(1),.same-name-roster .same-name-table td:nth-child(1),.same-name-roster .same-name-table th:nth-child(2),.same-name-roster .same-name-table td:nth-child(2),.same-name-roster .same-name-table th:nth-child(6),.same-name-roster .same-name-table td:nth-child(6),.same-name-roster .same-name-table th:nth-child(7),.same-name-roster .same-name-table td:nth-child(7),.same-name-roster .same-name-table th:nth-child(8),.same-name-roster .same-name-table td:nth-child(8){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.same-name-roster .same-name-table .hr-name-link{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}
+</style>
 <script id="sameNameRosterScript">
 /* Read-only same-name roster. Identical names are not proof of different identities. */
 (function(){
@@ -2525,9 +2542,9 @@ window.saveRetirementContractConversion=function(id){
   const groups=sameNameGroups();
   const people=groups.reduce((count,g)=>count+g.rows.length,0);
   return `<div class="cards">${card('동일 성명 그룹',groups.length,'2건 이상 등록된 성명')}${card('해당 직원 기록',people,'퇴사자 포함 · 등록 기록 기준')}</div>`+
-    `<section class="panel"><h2>동명이인 명부</h2><p class="hint">성명 표기가 같은 기록을 모았습니다. 같은 사람이 재입사하여 사번이 여러 개인 경우에도 표시됩니다. 사번·소속·입사일로 확인하세요.</p>`+
-    (groups.length?groups.map(group=>`<div style="margin:18px 0 22px"><h3 style="margin:0 0 8px">${safe(group.name)} <span class="muted" style="font-size:13px">${group.rows.length}건</span></h3>`+
-    `<div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부 / 실</th><th>부서 / 팀</th><th>입사일</th><th>퇴사일</th><th>현재 상태</th></tr></thead><tbody>`+
+    `<section class="panel same-name-roster"><h2>동명이인 명부</h2><p class="hint">성명 표기가 같은 기록을 모았습니다. 같은 사람이 재입사하여 사번이 여러 개인 경우에도 표시됩니다. 사번·소속·입사일로 확인하세요.</p>`+
+    (groups.length?groups.map(group=>`<div class="same-name-group"><h3>${safe(group.name)} <span class="muted" style="font-size:13px">${group.rows.length}건</span></h3>`+
+    `<div class="tablewrap"><table class="same-name-table"><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부 / 실</th><th>부서 / 팀</th><th>입사일</th><th>퇴사일</th><th>현재 상태</th></tr></thead><tbody>`+
     group.rows.map(person=>`<tr><td>${safe(person.employee_no)}</td><td><button type="button" class="hr-name-link" data-employee-detail="${safe(String(person.id))}" title="직원 상세정보 보기">${safe(person.name)}</button></td><td>${safe(person.corporation)}</td><td>${safe(person.headquarters)}</td><td>${safe(person.department)}</td><td>${safe(person.hire_date)}</td><td>${safe(person.exit_date||'-')}</td><td>${safe(person.status)}</td></tr>`).join('')+
     `</tbody></table></div></div>`).join(''):'<div class="empty">현재 등록된 직원 기록 중 이름이 같은 경우가 없습니다.</div>')+
     `</section>`;
