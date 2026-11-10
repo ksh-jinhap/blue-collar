@@ -3761,14 +3761,56 @@ function problems(){qualityMasterCache=null;const out=[],seen=new Map();for(cons
 const safe=esc;
 function empButton(e,text='수정'){return `<button type="button" class="btn tiny" data-qa-edit="${safe(String(e.id))}">${safe(text)}</button>`;}
 function btnView(v,caption){return `<button type="button" class="btn tiny" data-qa-view="${v}">${caption}</button>`;}
-let qKind='전체',qText='',changeText='',alertKind='전체',alertLevel='전체',trendYear=new Date().getFullYear(),trendMonth=new Date().getMonth()+1,trendCorp='',trendHQ='',trendDept='';
-function qualityView(){const all=problems(),group={};all.forEach(x=>group[x.kind]=(group[x.kind]||0)+1);
- // Index employees once rather than searching the entire roster per issue/row.
- const employeeIndex=new Map(db.employees.map(e=>[String(e.id),e]));
+let qKind='전체',qDetail='전체',qText='',changeText='',alertKind='전체',alertLevel='전체',trendYear=new Date().getFullYear(),trendMonth=new Date().getMonth()+1,trendCorp='',trendHQ='',trendDept='';
+// Keep the established issue-detection rules unchanged; enrich each detected issue
+// for actionable inspection without changing any employee record or persistence path.
+const QUALITY_FIELD_KEYS=Object.fromEntries([...Object.entries(REQUIRED),...Object.entries(RECOMMENDED),...Object.entries(TYPES),['퇴사 예정일','scheduled_exit_date'],['전환일','conversion_date'],['휴직 시작일','leave_date'],['퇴사일','exit_date']].map(([k,v])=>[v,k]));
+function qualityIssueInfo(r,e){
+ const name=txt(r.what),category=r.kind;
+ const result={type:category,field:name,value:'—',reason:'',action:'직원 수정 화면에서 해당 항목을 확인하세요.'};
+ if(category==='필수정보 누락'||category==='권장정보 누락'){
+   const key=QUALITY_FIELD_KEYS[name];result.field=name;result.type=(category==='필수정보 누락'?'필수':'권장')+' · '+name+' 미입력';
+   result.value='미입력';result.reason=name+' 항목이 비어 있습니다.';
+   result.action=category==='필수정보 누락'?'직원 수정 화면에서 '+name+' 항목을 입력한 뒤 저장하세요.':'업무상 확인 가능한 경우 '+name+' 항목을 입력하세요.';
+ }else if(category==='중복 사번'){
+   result.type='동일 사번 중복';result.field='사번';result.value=txt(e.employee_no)||'미입력';result.reason=name+' · 여러 직원에 동일한 사번이 등록되어 있습니다.';
+   result.action='동일 사번으로 등록된 직원이 실제 중복인지 확인하고 필요한 건만 정정하세요.';
+ }else if(category==='기준정보 불일치'){
+   const field=name.split(' · ')[0];const key=Object.keys(TYPES).find(k=>TYPES[k]===field);const value=key?normalizeEmpValue(e,key):name.split(' · ').slice(1).join(' · ');
+   result.field=field;result.value=value||'미입력';
+   const refs=key?references(key):[];
+   const activeMatches=refs.filter(x=>x.value===value&&!x.deleted&&x.active!==false);
+   const scoped=activeMatches.filter(x=>(!x.corporation||x.corporation===e.corporation)&&(!x.headquarters||x.headquarters===e.headquarters));
+   if(activeMatches.length&&!scoped.length){result.type='조직별 기준정보 범위 불일치';result.reason='등록된 기준값이지만 현재 소속 법인·본부에 적용되는 값이 아닙니다.';}
+   else if(refs.some(x=>x.value===value&&(x.deleted||x.active===false))){result.type='비활성 기준정보 사용';result.reason='현재 사용 중지 또는 삭제 처리된 기준값을 사용하고 있습니다.';}
+   else{result.type='미등록 기준정보 사용';result.reason='현재 기준정보 목록에서 일치하는 사용 가능 값을 찾지 못했습니다.';}
+   result.action='기준정보 관리에서 적용 범위를 확인하거나 직원의 '+field+' 값을 유효한 항목으로 수정하세요.';
+ }else if(category==='날짜 오류'){
+   if(name.includes('퇴사일이 입사일보다')){
+     result.type='날짜 선후관계 오류';result.field='입사일 / 퇴사일';result.value=(txt(e.hire_date)||'—')+' / '+(txt(e.exit_date)||'—');
+     result.reason='퇴사일이 입사일보다 앞서 있습니다.';result.action='입사일과 퇴사일을 실제 날짜와 대조하여 수정하세요.';
+   }else{
+     const key=QUALITY_FIELD_KEYS[name]||({입사일:'hire_date',퇴사일:'exit_date'}[name]);result.type='날짜 형식·유효성 오류';result.field=name;result.value=txt(e[key])||'미입력';
+     result.reason='날짜가 올바른 YYYY-MM-DD 형식이 아니거나 존재하지 않는 날짜입니다.';result.action='실제 날짜를 확인해 YYYY-MM-DD 형식으로 수정하세요.';
+   }
+ }else if(category==='퇴사일 확인'){
+   result.type='퇴사자 퇴사일 확인 필요';result.field='재직 상태 / 퇴사일';result.value='퇴사 / '+(txt(e.exit_date)||'미입력');
+   result.reason='재직 상태가 퇴사인데 유효한 퇴사일이 없습니다.';result.action='퇴사일을 확인해 입력하거나 재직 상태를 정정하세요.';
+ }
+ return result;
+}
+function qualityView(){
+ const all=problems();const employeeIndex=new Map(db.employees.map(e=>[String(e.id),e]));
+ const detailed=all.map(x=>({issue:x,detail:qualityIssueInfo(x,employeeIndex.get(String(x.id))||{})}));
  const matching=qText?qText.trim().toLocaleLowerCase('ko'):'';
- const records=all.filter(x=>{if(qKind!=='전체'&&x.kind!==qKind)return false;if(!matching)return true;const e=employeeIndex.get(String(x.id));return [e?.name,e?.employee_no,x.what].some(v=>String(v||'').toLocaleLowerCase('ko').includes(matching));});
+ const byKind=detailed.filter(x=>qKind==='전체'||x.issue.kind===qKind);
+ const detailKinds=[...new Set(byKind.map(x=>x.detail.type))].sort((a,b)=>a.localeCompare(b,'ko'));
+ if(qDetail!=='전체'&&!detailKinds.includes(qDetail))qDetail='전체';
+ const records=byKind.filter(x=>{if(qDetail!=='전체'&&x.detail.type!==qDetail)return false;if(!matching)return true;
+  const e=employeeIndex.get(String(x.issue.id));return [e?.name,e?.employee_no,x.issue.kind,x.detail.type,x.detail.field,x.detail.value,x.detail.reason,x.detail.action].some(v=>String(v||'').toLocaleLowerCase('ko').includes(matching));});
  const selectedKinds=[...new Set(all.map(x=>x.kind))].sort();const flagged=new Set(all.map(x=>String(x.id)));const noIssue=db.employees.length-flagged.size;
- return `<section class="panel"><div class="report-head"><div><h2>인사 데이터 점검센터</h2><p class="hint">점검은 조회만 수행합니다. 직원 수정 버튼은 기존 직원 수정 화면과 동일하게 저장됩니다. 계약직 직원은 권장정보 누락에서 제외하며, 필수정보·중복·날짜·기준정보 검사는 그대로 적용합니다. 저장 후 공동 DB 저장 완료 표시를 확인하세요.</p></div>${btnView('master','기준정보 관리')}</div><div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">${card('점검 대상',db.employees.length,'퇴사자 포함')}${card('점검 항목',all.length,'직원당 여러 건 발생 가능')}${card('이상 없음',noIssue,'현재 점검 규칙 기준')}</div><div class="toolbar"><label>유형 ${select('qaKind',selectedKinds,qKind,'전체')}</label><input id="qaText" placeholder="사번·성명·항목 검색" value="${safe(qText)}"><button class="btn" data-qa-reset="1">초기화</button></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>문제 유형</th><th>확인할 항목</th><th>처리</th></tr></thead><tbody>${records.map(r=>{const e=employeeIndex.get(String(r.id));return e?`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(r.kind)}</td><td>${safe(r.what)}</td><td>${empButton(e)}</td></tr>`:''}).join('')||'<tr><td colspan="5" class="empty">해당 조건에서 점검 결과가 없습니다.</td></tr>'}</tbody></table></div></section><section class="panel"><h2>직원별 정보 완성도</h2><p class="hint">일반 직원은 필수 7개·권장 4개 항목, 계약직은 필수 7개 항목으로 계산합니다. 완성도는 인사평가 점수가 아닙니다.</p><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>완성도</th><th>필수 누락</th><th>권장 누락</th><th>관리</th></tr></thead><tbody>${db.employees.map(e=>{const p=completeness(e);return `<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td><b>${p.pct}%</b><div class="bar"><i style="width:${p.pct}%"></i></div></td><td>${safe(p.required.join(', ')||'-')}</td><td>${safe(p.recommended.join(', ')||'-')}</td><td>${empButton(e)}</td></tr>`}).join('')||'<tr><td colspan="6" class="empty">직원 정보가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+ const issuesRows=records.map(({issue,detail})=>{const e=employeeIndex.get(String(issue.id));return e?`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(issue.kind)}</td><td><b>${safe(detail.type)}</b></td><td>${safe(detail.field)}</td><td>${safe(detail.value)}</td><td style="min-width:260px"><div>${safe(detail.reason)}</div><div class="hint" style="margin-top:4px">조치: ${safe(detail.action)}</div></td><td>${empButton(e)}</td></tr>`:''}).join('');
+ return `<section class="panel"><div class="report-head"><div><h2>인사 데이터 점검센터</h2><p class="hint">문제 분류·세부 유형·현재 입력값·발생 사유와 조치 방법을 구분하여 표시합니다. 점검은 조회만 수행하며 수정 버튼은 기존 직원 수정 화면을 엽니다. 고용형태가 계약직인 직원은 권장정보 누락에서 제외합니다.</p></div>${btnView('master','기준정보 관리')}</div><div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">${card('점검 대상',db.employees.length,'퇴사자 포함')}${card('발견 문제',all.length,'직원당 여러 건 발생 가능')}${card('이상 없음',noIssue,'현재 점검 규칙 기준')}</div><div class="toolbar"><label>문제 분류 ${select('qaKind',selectedKinds,qKind,'전체')}</label><label>세부 유형 ${select('qaDetail',detailKinds,qDetail,'전체')}</label><input id="qaText" placeholder="사번·성명·문제 항목·원인 검색" value="${safe(qText)}"><button class="btn" data-qa-reset="1">초기화</button><span class="pill">표시 ${records.length}건</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>문제 분류</th><th>세부 문제유형</th><th>문제 항목</th><th>현재 입력값</th><th>발생 사유 및 조치 방법</th><th>처리</th></tr></thead><tbody>${issuesRows||'<tr><td colspan="8" class="empty">해당 조건에서 점검 결과가 없습니다.</td></tr>'}</tbody></table></div></section><section class="panel"><h2>직원별 정보 완성도</h2><p class="hint">일반 직원은 필수 7개·권장 4개 항목, 계약직은 필수 7개 항목으로 계산합니다. 완성도는 인사평가 점수가 아닙니다.</p><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>완성도</th><th>필수 누락</th><th>권장 누락</th><th>관리</th></tr></thead><tbody>${db.employees.map(e=>{const p=completeness(e);return `<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td><b>${p.pct}%</b><div class="bar"><i style="width:${p.pct}%"></i></div></td><td>${safe(p.required.join(', ')||'-')}</td><td>${safe(p.recommended.join(', ')||'-')}</td><td>${empButton(e)}</td></tr>`}).join('')||'<tr><td colspan="6" class="empty">직원 정보가 없습니다.</td></tr>'}</tbody></table></div></section>`;
 }
 function changes(){return Array.isArray(db.hr_change_comparisons)?db.hr_change_comparisons:[];}
 function diff(before,after){return Object.entries(EDIT_FIELDS).filter(([k])=>txt(before?.[k])!==txt(after?.[k])).map(([k,label])=>({key:k,label,before:txt(before?.[k])||'—',after:txt(after?.[k])||'—'}));}
@@ -3848,8 +3890,8 @@ render=function(){if(!label[view])return oldRender();const [head,desc]=label[vie
 const oldSave=saveEmployee;
 saveEmployee=function(id){const old=id!=null?db.employees.find(e=>String(e.id)===String(id)):null;const snapshot=capture(old?[old.id]:[]);const beforeLength=db.employees.length;const result=oldSave.apply(this,arguments);if(old&&document.getElementById('modalWrap')?.classList.contains('open')===false)logCompared('직원 수정',snapshot);else if(!old&&db.employees.length>beforeLength){const e=db.employees.at(-1);const previous=new Map([[String(e.id),{}]]);logCompared('신규 직원 등록',previous);}return result;};
 for(const [name,action] of [['applyEmployeeMassEdit','선택 인원 일괄수정'],['applyBulkTransfer','일괄 인사발령']]){const fn=window[name];if(typeof fn==='function')window[name]=function(){const before=capture();const result=fn.apply(this,arguments);logCompared(action,before);return result;};}
-document.addEventListener('click',ev=>{const viewButton=ev.target.closest('[data-qa-view]');if(viewButton){setView(viewButton.dataset.qaView);return;}const edit=ev.target.closest('[data-qa-edit]');if(edit){const e=db.employees.find(x=>String(x.id)===String(edit.dataset.qaEdit));if(e)openEmployee(e.id);return;}if(ev.target.closest('[data-qa-reset]')){qKind='전체';qText='';render();}if(ev.target.closest('[data-qa-trend-reset]')){trendCorp='';trendHQ='';trendDept='';trendMonth=new Date().getMonth()+1;render();}});
-document.addEventListener('change',ev=>{if(ev.target.id==='qaKind'){qKind=ev.target.value;render();}if(ev.target.id==='qaAlertKind'){alertKind=ev.target.value;render();}if(ev.target.id==='qaAlertLevel'){alertLevel=Object.keys(alertTitle).find(k=>alertTitle[k]===ev.target.value)||'전체';render();}if(ev.target.id==='qaTrendCorp'){trendCorp=ev.target.value;trendHQ='';trendDept='';render();}if(ev.target.id==='qaTrendHQ'){trendHQ=ev.target.value;trendDept='';render();}if(ev.target.id==='qaTrendDept'){trendDept=ev.target.value;render();}if(ev.target.id==='qaTrendMonth'){trendMonth=Number(ev.target.value);render();}if(ev.target.id==='qaTrendYear'){const n=Number(ev.target.value);if(Number.isInteger(n)&&n>=2000&&n<=2100){trendYear=n;render();}}});
+document.addEventListener('click',ev=>{const viewButton=ev.target.closest('[data-qa-view]');if(viewButton){setView(viewButton.dataset.qaView);return;}const edit=ev.target.closest('[data-qa-edit]');if(edit){const e=db.employees.find(x=>String(x.id)===String(edit.dataset.qaEdit));if(e)openEmployee(e.id);return;}if(ev.target.closest('[data-qa-reset]')){qKind='전체';qDetail='전체';qText='';render();}if(ev.target.closest('[data-qa-trend-reset]')){trendCorp='';trendHQ='';trendDept='';trendMonth=new Date().getMonth()+1;render();}});
+document.addEventListener('change',ev=>{if(ev.target.id==='qaKind'){qKind=ev.target.value||'전체';qDetail='전체';render();}if(ev.target.id==='qaDetail'){qDetail=ev.target.value||'전체';render();}if(ev.target.id==='qaAlertKind'){alertKind=ev.target.value;render();}if(ev.target.id==='qaAlertLevel'){alertLevel=Object.keys(alertTitle).find(k=>alertTitle[k]===ev.target.value)||'전체';render();}if(ev.target.id==='qaTrendCorp'){trendCorp=ev.target.value;trendHQ='';trendDept='';render();}if(ev.target.id==='qaTrendHQ'){trendHQ=ev.target.value;trendDept='';render();}if(ev.target.id==='qaTrendDept'){trendDept=ev.target.value;render();}if(ev.target.id==='qaTrendMonth'){trendMonth=Number(ev.target.value);render();}if(ev.target.id==='qaTrendYear'){const n=Number(ev.target.value);if(Number.isInteger(n)&&n>=2000&&n<=2100){trendYear=n;render();}}});
 let qaSearchTimer=null;
 document.addEventListener('input',ev=>{if(!['qaText','qaChangeText'].includes(ev.target.id))return;const id=ev.target.id,at=ev.target.selectionStart??ev.target.value.length;if(id==='qaText')qText=ev.target.value;else changeText=ev.target.value;clearTimeout(qaSearchTimer);if(ev.isComposing)return;qaSearchTimer=setTimeout(()=>{if(document.activeElement?.id!==id)return;render();const next=document.getElementById(id);if(next){next.focus({preventScroll:true});try{next.setSelectionRange(at,at);}catch(_){}}},300);});
 document.addEventListener('change',ev=>{if(ev.target.id==='qaText'||ev.target.id==='qaChangeText'){clearTimeout(qaSearchTimer);render();}});
