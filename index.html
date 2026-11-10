@@ -414,6 +414,16 @@ const originalFetchLatest=fetchLatest;
 // Do not poll while an edit dialog is open; manual refresh remains available.
 window.addEventListener('online',()=>{if(session&&dirty&&!conflict)push();});
 window.addEventListener('beforeunload',e=>{if(dirty||writing){e.preventDefault();e.returnValue='';}});
+// Safe read-only hooks for the month-end assistant; authentication state remains private.
+window.__hrMonthCloud={
+ ready:()=>Boolean(session&&rev!==null&&!dirty&&!writing&&!polling&&!conflict),
+ refresh:async()=>{
+  if(!session||rev===null||dirty||writing||polling||conflict)return false;
+  lastCloudError='';
+  await fetchLatest(false);
+  return Boolean(session&&rev!==null&&!dirty&&!writing&&!polling&&!conflict&&!lastCloudError);
+ }
+};
 render();status();
 })();
 </script><script>
@@ -4553,6 +4563,76 @@ executiveView=function(){
   }
   return root.innerHTML;
  };
+})();
+</script>
+<script id="hrRollingMonthAndSafeClose20261110">
+/* Current-month auto-follow and guarded online month-end closing.
+   A static GitHub Pages document cannot execute after all browser tabs close.
+   Historical snapshots are never manufactured retrospectively. */
+(function(){
+ 'use strict';
+ const tz='Asia/Seoul';
+ const parts=()=>{
+  const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date()).filter(x=>x.type!=='literal').map(x=>[x.type,Number(x.value)]));
+  return {y:p.year,m:p.month,d:p.day,h:p.hour,min:p.minute};
+ };
+ const current=parts();
+ let observed=`${current.y}-${current.m}`;
+ let followCurrent=Number(planYear)===current.y&&Number(planMonth)===current.m;
+ let closeBusy=false;
+ // Explicitly selected historical months stay selected until the user returns to the current month.
+ document.addEventListener('change',event=>{
+  if(event.target?.id!=='planYear'&&event.target?.id!=='planMonth')return;
+  setTimeout(()=>{const now=parts();followCurrent=Number(planYear)===now.y&&Number(planMonth)===now.m;},0);
+ },true);
+ const hasSnapshot=(y,m)=>(db.snapshots||[]).some(s=>Number(s.year)===y&&Number(s.month)===m);
+ function onlineReady(){return Boolean(window.__hrMonthCloud?.ready())&&!document.getElementById('modalWrap')?.classList.contains('open');}
+ function monthEnd(now){return now.d===new Date(Date.UTC(now.y,now.m,0)).getUTCDate();}
+ function updateViewDate(now){
+  const key=`${now.y}-${now.m}`;
+  if(key===observed)return;
+  const [priorY,priorM]=observed.split('-').map(Number);
+  observed=key;
+  if(!followCurrent)return;
+  planYear=now.y;planMonth=now.m;
+  // Preserve a user-selected trend period if it differs from the previously followed period.
+  if(typeof trendYear!=='undefined'&&typeof trendMonth!=='undefined'){
+   try{if(Number(trendYear)===priorY&&Number(trendMonth)===priorM){trendYear=now.y;trendMonth=now.m;}}
+   catch(_){/* independent trend controls */}
+  }
+  if(!['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName))render();
+ }
+ async function closeAtMonthEnd(){
+  const n=parts();
+  if(!monthEnd(n)||n.h!==23||n.min!==59||closeBusy||!onlineReady()||hasSnapshot(n.y,n.m))return;
+  closeBusy=true;
+  try{
+   // Pull latest shared state first; never replace unsaved changes or overwrite an existing month.
+   if(!await window.__hrMonthCloud.refresh())return;
+   const fresh=parts();
+   if(fresh.y!==n.y||fresh.m!==n.m||!monthEnd(fresh)||fresh.h!==23||fresh.min!==59||!onlineReady()||hasSnapshot(n.y,n.m))return;
+   const people=(db.employees||[]).filter(occupied);
+   if(!(db.employees||[]).length)return; // No trustworthy roster to close.
+   const units={};
+   for(const e of people){const k=keyOf(e);units[k]=(units[k]||0)+1;}
+   db.snapshots??=[];
+   db.snapshots.push({year:n.y,month:n.m,units,total:people.length,captured:new Date().toLocaleString('ko-KR',{timeZone:tz}),source:'online-auto-month-end'});
+   // Existing CAS/revision save mechanism prevents silent overwrites by another user.
+   commit('월말 인원 자동 기록',`${n.y}년 ${n.m}월 / ${people.length}명 / 접속 중 자동기록`);
+  }catch(e){console.warn('월말 자동 기록을 완료하지 못했습니다:',e);}
+  finally{closeBusy=false;}
+ }
+ const oldForecast=forecastView;
+ forecastView=function(){
+  return oldForecast.apply(this,arguments).replace('월말마다 저장한 수치가 월말 실적이 됩니다.',
+   '월말 마지막 날 23:59(한국시간)에 로그인된 화면이 열려 있고 공동 DB가 정상 연결되어 있으면 자동 저장을 시도합니다. 이미 기록된 월은 변경하지 않습니다. 화면이 닫혀 있으면 자동 저장되지 않으므로 월말에 기록 여부를 확인하세요.');
+ };
+ window.__hrMonthStatus=()=>({today:parts(),followCurrent,onlineReady:onlineReady(),snapshots:(db.snapshots||[]).length});
+ function tick(){const now=parts();updateViewDate(now);void closeAtMonthEnd();}
+ setInterval(tick,15000);
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick();});
+ // For tests and manual verification; it does not force a month-end capture.
+ window.__hrMonthTick=tick;
 })();
 </script>
 </body></html>
