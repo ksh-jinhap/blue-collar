@@ -4428,4 +4428,54 @@ executiveView=function(){
  };
 })();
 </script>
+
+<script id="dashboardToLayout20261110">
+/* Dashboard-only layout: show organization-level TO lists and move company trend ahead of the corporation bars. */
+(function(){
+ 'use strict';
+ const earlierDashboard=dashboard;
+ dashboard=function(){
+  const html=earlierDashboard.apply(this,arguments);
+  const root=document.createElement('div');root.innerHTML=html;
+  const sections=[...root.querySelectorAll('section.panel')];
+  const priority=sections.find(node=>node.querySelector('h2')?.textContent.trim()==='초과 TO 우선 확인');
+  if(priority)priority.remove();
+  const company=root.querySelector('.hr-company-summary');
+  const corporation=sections.find(node=>['법인별 운영 인원','선택월 말 법인별 인원'].includes(node.querySelector('h2')?.textContent.trim()));
+  // The company summary is a full-width table, not a half-width grid panel.
+  if(company && corporation){
+   const layout=corporation.closest('.section');
+   if(layout){
+    layout.parentNode.insertBefore(company,layout);
+    // Now only the corporation panel remains: let it occupy the full available width.
+    layout.classList.add('dashboard-corp-layout');
+   }else corporation.parentNode.insertBefore(company,corporation);
+  }
+  const cards=root.querySelector('.cards');
+  const y=Number(planYear),m=Number(planMonth),now=new Date();
+  const current=y===now.getFullYear() && m===now.getMonth()+1;
+  const snap=typeof snapshotMonth==='function'?snapshotMonth(y,m):null;
+  const canCompare=!!snap||current;
+  if(cards && canCompare && typeof window.__hrExecToLists==='function'){
+   const plans=plansFor(y),units=snap?.units;
+   const rows=plans.map(p=>{
+    const actual=units&&typeof units==='object'?Number(units[keyOf(p)]||0):unitCount(p);
+    const target=Number(monthTarget(p,m)||0);
+    return {p,diff:actual-target};
+   });
+   const lists=document.createElement('div');
+   lists.className='dashboard-org-to-summary';
+   lists.innerHTML='<div class="hint">조직별 계획 대비 운영 인원 차이 · 부족과 초과를 각각 표시합니다. 전체 기준 초과 TO와 조직별 초과 합계는 다를 수 있습니다.</div>'+window.__hrExecToLists(rows,true);
+   // Avoid duplicating the former inline list beneath the net-surplus KPI.
+   root.querySelectorAll('.dashboard-to-teams').forEach(node=>node.remove());
+   cards.insertAdjacentElement('afterend',lists);
+  }
+  return root.innerHTML;
+ };
+ const style=document.createElement('style');
+ style.id='dashboardOrgToStyle20261110';
+ style.textContent='.dashboard-org-to-summary{margin:12px 0 18px}.dashboard-org-to-summary>.hint{margin:2px 0 9px}.dashboard-org-to-summary .exec-to-lists{margin:0}.dashboard-corp-layout{display:block!important}.dashboard-corp-layout>section.panel{width:100%;max-width:none}';
+ document.head.appendChild(style);
+})();
+</script>
 </body></html>
