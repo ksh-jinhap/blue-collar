@@ -1559,10 +1559,9 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
   const el=document.getElementById('dobBulkStatus');
   if(el){el.textContent=txt;el.style.color=kind==='error'?'#a32626':'#40516a';}
  };
- employeesView=function(){
-  const html=previous();
+ window.__hrDobBulkPanel=function(){
   const bar=`<section class="panel" style="padding:14px 20px;margin-bottom:12px"><div class="toolbar" style="margin:0;gap:10px;flex-wrap:wrap"><button class="btn" type="button" id="dobBulkButton" onclick="window.hrDobPick()">생년월일 일괄 반영</button><input type="file" id="dobBulkFile" accept=".tsv,.txt,text/tab-separated-values,text/plain" style="display:none" onchange="window.hrDobSelect(this)"><button type="button" class="btn primary" id="dobBulkApply" onclick="window.hrDobApply()" style="display:none">검증 결과 반영</button><span class="hint">사번·성명이 모두 일치하는 직원만 변경 · 주민등록번호 전체를 가져오지 않음</span></div><div id="dobBulkStatus" role="status" aria-live="polite" style="padding-top:8px;white-space:pre-line;font-size:13px">TSV 파일을 선택하면 일치 건수와 오류 여부를 이곳에 표시합니다.</div></section>`;
-  return bar+html;
+  return bar;
  };
  window.hrDobPick=()=>{
   staged=[];
@@ -3346,6 +3345,20 @@ window.saveRetirementContractConversion=function(id){
  #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments td{font-size:8.4px!important;padding:2px 2px!important;line-height:1.13!important}
  #hrRecordOverlay #hrRecordPrintArea .hr-record-right .hr-record-section{break-inside:auto!important}
 }
+/* Screen-only personnel-change history: keep original font size and one line per cell.
+   Let columns grow to their content width; scroll only the right-hand history panel
+   when the text cannot fit within half of the record card. Printing is unchanged. */
+@media screen {
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-right { overflow-x:auto; overflow-y:visible; }
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments table {
+  table-layout:auto; width:max-content; min-width:100%;
+ }
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments colgroup col { width:auto!important; }
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments th,
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-appointments td {
+  white-space:nowrap!important; overflow-wrap:normal!important; word-break:normal!important;
+ }
+}
 </style>
 
 <script>
@@ -3743,6 +3756,7 @@ function install(){
  const parent=document.createElement('button');parent.type='button';parent.id='hrCardBulkMenu';parent.className='nav';parent.textContent='▤ 인사기록카드 일괄등록';parent.setAttribute('aria-expanded','false');
  const submenu=document.createElement('div');submenu.id='hrCardBulkSubmenu';submenu.className='hr-card-submenu';submenu.hidden=true;
  for(const [key,cfg] of Object.entries(configs)){const button=document.createElement('button');button.type='button';button.className='nav';button.textContent=cfg.title;button.addEventListener('click',()=>modalFor(key));submenu.append(button);}
+ const dobButton=document.createElement('button');dobButton.type='button';dobButton.className='nav';dobButton.dataset.view='hrDobBulk';dobButton.textContent='생년월일 일괄 반영';dobButton.addEventListener('click',()=>{if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용할 수 있습니다.');return;}submenu.hidden=false;parent.setAttribute('aria-expanded','true');setView('hrDobBulk');});submenu.append(dobButton);
  parent.addEventListener('click',()=>{if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용할 수 있습니다.');return;}submenu.hidden=false;parent.setAttribute('aria-expanded','true');setView('hrCardBulkStatus');});target.append(parent,submenu);
 }
 // Dashboard for registration completeness. This is read-only: never mutates db.
@@ -4836,6 +4850,26 @@ executiveView=function(){
  const oldExecutive=executiveView;
  executiveView=function(){const html=oldExecutive.apply(this,arguments),y=Number(planYear);return html+`<section class="panel exec-section"><h2>07 · 연도별 인원 증감 비교</h2><p class="hint">${y-1}년과 ${y}년의 월별 월말 인원·입퇴사·정원 변화를 비교합니다. 확정되지 않은 값은 비교하지 않습니다.</p><div class="toolbar no-print"><button type="button" class="btn" id="openAnnualFromExecutive">연간 요약 및 상세 비교 보기</button></div>${compareTable(y)}</section>`;};
  document.addEventListener('click',ev=>{if(ev.target.closest('#openAnnualFromExecutive')){ev.preventDefault();setView('annualReview');}});
+})();
+</script>
+<script id="hrDobBulkNavigation20261111">
+/* Relocate DOB import to HR record card bulk submenu without changing import validation or saves. */
+(function(){
+ 'use strict';
+ names.hrDobBulk=['생년월일 일괄 반영','사번·성명 대조 후 생년월일을 일괄 반영합니다.'];
+ const before=render;
+ render=function(){
+  if(view!=='hrDobBulk')return before.apply(this,arguments);
+  if(!window.__hrCloudConnected?.()){view='cloud';return before.apply(this,arguments);}
+  document.querySelectorAll('.nav').forEach(button=>button.classList.toggle('active',button.dataset.view==='hrDobBulk'));
+  const menu=document.getElementById('hrCardBulkMenu');
+  const sub=document.getElementById('hrCardBulkSubmenu');
+  if(menu)menu.classList.add('active');
+  if(sub){sub.hidden=false;menu?.setAttribute('aria-expanded','true');}
+  document.getElementById('heading').textContent=names.hrDobBulk[0];
+  document.getElementById('subheading').textContent=names.hrDobBulk[1];
+  document.getElementById('content').innerHTML=window.__hrDobBulkPanel?.()||'<section class="panel">등록 화면을 불러오지 못했습니다.</section>';
+ };
 })();
 </script>
 </body></html>
