@@ -4120,7 +4120,7 @@ const statusAllowed=new Set(['재직','휴직','파견','대기','산재','육�
 let staged=null;
 function validDay(v){if(!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const [y,m,d]=v.split('-').map(Number),x=new Date(Date.UTC(y,m-1,d));return x.getUTCFullYear()===y&&x.getUTCMonth()===m-1&&x.getUTCDate()===d;}
 function monthEnd(code){const [y,m]=code.split('-').map(Number);return new Date(Date.UTC(y,m,0)).toISOString().slice(0,10);}
-function pastMonth(code){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(code))return false;const current=new Date(),thisMonth=current.getFullYear()+'-'+String(current.getMonth()+1).padStart(2,'0');return code<thisMonth&&(code==='2025-12'||code.startsWith('2026-'));}
+function pastMonth(code){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(code))return false;const current=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).formatToParts(new Date());const value=t=>current.find(x=>x.type===t)?.value;const thisMonth=value('year')+'-'+value('month');return Number(code.slice(0,4))>=2000&&code<thisMonth;}
 function excelDay(v){let t=clean(v);if(/^\d{4}-\d{2}-\d{2}$/.test(t))return t;if(/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(t)){const [y,m,d]=t.split('/').map(Number);return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}if(/^\d{5}(?:\.0+)?$/.test(t)){const n=Number(t);if(n>20000&&n<100000)return new Date(Date.UTC(1899,11,30)+n*86400000).toISOString().slice(0,10);}return t;}
 function getText(root,tag){return root.getElementsByTagName(tag)[0]?.textContent||'';}
 async function inflate(data){if(typeof DecompressionStream==='undefined')throw Error('이 브라우저는 XLSX 압축 해제를 지원하지 않습니다. 최신 Chrome 또는 Edge를 사용하세요.');let stream=new Blob([data]).stream().pipeThrough(new DecompressionStream('deflate-raw'));let buf=await new Response(stream).arrayBuffer();if(buf.byteLength>60*1024*1024)throw Error('엑셀 압축 해제 크기가 제한을 초과했습니다.');return new Uint8Array(buf);}
@@ -4175,7 +4175,7 @@ function stage(rows){
   const kind=clean(r['자료구분']);if(kind==='예시'){excluded.push(r._row);continue;}
   if(kind!=='실제'){errors.push(`행 ${r._row}: 자료구분은 '실제'로 입력하세요.`);continue;}
   const m=clean(r['기준월']),no=clean(r['사번']),name=clean(r['성명']),corp=clean(r['법인']),hq=clean(r['본부']),dept=clean(r['부서']),st=clean(r['재직상태']);
-  if(!pastMonth(m)){errors.push(`행 ${r._row}: 현재 월 이전의 2026년 기록 또는 2025-12만 허용합니다.`);continue;}
+  if(!pastMonth(m)){errors.push(`행 ${r._row}: 완료된 과거 월만 등록할 수 있습니다.`);continue;}
   if(!no||!name||!corp||!hq||!dept){errors.push(`행 ${r._row}: 사번·성명·법인·본부·부서는 필수입니다.`);continue;}
   if(!statusAllowed.has(st)){errors.push(`행 ${r._row}: 퇴사자는 해당 월말 재직 명부에 등록할 수 없습니다. 상태를 확인하세요.`);continue;}
   const hire=excelDay(r['입사일']),exit=excelDay(r['퇴사일']);
@@ -4196,7 +4196,7 @@ function stage(rows){
 function statusBox(s){const summaries=[...s.months].sort(([a],[b])=>a.localeCompare(b)).map(([m,g])=>`<tr><td>${html(m)}</td><td class="right">${g.people.length}명</td><td class="right">${g.org.size}개</td><td>${html((db.snapshots||[]).some(x=>Number(x.year)===Number(m.slice(0,4))&&Number(x.month)===Number(m.slice(5)))?'기존 기록 존재':'신규 기록')}</td></tr>`).join('');
  return `<div class="notice">읽은 행 ${s.rowsCount}행 · 예시 제외 ${s.excluded.length}행 · 등록 예정 ${s.months.size}개월 / ${[...s.months.values()].reduce((n,g)=>n+g.people.length,0)}명-월 · 오류 ${s.errors.length}건</div><div class="tablewrap" style="max-height:230px"><table><thead><tr><th>월</th><th class="right">인원</th><th class="right">조직 수</th><th>구분</th></tr></thead><tbody>${summaries}</tbody></table></div>${s.errors.length?`<div class="notice" style="background:#fff1f0;color:#a02323;border-color:#ffcccc"><b>등록 불가 — 오류 ${s.errors.length}건</b><div style="max-height:170px;overflow:auto;white-space:pre-wrap">${html(s.errors.slice(0,100).join('\n'))}${s.errors.length>100?'\n... 그 외 오류 있음':''}</div></div>`:'<p class="hint">검증 통과: 아직 저장되지 않았습니다. 매월 전체 대상자의 명부가 빠짐없는지 직접 확인해 주세요.</p>'}`;
 }
-function rosterMarkup(){return `<section class="panel"><h2>과거 월말 직원명부 일괄등록</h2><div class="notice"><b>입력 범위:</b> 2025년 12월 및 2026년의 완료된 월말 자료. 엑셀의 첫 번째 '월말직원명부' 시트만 읽습니다. 나머지 6개 시트는 자료 정리용이며 이 메뉴에서 자동 반영하지 않습니다.</div><p class="hint">월말 당시 재직·휴직·파견 등 인원으로 집계된 <b>직원 전체 명부</b>를 월별로 작성하세요. 명단 일부만 등록하면 그 달의 인원 전체가 잘못 기록됩니다. 현재 직원 명부·인사발령 이력·계획 정원은 변경하지 않습니다.</p><div class="toolbar"><a class="btn" href="#" id="pastTemplateInfo">엑셀 작성 방법</a><label class="btn primary" style="cursor:pointer">엑셀 파일 선택<input id="pastRosterFile" type="file" accept=".xlsx" hidden></label><span class="muted" id="pastFilename">파일 선택 전</span></div><div id="pastPreview" class="hint">파일을 선택하면 등록 전 검사 결과가 표시됩니다.</div><label style="display:flex;align-items:flex-start;gap:8px;margin:16px 0"><input type="checkbox" id="pastRosterComplete" style="width:auto;margin:3px 0"><span>등록 대상 <b>각 월말의 전체 인원 명부가 완전하고 정확함</b>을 확인했습니다. 일부 직원만 포함한 파일은 확정 기록으로 저장하지 않습니다.</span></label><button class="btn primary" id="pastRosterApply" disabled>검증된 과거 월말 기록 저장</button><p class="hint">기존 월말 기록이 있는 달은 덮어쓰지 않습니다. 로그인된 공동 DB에 저장 요청 후 최종 저장 완료 표시를 확인하세요. 대용량 파일은 월별로 나누어 등록하세요.</p></section>`;}
+function rosterMarkup(){return `<section class="panel"><h2>과거 월말 직원명부 일괄등록</h2><div class="notice"><b>입력 범위:</b> 2000년 이후 현재 월보다 이전의 완료된 월말 자료. 엑셀의 첫 번째 '월말직원명부' 시트만 읽습니다. 나머지 6개 시트는 자료 정리용이며 이 메뉴에서 자동 반영하지 않습니다.</div><p class="hint">월말 당시 재직·휴직·파견 등 인원으로 집계된 <b>직원 전체 명부</b>를 월별로 작성하세요. 명단 일부만 등록하면 그 달의 인원 전체가 잘못 기록됩니다. 현재 직원 명부·인사발령 이력·계획 정원은 변경하지 않습니다.</p><div class="toolbar"><a class="btn" href="#" id="pastTemplateInfo">엑셀 작성 방법</a><label class="btn primary" style="cursor:pointer">엑셀 파일 선택<input id="pastRosterFile" type="file" accept=".xlsx" hidden></label><span class="muted" id="pastFilename">파일 선택 전</span></div><div id="pastPreview" class="hint">파일을 선택하면 등록 전 검사 결과가 표시됩니다.</div><label style="display:flex;align-items:flex-start;gap:8px;margin:16px 0"><input type="checkbox" id="pastRosterComplete" style="width:auto;margin:3px 0"><span>등록 대상 <b>각 월말의 전체 인원 명부가 완전하고 정확함</b>을 확인했습니다. 일부 직원만 포함한 파일은 확정 기록으로 저장하지 않습니다.</span></label><button class="btn primary" id="pastRosterApply" disabled>검증된 과거 월말 기록 저장</button><p class="hint">기존 월말 기록이 있는 달은 덮어쓰지 않습니다. 로그인된 공동 DB에 저장 요청 후 최종 저장 완료 표시를 확인하세요. 대용량 파일은 월별로 나누어 등록하세요.</p></section>`;}
 function renderPage(){document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view==='pastRoster'));$id('heading').textContent='과거 월말 데이터 일괄등록';$id('subheading').textContent='엑셀 월말직원명부 검증 후 과거 확정 인원 저장';$id('content').innerHTML=rosterMarkup();
  $id('pastTemplateInfo').onclick=e=>{e.preventDefault();alert('제공된 7개 시트 엑셀 양식에서 첫 번째 월말직원명부를 작성하세요. 자료구분은 실제, 기준월은 YYYY-MM이며 각 월말 전체 재직 대상자를 한 명당 한 행으로 입력합니다. 예시 행은 저장 대상에서 제외됩니다. 날짜는 YYYY-MM-DD로 입력하세요.');};
  $id('pastRosterFile').onchange=async e=>{staged=null;$id('pastRosterApply').disabled=true;$id('pastRosterComplete').checked=false;const f=e.target.files?.[0];if(!f)return;$id('pastFilename').textContent=f.name;$id('pastPreview').textContent='엑셀 검사 중...';try{staged=stage(await readRoster(f));$id('pastPreview').innerHTML=statusBox(staged);$id('pastRosterApply').disabled=Boolean(staged.errors.length);}catch(err){$id('pastPreview').textContent='파일 검사 실패: '+err.message;}};
@@ -4245,8 +4245,8 @@ function flow(s,c='',h='',d=''){
  return {hires,exits};
 }
 window.__hrAggregateFlow=flow;
-const validMonth=s=>/^2026-(0[1-9]|1[0-2])$/.test(s)||s==='2025-12';
-function pastMonth(s){if(!validMonth(s))return false;const d=new Date(),current=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;return s<current;}
+const validMonth=s=>/^\d{4}-(0[1-9]|1[0-2])$/.test(s)&&Number(s.slice(0,4))>=2000;
+function pastMonth(s){if(!validMonth(s))return false;const d=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit'}).formatToParts(new Date());const value=t=>d.find(x=>x.type===t)?.value;return s<value('year')+'-'+value('month');}
 function snapshotKey(y,m){return Number(y)+'-'+Number(m);}
 function getSnapshot(m){const [y,mm]=m.split('-');return (db.snapshots||[]).find(s=>snapshotKey(s.year,s.month)===snapshotKey(y,mm));}
 let preview=null;
@@ -4257,7 +4257,7 @@ function stage(rows){
   if(kind==='예시'){skipped.push(r.line);continue;}
   if(kind!=='실제'){errors.push(`행 ${r.line}: 자료구분을 '실제'로 입력하세요.`);continue;}
   const m=val('기준월'),corp=val('법인'),hq=normalizedHQ(val('본부')),dept=val('부서');
-  if(!pastMonth(m)){errors.push(`행 ${r.line}: 등록 가능 월은 2025-12 또는 완료된 2026년 월입니다.`);continue;}
+  if(!pastMonth(m)){errors.push(`행 ${r.line}: 등록 가능 월은 현재 월보다 이전의 완료된 월입니다.`);continue;}
   if(!corp||!hq||!dept){errors.push(`행 ${r.line}: 법인·본부·부서는 필수입니다.`);continue;}
   const nums=[];
   for(const key of ['월말인원','입사인원','퇴사인원']){
@@ -4290,7 +4290,7 @@ function stage(rows){
 const previewWarnings=new Map();
 function markup(){return `<section class="panel"><h2>과거 월별 인원 간편 일괄등록</h2>
  <div class="notice"><b>입력:</b> 월별 법인·본부·부서별 월말인원·입사인원·퇴사인원만 등록합니다. 사번 또는 직원별 명부는 필요하지 않습니다. 본부는 <b>제조본부 / 화스너생산실</b>로 입력해도 <b>화스너생산실</b>로 자동 연결됩니다. 부서는 사업계획과 동일하게 <b>생산1팀(단조)</b>, <b>생산1팀(전조)</b>를 각각 입력하세요.<br><b>반영:</b> 대시보드, 인력 증감 분석(표·그래프), 과거 월별 경영진 보고서 및 정원 대비 분석.</div>
- <p class="hint">2025년 12월 및 2026년 완료된 월만 등록합니다. 기존 월말 기록은 변경하지 않습니다. 현재 직원 명부, 입퇴사자 명단, 인사기록카드, 계획 정원은 변경되지 않습니다. 입사·퇴사 수는 직원별 명부로 변환되지 않습니다.</p>
+ <p class="hint">현재 월보다 이전의 완료된 월은 연도와 관계없이 등록할 수 있습니다. 기존 월말 기록은 변경하지 않습니다. 현재 직원 명부, 입퇴사자 명단, 인사기록카드, 계획 정원은 변경되지 않습니다. 입사·퇴사 수는 직원별 명부로 변환되지 않습니다.</p>
  <div class="toolbar"><label class="btn primary" style="cursor:pointer">간편 엑셀 파일 선택 <input type="file" id="simpleExcelFile" accept=".xlsx" hidden></label><span id="simpleFileName" class="muted">파일을 선택해 주세요.</span></div>
  <div id="simplePreview" class="hint">파일을 선택하면 검증 결과와 월별 합계를 표시합니다.</div>
  <label style="display:flex;gap:9px;margin:18px 0;align-items:start"><input type="checkbox" id="simpleComplete" style="width:auto;margin-top:3px"><span>각 월별 <b>모든 대상 조직의 인원과 입퇴사 숫자가 빠짐없이 포함</b>되었고, 인원 집계 기준이 동일함을 확인했습니다.</span></label>
@@ -4310,7 +4310,7 @@ function status(p){
 function page(){
  document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view==='simpleMonthly'));
  byId('heading').textContent='과거 월별 인원 간편등록';
- byId('subheading').textContent='월말 인원·입사·퇴사 숫자만으로 2026년 월별 비교자료 구축';
+ byId('subheading').textContent='완료된 모든 연도의 월말 인원·입사·퇴사 일괄등록';
  byId('content').innerHTML=markup();
  byId('simpleExcelFile').onchange=async e=>{
   preview=null;previewWarnings.clear();byId('simpleApply').disabled=true;byId('simpleComplete').checked=false;
@@ -4703,6 +4703,85 @@ executiveView=function(){
  document.addEventListener('visibilitychange',()=>{if(!document.hidden)tick();});
  // For tests and manual verification; it does not force a month-end capture.
  window.__hrMonthTick=tick;
+})();
+</script>
+<style id="hrAnnualAnalyticsStyle">
+.hr-annual-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}.hr-annual-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:12px 0}.hr-annual-summary .card{min-width:0}.hr-annual-key{background:#edf5ff;font-weight:700}.hr-annual-table{width:100%;border-collapse:collapse}.hr-annual-table th,.hr-annual-table td{padding:9px 10px;border-bottom:1px solid #e7eaf1;text-align:right;white-space:nowrap}.hr-annual-table th:first-child,.hr-annual-table td:first-child{text-align:left}.hr-annual-table thead th{background:#f3f6fb}.hr-annual-muted{color:#66758b;font-size:12px}.hr-annual-na{color:#a16c29}.hr-annual-comparison{margin-top:18px}
+@media(max-width:950px){.hr-annual-grid{grid-template-columns:1fr}.hr-annual-summary{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:560px){.hr-annual-summary{grid-template-columns:1fr 1fr}}
+@media print{.hr-annual-grid{grid-template-columns:1fr 1fr!important}}
+</style>
+<script id="hrLongTermAnnualReports20261110">
+(function(){
+ 'use strict';
+ const escText=x=>esc(String(x??''));
+ const fmtNum=x=>x==null?'미기록':fmt(x);
+ const kstNow=()=>{const p=Object.fromEntries(new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date()).filter(x=>x.type!=='literal').map(x=>[x.type,Number(x.value)]));return p;};
+ const monthCode=(y,m)=>String(y)+'-'+String(m).padStart(2,'0');
+ const snapshots=()=>Array.isArray(db.snapshots)?db.snapshots:[];
+ const planRows=y=>(db.plans||[]).filter(p=>Number(p.year)===Number(y));
+ const num=x=>{if(x===null||x===undefined||x==='')return 0;const n=Number(x);return Number.isFinite(n)?n:0;};
+ function yearRows(y){
+  const now=kstNow(),todayKey=monthCode(now.year,now.month);
+  const plans=planRows(y);
+  return Array.from({length:12},(_,i)=>{
+   const month=i+1,code=monthCode(y,month);
+   const snap=snapshots().find(s=>Number(s.year)===y&&Number(s.month)===month);
+   const isFuture=code>todayKey,isCurrent=code===todayKey;
+   // Historical headcount is always taken from an actual saved snapshot.
+   // Current month is explicitly provisional and never silently written to history.
+   const known=!!snap&&Number.isFinite(Number(snap.total));
+   const headcount=known?Number(snap.total):isCurrent?(db.employees||[]).filter(occupied).length:null;
+   const planKnown=plans.length>0;
+   const target=planKnown?plans.reduce((a,p)=>{const value=p.months?.[i];return a+num(value===undefined||value===null||value===''?p.target:value);},0):null;
+   const flow=typeof window.__hrExecMonthFlow==='function'&&!isFuture?window.__hrExecMonthFlow(y,month):null;
+   return {year:y,month,code,headcount,headSource:known?'월말 확정':isCurrent?'당월 잠정':isFuture?'미래 월':'미기록',target,hires:flow?num(flow.hires):null,exits:flow?num(flow.exits):null,flowSource:flow?.source||'미기록'};
+  });
+ }
+ function aggregate(y){
+  const rows=yearRows(y),saved=rows.filter(r=>r.headSource==='월말 확정');
+  const start=rows[0].headcount,end=rows[11].headcount;
+  const sumOf=key=>{const v=rows.filter(r=>r[key]!=null);return {sum:v.reduce((a,r)=>a+r[key],0),months:v.length};};
+  const hires=sumOf('hires'),exits=sumOf('exits');
+  const plans=sumOf('target');
+  return {year:y,rows,saved:saved.length,hires,exits,plans,yearEnd:end,yearEndConfirmed:rows[11].headSource==='월말 확정',currentOrLast:rows.filter(r=>r.headcount!=null).at(-1)||null};
+ }
+ window.__hrAnnualRows=yearRows;
+ window.__hrAnnualAggregate=aggregate;
+ const status=(n,d)=>`${n}/12개월`;
+ const cell=(v,post='')=>v==null?'<span class="hr-annual-na">미기록</span>':escText(fmt(v)+post);
+ function rowList(rows){return `<div class="tablewrap"><table class="hr-annual-table"><thead><tr><th>월</th><th>월말/현재 인원</th><th>입사</th><th>퇴사</th><th>계획 정원</th><th>운영 − 계획</th><th>자료 기준</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${r.month}월</td><td>${cell(r.headcount)}</td><td>${cell(r.hires)}</td><td>${cell(r.exits)}</td><td>${cell(r.target)}</td><td>${r.headcount==null||r.target==null?'<span class="hr-annual-na">미산정</span>':cell(r.headcount-r.target)}</td><td class="hr-annual-muted">${escText(r.headSource)} / ${escText(r.flowSource)}</td></tr>`).join('')}</tbody></table></div>`;}
+ function compareTable(y){
+  const a=yearRows(y),b=yearRows(y-1);
+  const labels=[['월말/현재 인원','headcount'],['입사 인원','hires'],['퇴사 인원','exits'],['계획 정원','target']];
+  const tables=labels.map(([title,key])=>{
+   const rows=a.map((r,i)=>{const left=b[i][key],right=r[key],delta=left==null||right==null?null:right-left;return `<tr><td>${i+1}월${r.headSource==='당월 잠정'&&key==='headcount'?' (잠정)':''}</td><td>${cell(left)}</td><td>${cell(right)}</td><td>${delta==null?'<span class="hr-annual-na">비교 불가</span>':escText((delta>0?'+':'')+fmt(delta))}</td></tr>`;}).join('');
+   return `<section class="panel"><h3>${escText(title)}</h3><div class="tablewrap"><table class="hr-annual-table"><thead><tr><th>월</th><th>${y-1}년</th><th>${y}년</th><th>증감</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+  }).join('');
+  return `<div class="hr-annual-comparison"><h2>${y-1}년 ↔ ${y}년 월별 비교</h2><p class="hint">같은 달끼리 비교합니다. 확정 기록이 없는 과거 월과 미래 월은 비교 불가로 표시합니다. 진행 중인 당월 인원은 잠정값입니다.</p><div class="hr-annual-grid">${tables}</div></div>`;
+ }
+ function summaryCard(label,value,note){return `<div class="card"><div class="label">${escText(label)}</div><div class="num">${escText(value)}</div><div class="note">${escText(note)}</div></div>`;}
+ function annualView(){
+  const y=Number(planYear),r=aggregate(y),h=r.hires,e=r.exits;
+  return yearPicker()+`<section class="panel"><div class="report-head"><div><h2>${y}년 연간 인원·입퇴사·TO 요약</h2><p class="hint">2027년 이후에도 저장된 월별 실적을 누적 조회합니다. 당월 잠정 수치와 과거 확정 기록을 구분합니다.</p></div><button type="button" class="btn primary no-print" onclick="window.print()">인쇄 / PDF 저장</button></div><div class="hr-annual-summary">${summaryCard('월말 확정 기록',status(r.saved), '저장된 월말 기록 수')}${summaryCard('입사 합계',h.months?fmt(h.sum)+'명':'미기록',h.months+'개월 자료 합산')}${summaryCard('퇴사 합계',e.months?fmt(e.sum)+'명':'미기록',e.months+'개월 자료 합산')}${summaryCard('12월 말 인원',r.yearEndConfirmed?fmt(r.yearEnd)+'명':'미확정','12월 월말 확정 기록 기준')}${summaryCard('12월 계획 정원',r.rows[11].target==null?'미등록':fmt(r.rows[11].target)+'명','12월 등록 사업계획 기준')}${summaryCard('연말 운영 − 계획',r.yearEndConfirmed&&r.rows[11].target!=null?((r.yearEnd-r.rows[11].target)>0?'+':'')+fmt(r.yearEnd-r.rows[11].target)+'명':'미산정','연말 운영 인원에서 계획 정원 차감')}</div><div class="notice">입퇴사 합계는 자료가 있는 달만 합산한 부분 합계입니다. 전체 12개월이 기록되지 않았다면 연간 확정 실적으로 해석하지 마세요. 월말 기록, 직원 등록기록(참고), 당월 잠정 수치는 구분 표시합니다.</div></section><section class="panel"><h2>${y}년 월별 실적 및 계획 정원</h2>${rowList(r.rows)}</section>${compareTable(y)}`;
+ }
+ const folders=[...document.querySelectorAll('.nav-folder')];
+ const people=folders.find(f=>f.querySelector('.folder-head')?.textContent.includes('인원관리'))?.querySelector('.folder-items');
+ if(people&&!people.querySelector('[data-view="annualReview"]')){
+  const btn=document.createElement('button');btn.type='button';btn.className='nav';btn.dataset.view='annualReview';btn.textContent='연간 인원·입퇴사·TO 분석';btn.addEventListener('click',()=>setView('annualReview'));people.appendChild(btn);
+ }
+ names.annualReview=['연간 인원·입퇴사·TO 분석','연도별 월말 인원·입퇴사·사업계획 비교 및 누적 요약'];
+ const previousRender=render;
+ render=function(){if(view==='annualReview'){
+  document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.view==='annualReview'));
+  document.getElementById('heading').textContent=names.annualReview[0];
+  document.getElementById('subheading').textContent=names.annualReview[1];
+  document.getElementById('content').innerHTML=annualView();return;
+ }return previousRender.apply(this,arguments);};
+ const previousSetView=setView;
+ setView=function(v){if(v==='annualReview'){view=v;return render();}return previousSetView.apply(this,arguments);};
+ const oldExecutive=executiveView;
+ executiveView=function(){const html=oldExecutive.apply(this,arguments),y=Number(planYear);return html+`<section class="panel exec-section"><h2>07 · 연도별 인원 증감 비교</h2><p class="hint">${y-1}년과 ${y}년의 월별 월말 인원·입퇴사·정원 변화를 비교합니다. 확정되지 않은 값은 비교하지 않습니다.</p><div class="toolbar no-print"><button type="button" class="btn" id="openAnnualFromExecutive">연간 요약 및 상세 비교 보기</button></div>${compareTable(y)}</section>`;};
+ document.addEventListener('click',ev=>{if(ev.target.closest('#openAnnualFromExecutive')){ev.preventDefault();setView('annualReview');}});
 })();
 </script>
 </body></html>
