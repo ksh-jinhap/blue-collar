@@ -4910,8 +4910,8 @@ executiveView=function(){
  const personMenu=[...document.querySelectorAll('.nav-folder')].find(f=>f.querySelector('.folder-head')?.textContent.includes('인원관리'))?.querySelector('.folder-items');
  if(personMenu&&!personMenu.querySelector('[data-view="talent"]')){
   const btn=document.createElement('button');btn.type='button';btn.className='nav';btn.dataset.view='talent';btn.textContent='핵심인재관리';
-  const employeeButton=personMenu.querySelector('[data-view="employees"]');
-  if(employeeButton)employeeButton.insertAdjacentElement('afterend',btn);else personMenu.appendChild(btn);
+  // Keep Talent Management as the last sub-menu under Personnel Management.
+  personMenu.appendChild(btn);
   btn.addEventListener('click',()=>setView('talent'));
  }
  function talentView(){
