@@ -4982,4 +4982,65 @@ executiveView=function(){
  document.addEventListener('change',ev=>{if(ev.target.id==='hrTalentSearch'){query=ev.target.value.trim();render();}});
 })();
 </script>
+<script id="hrUnionRole20261111">
+/* Union role is an optional attribute on an employee's existing shared record.
+   Do not infer a role for members who have not explicitly selected one. */
+(function(){
+ 'use strict';
+ const KEY='union_role';
+ const ROLES=['조합원','대의원','회계감사','사무국장','부위원장','위원장'];
+ const roleValue=value=>ROLES.includes(String(value||''))?String(value):'';
+ const previousOpen=window.openEmployee;
+ window.openEmployee=function(id=null,encoded=''){
+  const result=previousOpen.apply(this,arguments);
+  const union=document.getElementById('eUnion');
+  const grid=document.querySelector('#modalBody .formgrid');
+  if(!union||!grid||document.getElementById('eUnionRole'))return result;
+  const employee=id==null?null:(db.employees||[]).find(item=>String(item.id)===String(id));
+  const label=document.createElement('label');
+  label.id='eUnionRoleLabel';
+  label.textContent='노조 담당 직책';
+  const select=document.createElement('select');
+  select.id='eUnionRole';
+  select.setAttribute('aria-label','노조 담당 직책');
+  for(const [value,text] of [['','선택'],...ROLES.map(role=>[role,role])]){
+   const option=document.createElement('option');option.value=value;option.textContent=text;select.appendChild(option);
+  }
+  select.value=roleValue(employee?.[KEY]);
+  label.appendChild(select);
+  union.closest('label')?.insertAdjacentElement('afterend',label);
+  if(!label.isConnected)grid.appendChild(label);
+  function update(){
+   const joined=union.value==='가입';
+   label.style.display=joined?'':'none';
+   select.disabled=!joined;
+  }
+  union.addEventListener('change',update);
+  update();
+  return result;
+ };
+ const previousSave=window.saveEmployee;
+ window.saveEmployee=function(id){
+  const picker=document.getElementById('eUnionRole');
+  const union=document.getElementById('eUnion');
+  const intended=picker&&union?(union.value==='가입'?roleValue(picker.value):''):null;
+  const before=(db.employees||[]).length;
+  const employee=id==null?null:(db.employees||[]).find(item=>String(item.id)===String(id));
+  const result=previousSave.apply(this,arguments);
+  // Base editor leaves its modal open when validation fails.
+  if(intended===null||document.getElementById('modalWrap')?.classList.contains('open'))return result;
+  const target=employee||((db.employees||[]).length>before?db.employees.at(-1):null);
+  if(!target)return result;
+  const old=String(target[KEY]||'');
+  if(old===intended)return result;
+  if(intended)target[KEY]=intended;
+  else delete target[KEY];
+  if(employee){
+   db.audit.unshift({id:uid(),date:new Date().toLocaleString('ko-KR'),action:'노조 담당 직책 변경',detail:String(target.employee_no||'')+' / '+(old||'미지정')+' → '+(intended||'미지정')});
+  }
+  save();render();
+  return result;
+ };
+})();
+</script>
 </body></html>
