@@ -3423,15 +3423,17 @@ window.saveRetirementContractConversion=function(id){
   'employment_type':e.employment_type,'hire_date':e.hire_date,'exit_date':e.exit_date,
   'appointment_date':latestChangeDate,'regular_conversion':window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date,
   'manager_role':e.field_leader_role,'status':e.status,'resident_address':x.resident_address,
-  'family_note':x.family_note
+  'family_note':x.family_note,'age':typeof displayAge==='function'?displayAge(e):e.age,
+  'union_status':e.union_status||'미확인'
  };return show(values[k]);}
  const basic=[
-  ['사번','employee_no'],['성명','name'],['성별','gender'],
-  ['생년월일','birth_date'],['결혼구분','marital_status'],['학력구분','academic_category'],['병역구분','military_category'],
-  ['근무기간','work_period'],['본부','headquarters'],['부서','department'],
-  ['직책','manager_role'],['입사구분','employment_category'],
-  ['입사일','hire_date'],['퇴사일','exit_date'],['인사변동일','appointment_date'],['정규직 전환일','regular_conversion'],
-  ['법인','corporation'],['고용형태','employment_type'],['직위','position'],['직급','grade'],['현재 상태','status']
+  ['생년월일','birth_date'],['근무기간','work_period'],['나이','age'],
+  ['법인','corporation'],['본부','headquarters'],['부서','department'],
+  ['직위','position'],['직급','grade'],['직책','manager_role'],
+  ['입사구분','employment_category'],['입사일','hire_date'],['정규직 전환일','regular_conversion'],
+  ['최근 인사변동일','appointment_date'],['퇴사일','exit_date'],['고용형태','employment_type'],
+  ['노동조합 가입여부','union_status'],['성별','gender'],['현재 상태','status'],
+  ['병역구분','military_category'],['결혼구분','marital_status'],['학력구분','academic_category']
  ];
  function tableSection(title,cols,rows){
   rows=rows.filter(row=>row.some(v=>String(v??'').trim()!==''));
@@ -3466,7 +3468,7 @@ window.saveRetirementContractConversion=function(id){
   // Do not use the historical manually entered card field as a fallback.
   const latestChangeDate=evt.map(h=>String(h.event_date||'').slice(0,10))
    .find(d=>/^\d{4}-\d{2}-\d{2}$/.test(d))||'';
-  const items=basic.map(([label,k])=>`<div class="hr-record-item"><span>${safe(label)}</span><strong>${cardValue(e,x,k,latestChangeDate)}</strong></div>`).join('');
+  const items=basic.map(([label,k])=>`<div class="hr-record-item${k==='age'||k==='union_status'?' hr-record-emphasis':''}"><span>${safe(label)}</span><strong>${cardValue(e,x,k,latestChangeDate)}</strong></div>`).join('');
   const sectionHtml={};
   for(const item of lists){
    const rows=arrOf(x,item.key).map(record=>item.columns.map(([key])=>item.key==='school'&&key==='category'?(e.education||''):item.key==='career'&&key==='start_date'&&!record.start_date&&record.period?record.period:(record[key]||'')));
@@ -3484,7 +3486,7 @@ window.saveRetirementContractConversion=function(id){
    <div class="hr-record-top">
     <div class="hr-record-left-column">
      <div class="hr-record-primary">
-      <div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div>
+      <div class="hr-record-photo-column"><div class="hr-record-photo" id="hrRecordPhoto"><div>사진<br>미등록</div></div><div class="hr-record-photo-caption"><span>성명</span><strong>${show(e.name)}</strong><span>사번</span><strong>${show(e.employee_no)}</strong></div></div>
       <div class="hr-record-left-details">
        <div class="hr-record-items">${items}</div>
        <div class="hr-record-note${String(x.resident_address||'').trim()?'':' hr-record-no-data'}"><b>주민등록주소</b><span>${show(x.resident_address)}</span></div>
@@ -4870,6 +4872,101 @@ executiveView=function(){
   document.getElementById('subheading').textContent=names.hrDobBulk[1];
   document.getElementById('content').innerHTML=window.__hrDobBulkPanel?.()||'<section class="panel">등록 화면을 불러오지 못했습니다.</section>';
  };
+})();
+</script>
+
+<style id="hrTalentAndCardStyle20261111">
+#hrRecordPrintArea .hr-record-item.hr-record-emphasis>span{color:#dc2626}
+/* Employee record card: photo + employee identification stays at the left.
+   Its basic information follows the approved three-column sequence. */
+#hrRecordPrintArea .hr-record-photo-column{min-width:0;display:flex;flex-direction:column;gap:5px}
+#hrRecordPrintArea .hr-record-photo-caption{display:flex;flex-direction:column;gap:1px;font-size:10px;overflow-wrap:anywhere}
+#hrRecordPrintArea .hr-record-photo-caption span{color:#64748b;font-size:10px}
+#hrRecordPrintArea .hr-record-photo-caption strong{font-size:12px;color:#14263e;line-height:1.3}
+#hrRecordPrintArea .hr-record-items{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media print{
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-photo-column{min-width:0!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-photo-caption{font-size:8px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-photo-caption span{font-size:8px!important}
+ #hrRecordOverlay #hrRecordPrintArea .hr-record-photo-caption strong{font-size:10px!important}
+}
+.hr-talent-tabs{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 17px}
+.hr-talent-tabs .btn[aria-pressed="true"]{background:#1d4ed8;color:white;border-color:#1d4ed8}
+.hr-talent-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.hr-talent-summary .card{margin:0}
+.hr-talent-name{font-weight:700;white-space:nowrap}
+@media(max-width:680px){.hr-talent-summary{grid-template-columns:1fr}}
+</style>
+<script id="hrTalentManagement20261111">
+/* Keep employee talent classification in the employee object so the existing
+   shared-state save, backup and restore mechanisms carry it automatically. */
+(function(){
+ 'use strict';
+ const KEY='talent_category',allowed=new Set(['GOOD','BAD']);
+ const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ let selected='GOOD',query='';
+ const normalize=v=>allowed.has(String(v||''))?String(v):'';
+ names.talent=['핵심인재관리','GOOD 인재와 BAD 인재를 구분하여 조회합니다. 직원 수정에서 분류를 변경할 수 있습니다.'];
+ const personMenu=[...document.querySelectorAll('.nav-folder')].find(f=>f.querySelector('.folder-head')?.textContent.includes('인원관리'))?.querySelector('.folder-items');
+ if(personMenu&&!personMenu.querySelector('[data-view="talent"]')){
+  const btn=document.createElement('button');btn.type='button';btn.className='nav';btn.dataset.view='talent';btn.textContent='핵심인재관리';
+  const employeeButton=personMenu.querySelector('[data-view="employees"]');
+  if(employeeButton)employeeButton.insertAdjacentElement('afterend',btn);else personMenu.appendChild(btn);
+  btn.addEventListener('click',()=>setView('talent'));
+ }
+ function talentView(){
+  const all=db.employees||[];
+  const active=all.filter(e=>e.status!=='퇴사');
+  const shown=active.filter(e=>normalize(e[KEY])===selected).filter(e=>!query||[e.employee_no,e.name,e.corporation,e.headquarters,e.department].some(v=>String(v||'').toLocaleLowerCase().includes(query.toLocaleLowerCase())));
+  const count=kind=>active.filter(e=>normalize(e[KEY])===kind).length;
+  const rows=shown.map(e=>`<tr><td>${safe(e.employee_no)}</td><td class="hr-talent-name">${safe(e.name)}</td><td>${safe(e.corporation)}</td><td>${safe(e.headquarters)}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>${safe(e.grade)}</td><td>${safe(e.status)}</td><td><button type="button" class="btn tiny" data-hr-talent-edit="${safe(String(e.id))}">수정</button></td></tr>`).join('');
+  return `<div class="hr-talent-summary">${card('GOOD 인재',count('GOOD'),'현재 운영 직원 기준')}${card('BAD 인재',count('BAD'),'현재 운영 직원 기준')}${card('미분류',active.filter(e=>!normalize(e[KEY])).length,'아직 분류하지 않은 직원')}</div><section class="panel"><div class="report-head"><div><h2>핵심인재 분류 현황</h2><p class="hint">분류는 직원 수정에서 지정하며 기존 데이터에는 기본적으로 미분류가 적용됩니다. 퇴사자는 현재 목록에서 제외됩니다.</p></div></div><div class="hr-talent-tabs"><button type="button" class="btn" data-hr-talent-tab="GOOD" aria-pressed="${selected==='GOOD'}">GOOD 인재 (${count('GOOD')}명)</button><button type="button" class="btn" data-hr-talent-tab="BAD" aria-pressed="${selected==='BAD'}">BAD 인재 (${count('BAD')}명)</button></div><div class="toolbar"><input id="hrTalentSearch" placeholder="사번·성명·법인·본부·부서 검색" value="${safe(query)}"><span class="hint">${selected} 인재 검색 결과: ${fmt(shown.length)}명</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부</th><th>부서</th><th>직위</th><th>직급</th><th>상태</th><th>관리</th></tr></thead><tbody>${rows||'<tr><td colspan="9" class="empty">해당 직원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+ }
+ const baseRender=render;
+ render=function(){
+  if(view!=='talent')return baseRender.apply(this,arguments);
+  document.querySelectorAll('.nav').forEach(btn=>btn.classList.toggle('active',btn.dataset.view==='talent'));
+  document.getElementById('heading').textContent=names.talent[0];
+  document.getElementById('subheading').textContent=names.talent[1];
+  document.getElementById('content').innerHTML=talentView();
+ };
+ const baseOpen=window.openEmployee;
+ window.openEmployee=function(id=null,encoded=''){
+  const result=baseOpen.apply(this,arguments);
+  const grid=document.querySelector('#modalBody .formgrid');
+  if(!grid||document.getElementById('eTalentCategory'))return result;
+  const e=id==null?null:(db.employees||[]).find(item=>String(item.id)===String(id));
+  const label=document.createElement('label');label.textContent='핵심인재 구분';
+  const field=document.createElement('select');field.id='eTalentCategory';
+  for(const [value,text] of [['','미분류'],['GOOD','GOOD 인재'],['BAD','BAD 인재']]){
+   const option=document.createElement('option');option.value=value;option.textContent=text;field.appendChild(option);
+  }
+  field.value=normalize(e?.[KEY]);label.appendChild(field);grid.appendChild(label);
+  return result;
+ };
+ const baseSave=window.saveEmployee;
+ window.saveEmployee=function(id){
+  const picker=document.getElementById('eTalentCategory');
+  const value=picker?normalize(picker.value):null;
+  const countBefore=db.employees.length;
+  const previous=id==null?null:db.employees.find(e=>String(e.id)===String(id));
+  const oldValue=normalize(previous?.[KEY]);
+  const result=baseSave.apply(this,arguments);
+  // Existing validation leaves the modal open. Never apply talent changes if
+  // the base editor refused to save (or if an employee wasn't created).
+  if(value===null||document.getElementById('modalWrap')?.classList.contains('open'))return result;
+  const e=previous||(db.employees.length>countBefore?db.employees.at(-1):null);
+  if(!e||normalize(e[KEY])===value)return result;
+  if(value)e[KEY]=value;else delete e[KEY];
+  if(previous)db.audit.unshift({id:uid(),date:new Date().toLocaleString('ko-KR'),action:'핵심인재 구분 변경',detail:String(e.employee_no||'')+' / '+(oldValue||'미분류')+' → '+(value||'미분류')});
+  save();render();
+  return result;
+ };
+ document.addEventListener('click',ev=>{
+  const tab=ev.target.closest('[data-hr-talent-tab]');if(tab){selected=tab.dataset.hrTalentTab;render();return;}
+  const edit=ev.target.closest('[data-hr-talent-edit]');if(edit){const e=db.employees.find(x=>String(x.id)===edit.dataset.hrTalentEdit);if(e)openEmployee(e.id);}
+ });
+ document.addEventListener('change',ev=>{if(ev.target.id==='hrTalentSearch'){query=ev.target.value.trim();render();}});
 })();
 </script>
 </body></html>
