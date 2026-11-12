@@ -3443,8 +3443,7 @@ window.saveRetirementContractConversion=function(id){
  const show=v=>safe(String(v??'').trim()||'-');
  const fieldDefs=[
  ['marital_status','결혼구분'],['military_category','병역구분'],
- ['employment_category','입사구분'],['resident_address','주민등록주소'],
- ['family_note','가족사항 비고']
+ ['employment_category','입사구분'],['resident_address','주민등록주소']
  ];
  const lists=[
  {key:'family',title:'가족사항',columns:[['name','가족성명'],['relation','관계'],['note','비고']]},
@@ -3468,7 +3467,7 @@ window.saveRetirementContractConversion=function(id){
   'employment_type':e.employment_type,'hire_date':e.hire_date,'exit_date':e.exit_date,
   'appointment_date':latestChangeDate,'regular_conversion':window.hrRegularConversionLabel?window.hrRegularConversionLabel(e):e.conversion_date,
   'manager_role':e.field_leader_role,'status':e.status,'resident_address':x.resident_address,
-  'family_note':x.family_note,'age':typeof displayAge==='function'?displayAge(e):e.age,
+  'age':typeof displayAge==='function'?displayAge(e):e.age,
   'union_status':e.union_status||'미확인'
  };return show(values[k]);}
  const basic=[
