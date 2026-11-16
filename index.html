@@ -3497,7 +3497,7 @@ window.saveRetirementContractConversion=function(id){
    '가족사항':'hr-record-centered hr-record-family',
    '자격/면허사항':'hr-record-centered hr-record-licenses',
    '인사변동사항':'hr-record-appointments',
-   '휴직 · 산재 · 육아휴직':'hr-record-leave'
+   '휴직 · 산재 · 육아휴직':'hr-record-centered hr-record-leave'
   };
   const widths=layouts[title];
   const colgroup=widths&&widths.length===cols.length?'<colgroup>'+widths.map(w=>'<col style="width:'+w+'">').join('')+'</colgroup>':'';
