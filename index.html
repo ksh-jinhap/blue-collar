@@ -1149,7 +1149,7 @@ document.addEventListener('change',ev=>{
  window.saveInterview=function(id){const e=getEmployee(id);if(!e)return;e.mentor_name=read('it_mentor').trim();e.mentor_department=read('it_mentor_dept').trim();const record={other:read('it_other')};stages.forEach(([k])=>record[k]={date:read('it_'+k+'_date'),by:read('it_'+k+'_by').trim(),note:read('it_'+k+'_note').trim()});e.mentoring=record;closeModal();commit('면담기록 수정',`${e.employee_no} ${e.name} · 멘토/면담 기록`)};
  function ojtView(){const items=planList();const options=orgs();const corps=[...new Set(options.map(o=>o.corporation))];const deps=[...new Set(options.filter(o=>ojtCorp==='전체'||o.corporation===ojtCorp).map(o=>o.department))];if(ojtDept!=='전체'&&!deps.includes(ojtDept))ojtDept='전체';const filtered=items.filter(o=>(ojtCorp==='전체'||o.corporation===ojtCorp)&&(ojtDept==='전체'||o.department===ojtDept)).slice().sort((a,b)=>String(a.corporation).localeCompare(String(b.corporation),'ko')||String(a.department).localeCompare(String(b.department),'ko')||String(a.schedule||'').localeCompare(String(b.schedule||'')));const emps=(db.employees||[]).filter(e=>e.status!=='퇴사'&&(ojtCorp==='전체'||e.corporation===ojtCorp)&&(ojtDept==='전체'||e.department===ojtDept));const selected=getEmployee(ojtEmployee);const eligible=selected&&emps.some(e=>String(e.id)===String(selected.id));const employeeOptions=emps.map(e=>`<option value="${safe(e.id)}" ${String(e.id)===String(ojtEmployee)?'selected':''}>${safe(e.name)} (${safe(e.employee_no)})</option>`).join('');const rates=eligible?filtered.map(p=>{const o=outcomeList().find(x=>String(x.plan_id)===String(p.id)&&String(x.employee_id)===String(ojtEmployee));return {p,o}}):[];const completed=rates.filter(x=>x.o?.completed).length;
  const rows=filtered.map((p,i)=>`<tr><td>${safe(p.corporation)}</td><td>${safe(p.department)}</td><td>${safe(p.hours)}</td><td>${safe(p.subject)}</td><td>${safe(p.content)}</td><td>${safe(p.goal)}</td><td>${safe(p.method)}</td><td>${safe(p.instructor)}</td><td>${safe(p.actual_instructor||'')}</td><td>${eligible?`<label style="display:inline-flex;gap:6px;align-items:center;white-space:nowrap"><input type="checkbox" ${rates[i].o?.completed?'checked':''} onchange="setOjtDone(${idArg(p.id)},this.checked)" aria-label="이수 완료">${rates[i].o?.completed?'완료':'미완료'}</label>`:'직원 선택 필요'}</td><td><button class="btn tiny" onclick="editOjtPlan(${idArg(p.id)})">수정</button> <button class="btn tiny" onclick="removeOjtPlan(${idArg(p.id)})">삭제</button></td></tr>`).join('');
- return `<section class="panel"><div class="report-head"><h2>부서별 OJT 교육계획 및 이수 현황</h2><div><button class="btn" onclick="downloadExcel('OJT계획이수')">Excel</button> <button class="btn primary" onclick="editOjtPlan()">계획 행 추가</button></div></div><div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0"><label>법인<select id="ojtCorp" onchange="setOjtFilter('corp',this.value)"><option value="전체">전체</option>${corps.map(x=>`<option ${ojtCorp===x?'selected':''}>${safe(x)}</option>`).join('')}</select></label><label>부서<select id="ojtDept" onchange="setOjtFilter('dept',this.value)"><option value="전체">전체</option>${deps.map(x=>`<option ${ojtDept===x?'selected':''}>${safe(x)}</option>`).join('')}</select></label><label>이수 확인 대상 직원<select id="ojtEmployee" onchange="setOjtFilter('employee',this.value)"><option value="">직원 선택 (계획만 보기)</option>${employeeOptions}</select></label></div><div class="notice">교육계획은 부서별로 공유하며, 이수 여부는 <b>직원별 완료·미완료</b>로 저장됩니다. 먼저 대상 직원을 선택하세요.</div>${eligible?`<p><b>${safe(selected.name)}</b> · 이수 ${completed} / ${filtered.length}건</p>`:''}<div class="tablewrap"><table><thead><tr><th>법인</th><th>부서</th><th>시간</th><th>교육항목</th><th>세부 교육내용</th><th>교육목표</th><th>교육 방법</th><th>담당</th><th>실제 교육담당자</th><th>이수 여부 (완료/미완료)</th><th>관리 (계획 수정·삭제)</th></tr></thead><tbody>${rows||'<tr><td colspan="11" class="empty">등록된 OJT 계획이 없습니다.</td></tr>'}</tbody></table></div></section>`}
+ return `<section class="panel"><div class="report-head"><h2>부서별 OJT 교육계획 및 이수 현황</h2><div><button class="btn" onclick="downloadExcel('OJT계획이수')">Excel</button> <button class="btn" onclick="openOjtBulkImport()">엑셀 일괄등록</button> <button class="btn primary" onclick="editOjtPlan()">계획 행 추가</button></div></div><div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0"><label>법인<select id="ojtCorp" onchange="setOjtFilter('corp',this.value)"><option value="전체">전체</option>${corps.map(x=>`<option ${ojtCorp===x?'selected':''}>${safe(x)}</option>`).join('')}</select></label><label>부서<select id="ojtDept" onchange="setOjtFilter('dept',this.value)"><option value="전체">전체</option>${deps.map(x=>`<option ${ojtDept===x?'selected':''}>${safe(x)}</option>`).join('')}</select></label><label>이수 확인 대상 직원<select id="ojtEmployee" onchange="setOjtFilter('employee',this.value)"><option value="">직원 선택 (계획만 보기)</option>${employeeOptions}</select></label></div><div class="notice">교육계획은 부서별로 공유하며, 이수 여부는 <b>직원별 완료·미완료</b>로 저장됩니다. 먼저 대상 직원을 선택하세요.</div>${eligible?`<p><b>${safe(selected.name)}</b> · 이수 ${completed} / ${filtered.length}건</p>`:''}<div class="tablewrap"><table><thead><tr><th>법인</th><th>부서</th><th>시간</th><th>교육항목</th><th>세부 교육내용</th><th>교육목표</th><th>교육 방법</th><th>담당</th><th>실제 교육담당자</th><th>이수 여부 (완료/미완료)</th><th>관리 (계획 수정·삭제)</th></tr></thead><tbody>${rows||'<tr><td colspan="11" class="empty">등록된 OJT 계획이 없습니다.</td></tr>'}</tbody></table></div></section>`}
  window.setOjtFilter=function(kind,v){if(kind==='corp'){ojtCorp=v;ojtDept='전체';ojtEmployee=''}else if(kind==='dept'){ojtDept=v;ojtEmployee=''}else ojtEmployee=v;render()};
  window.editOjtPlan=function(id){
   const p=planList().find(x=>String(x.id)===String(id))||{};
@@ -5079,6 +5079,153 @@ executiveView=function(){
   }
   save();render();
   return result;
+ };
+})();
+</script>
+<!-- OJT multi-team plan and outcome importer: preserves existing plans and completion records -->
+<script>
+(function(){
+ 'use strict';
+ const PLAN=['법인','본부','부서','시간','교육항목','세부 교육내용','교육목표','교육 방법','담당','실제 교육담당자'];
+ const DONE=['사번','법인','본부','부서','교육항목','이수여부','이수일','특이사항'];
+ const clean=v=>String(v??'').trim();
+ const norm=v=>clean(v).replace(/\s+/g,'');
+ const key=(...v)=>v.map(norm).join('\u241e');
+ const text=v=>typeof safe==='function'?safe(v):esc(v);
+ let prepared=null;
+ function orgCatalog(){
+  const map=new Map();
+  for(const e of [...(db.employees||[]),...(db.plans||[]),...(db.recruitment||[]),...(db.ojt_plans||[])]){
+   if(e.corporation&&e.department)map.set(key(e.corporation,e.headquarters,e.department),{corp:clean(e.corporation),hq:clean(e.headquarters),dept:clean(e.department)});
+  }
+  for(const r of db.reference_master||[]){if(r.type==='department'&&r.active!==false&&r.corporation&&r.value)map.set(key(r.corporation,r.headquarters,r.value),{corp:clean(r.corporation),hq:clean(r.headquarters),dept:clean(r.value)});}
+  return map;
+ }
+ function root(){return document.getElementById('ojtBulkPanel')}
+ function modalHtml(){
+  return `<div id="ojtBulkPanel"><div class="notice">하나의 XLSX 파일에 <b>여러 법인·본부·팀</b>을 작성할 수 있습니다. 첫 시트는 OJT교육계획, 두 번째 시트는 직원별 이수현황(선택)입니다. 기존 계획과 이수 상태를 덮어쓰지 않습니다. <b>일정 항목은 없습니다.</b></div>
+  <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap;margin:12px 0"><button class="btn" type="button" onclick="downloadOjtBulkTemplate()">일괄등록 양식 다운로드</button><label class="btn" style="cursor:pointer">엑셀 파일 선택<input type="file" accept=".xlsx" style="display:none" onchange="readOjtBulkFile(this)"></label></div>
+  <div id="ojtBulkStatus" class="hint">엑셀을 선택하면 팀별 계획과 직원별 이수 결과를 미리 확인합니다.</div><div id="ojtBulkReview" style="max-height:330px;overflow:auto;margin:12px 0"></div>
+  <div class="modalactions"><button class="btn" onclick="closeModal()">취소</button><button id="ojtBulkApply" class="btn primary" disabled onclick="applyOjtBulk()">검증된 자료 일괄 등록</button></div></div>`;
+ }
+ window.openOjtBulkImport=function(){prepared=null;if(typeof session!=='undefined'&&!session){alert('로그인 후 이용하세요.');return;}modal('OJT 계획 및 이수 일괄등록',modalHtml())};
+ window.downloadOjtBulkTemplate=function(){
+  const make=window.__unionMakeXlsx;
+  if(typeof make!=='function'){alert('엑셀 양식 생성 기능을 찾을 수 없습니다.');return;}
+  make('OJT_여러팀_일괄등록_양식',[{name:'OJT교육계획',rows:[PLAN]},{name:'OJT이수현황',rows:[DONE]}]);
+ };
+ async function workbookSheets(file){
+  if(!file||!/\.xlsx$/i.test(file.name))throw Error('XLSX 파일을 선택하세요.');
+  if(file.size>8*1024*1024)throw Error('파일 용량이 8MB를 초과합니다. 분할해서 등록하세요.');
+  const b=new Uint8Array(await file.arrayBuffer());
+  const u16=i=>b[i]|b[i+1]<<8; const u32=i=>(b[i]|b[i+1]<<8|b[i+2]<<16|b[i+3]<<24)>>>0;
+  let end=-1;for(let i=b.length-22;i>=Math.max(0,b.length-65557);i--)if(u32(i)===0x06054b50){end=i;break}
+  if(end<0)throw Error('유효한 XLSX 파일이 아닙니다.');
+  const n=u16(end+10);if(n>250)throw Error('엑셀 내부 파일 수가 너무 많습니다.');
+  let at=u32(end+16);const files=new Map(),decode=new TextDecoder();
+  for(let i=0;i<n;i++){
+   if(u32(at)!==0x02014b50)throw Error('엑셀 색인이 손상되었습니다.');
+   const method=u16(at+10),compressed=u32(at+20),size=u32(at+24),len=u16(at+28),ext=u16(at+30),comment=u16(at+32),start=u32(at+42);
+   const name=decode.decode(b.slice(at+46,at+46+len));at+=46+len+ext+comment;
+   if(!['xl/sharedStrings.xml','xl/worksheets/sheet1.xml','xl/worksheets/sheet2.xml'].includes(name))continue;
+   if(size>12*1024*1024)throw Error('엑셀 시트가 너무 큽니다.');
+   if(u32(start)!==0x04034b50)throw Error('엑셀 파일 형식 오류');
+   const offset=start+30+u16(start+26)+u16(start+28),chunk=b.slice(offset,offset+compressed);
+   if(method===0)files.set(name,chunk);
+   else if(method===8){if(typeof DecompressionStream==='undefined')throw Error('최신 Chrome 또는 Edge에서 엑셀을 불러오세요.');const stream=new Blob([chunk]).stream().pipeThrough(new DecompressionStream('deflate-raw'));const output=new Uint8Array(await new Response(stream).arrayBuffer());if(output.length>12*1024*1024)throw Error('엑셀 압축 해제 제한 초과');files.set(name,output)}
+   else throw Error('지원되지 않는 엑셀 압축 방식');
+  }
+  const xml=v=>{const x=new DOMParser().parseFromString(decode.decode(v),'application/xml');if(x.getElementsByTagName('parsererror').length)throw Error('엑셀 XML을 읽을 수 없습니다.');return x};
+  let shared=[];if(files.has('xl/sharedStrings.xml'))shared=[...xml(files.get('xl/sharedStrings.xml')).getElementsByTagName('si')].map(si=>[...si.getElementsByTagName('t')].map(t=>t.textContent||'').join(''));
+  const read=(name,headers,required)=>{
+   if(!files.has(name))return [];
+   const doc=xml(files.get(name)),rows=[];
+   for(const r of doc.getElementsByTagName('row')){
+    const raw={};for(const c of r.getElementsByTagName('c')){
+     const col=(c.getAttribute('r')||'').match(/^[A-Z]+/)?.[0];if(!col)continue;
+     const type=c.getAttribute('t');const val=type==='inlineStr'?[...c.getElementsByTagName('t')].map(t=>t.textContent||'').join(''):c.getElementsByTagName('v')[0]?.textContent||'';
+     raw[col]=clean(type==='s'?shared[Number(val)]??'':val);
+    }
+    if(Object.values(raw).some(Boolean))rows.push({raw,line:Number(r.getAttribute('r')||0)});
+    if(rows.length>5002)throw Error('한 시트는 최대 5,000건까지 지원합니다.');
+   }
+   if(!rows.length)return [];
+   const header=rows.shift().raw,mapping={};for(const [column,h]of Object.entries(header)){const found=headers.find(x=>norm(x)===norm(h));if(found)mapping[found]=column;}
+   const missing=required.filter(h=>!mapping[h]);if(missing.length)throw Error(`${name.includes('sheet1')?'OJT교육계획':'OJT이수현황'} 열 누락: ${missing.join(', ')}`);
+   return rows.map(({raw,line})=>{const o={line};headers.forEach(h=>o[h]=clean(raw[mapping[h]]||''));return o}).filter(r=>headers.some(h=>r[h]));
+  };
+  if(!files.has('xl/worksheets/sheet1.xml'))throw Error('첫 번째 교육계획 시트를 찾을 수 없습니다.');
+  return {plans:read('xl/worksheets/sheet1.xml',PLAN,['법인','본부','부서','교육항목']),done:read('xl/worksheets/sheet2.xml',DONE,['사번','법인','본부','부서','교육항목','이수여부'])};
+ }
+ function inspect(sheets){
+  const problems=[],plans=[],outcomes=[],skipped=[];
+  const orgs=orgCatalog();const stored=db.ojt_plans||[];
+  const uniquePlan=new Map();
+  const planned=[...stored];
+  for(const r of sheets.plans){
+   const prefix=`교육계획 ${r.line}행`;
+   if(!r['법인']||!r['본부']||!r['부서']||!r['교육항목']){problems.push(prefix+': 법인·본부·부서·교육항목은 필수입니다.');continue;}
+   const id=key(r['법인'],r['본부'],r['부서']);
+   if(!orgs.has(id)){problems.push(prefix+': 시스템에 등록된 조직과 일치하지 않습니다. ('+[r['법인'],r['본부'],r['부서']].join(' / ')+')');continue;}
+   const fields={corporation:r['법인'],headquarters:r['본부'],department:r['부서'],hours:r['시간'],subject:r['교육항목'],content:r['세부 교육내용'],goal:r['교육목표'],method:r['교육 방법'],instructor:r['담당'],actual_instructor:r['실제 교육담당자']};
+   const itemKey=key(fields.corporation,fields.headquarters,fields.department,fields.subject);
+   const same=planned.filter(p=>key(p.corporation,p.headquarters,p.department,p.subject)===itemKey);
+   if(same.length){const isDuplicate=same.some(p=>['hours','content','goal','method','instructor','actual_instructor'].every(k=>norm(p[k])===norm(fields[k])));if(isDuplicate){skipped.push(prefix+': 기존 계획과 동일하여 제외');continue;}problems.push(prefix+': 같은 조직·교육항목의 다른 계획이 이미 있습니다. 기존 계획을 수정하거나 교육항목을 구분하세요.');continue;}
+   const item={id:uid(),...fields};plans.push(item);planned.push(item);uniquePlan.set(itemKey,item);
+  }
+  const seenOutcome=new Set();
+  for(const r of sheets.done){
+   const prefix=`이수현황 ${r.line}행`;
+   const code=norm(r['이수여부']);if(!['완료','미이수'].includes(code)){problems.push(prefix+': 이수여부는 완료 또는 미이수만 허용합니다.');continue;}
+   const matched=(db.employees||[]).filter(e=>norm(e.employee_no)===norm(r['사번']));
+   if(matched.length!==1){problems.push(prefix+': 사번에 일치하는 직원이 '+(matched.length?'여러 명 있습니다.':'없습니다.'));continue;}
+   const e=matched[0];
+   const org=key(r['법인'],r['본부'],r['부서']);if(org!==key(e.corporation,e.headquarters,e.department)){problems.push(prefix+': 직원의 현재 소속과 엑셀 조직이 다릅니다.');continue;}
+   const matching=planned.filter(p=>key(p.corporation,p.headquarters,p.department,p.subject)===key(r['법인'],r['본부'],r['부서'],r['교육항목']));
+   if(matching.length!==1){problems.push(prefix+': 대상 교육계획을 정확히 한 건 찾을 수 없습니다.');continue;}
+   const p=matching[0],k=key(p.id,e.id);
+   if(seenOutcome.has(k)){problems.push(prefix+': 파일 안에 같은 직원·교육계획이 중복됩니다.');continue;}
+   seenOutcome.add(k);
+   const existing=(db.ojt_outcomes||[]).find(o=>String(o.plan_id)===String(p.id)&&String(o.employee_id)===String(e.id));
+   if(existing){skipped.push(prefix+': 기존 이수기록 보호를 위해 제외');continue;}
+   const date=clean(r['이수일']);
+   if(date&&!/^\d{4}-\d{2}-\d{2}$/.test(date)){problems.push(prefix+': 이수일은 YYYY-MM-DD 형식으로 작성하세요.');continue;}
+   if(date){const [y,m,d]=date.split('-').map(Number),test=new Date(Date.UTC(y,m-1,d));if(test.getUTCFullYear()!==y||test.getUTCMonth()!==m-1||test.getUTCDate()!==d){problems.push(prefix+': 유효하지 않은 이수일입니다.');continue;}}
+   if(code==='미이수'&&date){problems.push(prefix+': 미이수 항목에는 이수일을 입력하지 마세요.');continue;}
+   outcomes.push({id:uid(),plan_id:p.id,employee_id:e.id,completed:code==='완료',completed_date:code==='완료'?date:'',note:r['특이사항']});
+  }
+  if(!sheets.plans.length&&!sheets.done.length)problems.push('등록할 자료가 없습니다.');
+  return {problems,plans,outcomes,skipped,countPlan:sheets.plans.length,countDone:sheets.done.length};
+ }
+ window.readOjtBulkFile=async function(input){
+  const file=input.files?.[0];if(!file)return;prepared=null;
+  const panel=root();if(!panel)return;
+  const status=panel.querySelector('#ojtBulkStatus'),review=panel.querySelector('#ojtBulkReview'),apply=panel.querySelector('#ojtBulkApply');
+  apply.disabled=true;status.textContent='엑셀 검사 중: '+file.name;
+  try{
+   const sheets=await workbookSheets(file),result=inspect(sheets);prepared=result;
+   status.textContent=`교육계획 ${result.countPlan}행 / 이수현황 ${result.countDone}행 · 신규 계획 ${result.plans.length}건 / 신규 이수 ${result.outcomes.length}건 · 제외 ${result.skipped.length}건 · 오류 ${result.problems.length}건`;
+   const info=[...result.problems.map(v=>({status:'오류',detail:v})),...result.skipped.map(v=>({status:'제외',detail:v}))].slice(0,90);
+   review.innerHTML=info.length?`<div class="tablewrap"><table><thead><tr><th>구분</th><th>검증 결과</th></tr></thead><tbody>${info.map(x=>`<tr><td>${text(x.status)}</td><td>${text(x.detail)}</td></tr>`).join('')}</tbody></table></div>`:'<div class="notice">중복·오류 없이 등록할 수 있습니다.</div>';
+   if(result.problems.length)review.insertAdjacentHTML('afterbegin','<div class="notice" style="color:#b91c1c">오류가 발견되어 <b>파일 전체 적용을 차단</b>했습니다. 오류 행을 수정한 뒤 다시 선택하세요.</div>');
+   apply.disabled=Boolean(result.problems.length||!(result.plans.length+result.outcomes.length));
+  }catch(err){status.textContent='파일 읽기 실패: '+(err?.message||err);review.textContent='';prepared=null;}
+  input.value='';
+ };
+ window.applyOjtBulk=function(){
+  if(!prepared||prepared.problems.length||!(prepared.plans.length+prepared.outcomes.length))return;
+  if(typeof session!=='undefined'&&!session){alert('로그인 후 저장하세요.');return;}
+  // Check current data again in case another edit occurred while the preview was open.
+  const planIds=new Set((db.ojt_plans||[]).map(p=>key(p.corporation,p.headquarters,p.department,p.subject)));
+  if(prepared.plans.some(p=>planIds.has(key(p.corporation,p.headquarters,p.department,p.subject)))){alert('미리보기 이후 계획이 변경되었습니다. 엑셀을 다시 검사하세요.');return;}
+  const existing=new Set((db.ojt_outcomes||[]).map(o=>key(o.plan_id,o.employee_id)));
+  if(prepared.outcomes.some(o=>existing.has(key(o.plan_id,o.employee_id)))){alert('미리보기 이후 이수기록이 변경되었습니다. 엑셀을 다시 검사하세요.');return;}
+  const n=prepared.plans.length,m=prepared.outcomes.length;
+  if(!confirm(`교육계획 ${n}건, 직원별 이수기록 ${m}건을 등록하시겠습니까? 기존 기록은 변경하지 않습니다.`))return;
+  db.ojt_plans=db.ojt_plans||[];db.ojt_outcomes=db.ojt_outcomes||[];
+  db.ojt_plans.push(...prepared.plans);db.ojt_outcomes.push(...prepared.outcomes);
+  prepared=null;closeModal();commit('OJT 일괄등록',`계획 ${n}건 / 이수 ${m}건`);
+  alert(`OJT 교육계획 ${n}건, 직원별 이수 ${m}건을 저장 요청했습니다. 공동 DB 저장 완료 상태를 확인하세요.`);
  };
 })();
 </script>
