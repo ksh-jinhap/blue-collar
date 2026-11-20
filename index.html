@@ -2225,17 +2225,17 @@ const oldOpenEmployee=openEmployee;openEmployee=function(...args){if(args[0]!=nu
      <td>${esc(e.employee_no)}</td><td><button type="button" class="btn tiny" onclick="openRetirementContractConversion(${hrEmployeeIdArg(e.id)})">${esc(e.name)} · 촉탁직 전환</button></td>
      <td>${esc(e.corporation)}</td><td>${esc(e.headquarters)}</td><td>${esc(e.department)}</td>
      <td>${esc(e.position)}</td><td>${esc(e.grade)}</td><td>${esc(employeeBirthDate(e))}</td>
-     <td>${esc(date)}</td><td>${esc(basis)}</td>
+     <td>${esc(date)}</td><td>${yearValue}-12-31</td><td>${esc(basis)}</td>
    </tr>`).join('');
    const section=`<section class="panel" id="currentYearRetirementList">
      <div class="toolbar" style="justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap">
        <h2 style="margin:0">${yearValue}년 정년 도래 예상자 명단</h2>
        <span class="pill good">총 ${fmt(list.length)}명</span>
      </div>
-     <div class="notice">기준: 현재 퇴사하지 않은 직원 중 만 ${limit}세 도달 연도가 ${yearValue}년인 직원. 생년월일이 있으면 만 ${limit}세 생일을 <b>예상 도래일</b>로 표시하고, 생년월일이 없는 경우 기존 연령 자료로 연도만 추정합니다. 실제 정년퇴직일은 취업규칙과 인사발령에 따라 다를 수 있습니다.</div>
+     <div class="notice">기준: 현재 퇴사하지 않은 직원 중 만 ${limit}세 도달 연도가 ${yearValue}년인 직원. 생년월일이 있으면 만 ${limit}세 생일을 <b>예상 도래일</b>로 표시하고, 생년월일이 없는 경우 기존 연령 자료로 연도만 추정합니다. 새 정년일자는 정년 도래 예상 연도의 12월 31일로 표시합니다. 실제 퇴직일은 취업규칙과 인사발령에 따라 다를 수 있습니다.</div>
      <div class="tablewrap" style="max-height:460px;overflow:auto"><table><thead><tr>
-       <th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서/팀</th><th>직위</th><th>직급</th><th>생년월일</th><th>정년 도래 예상일</th><th>산정 기준</th>
-     </tr></thead><tbody>${rows||'<tr><td colspan="10" class="empty">올해 정년 도래 예상자가 없습니다.</td></tr>'}</tbody></table></div>
+       <th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서/팀</th><th>직위</th><th>직급</th><th>생년월일</th><th>정년 예상일</th><th>정년일자</th><th>산정 기준</th>
+     </tr></thead><tbody>${rows||'<tr><td colspan="11" class="empty">올해 정년 도래 예상자가 없습니다.</td></tr>'}</tbody></table></div>
    </section>`;
    // The list is displayed immediately after the existing year picker / KPI cards.
    const marker='<section class="panel">';
@@ -5329,6 +5329,74 @@ executiveView=function(){
    openPersonal(id);
   };
  };
+})();
+</script>
+
+<style id="hrAllPagesHelpIconStyle">
+/* Informational notices are accessible via heading-adjacent help buttons. */
+.hr-help-anchor{display:inline-flex;align-items:center;vertical-align:middle;position:relative;margin-left:7px;white-space:normal;line-height:1.2;font-weight:400;}
+.hr-help-trigger{width:19px;height:19px;min-width:19px;border:1.6px solid #426b9c;background:#fff;color:#315a89;border-radius:50%;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;line-height:1;cursor:help;font-family:Arial,sans-serif;}
+.hr-help-trigger:hover,.hr-help-trigger:focus-visible{outline:2px solid #a4bfec;outline-offset:2px;background:#eef5ff;}
+.hr-help-popup{position:absolute;top:calc(100% + 4px);left:0;z-index:1000;display:none;min-width:230px;width:max-content;max-width:min(490px,calc(100vw - 75px));padding:12px 14px;background:#fff;color:#233d5b;border:1px solid #b6cce6;border-radius:9px;box-shadow:0 8px 24px #1020392b;font:normal 12.5px/1.65 'Malgun Gothic','Apple SD Gothic Neo',sans-serif;white-space:normal;text-align:left;overflow-wrap:anywhere;}
+.hr-help-anchor:hover .hr-help-popup,.hr-help-anchor:focus-within .hr-help-popup,.hr-help-anchor.hr-help-open .hr-help-popup{display:block;}
+.hr-help-popup .hr-help-content{display:block;margin:0;}
+.hr-help-popup .hr-help-content *{max-width:100%;}
+.hr-help-popup .hr-help-content .btn{display:none;}
+@media(max-width:720px){.hr-help-popup{left:auto;right:-8px;max-width:min(310px,calc(100vw - 38px));}}
+@media print{.hr-help-anchor{display:none!important;}}
+</style>
+<script id="hrAllPagesHelpIconConversion">
+/* Convert only normal blue explanatory boxes; keep red validation/error notices visible. */
+(function(){
+ 'use strict';
+ let seq=0;
+ const roots=()=>[document.getElementById('content'),document.getElementById('modalBody')].filter(Boolean);
+ function closestHeading(notice,root){
+  if(root.id==='modalBody')return document.getElementById('modalTitle');
+  const panel=notice.closest('.panel');
+  if(panel){
+   const local=panel.querySelector('h2,h3,.report-head h2,.toolbar h2');
+   if(local)return local;
+  }
+  // Place explanations near the closest preceding section or field heading.
+  let n=notice.previousElementSibling;
+  while(n){
+   if(n.matches('h2,h3,h4,.report-head,.toolbar'))return n.matches('h2,h3,h4')?n:(n.querySelector('h2,h3,h4')||n);
+   n=n.previousElementSibling;
+  }
+  return document.getElementById('heading');
+ }
+ function shouldConvert(el){
+  if(el.closest('.hr-help-popup'))return false;
+  const style=el.getAttribute('style')||'';
+  if(/(?:background|color|border-color)\s*:\s*(?:#(?:fff1f0|ffcccc|fef2f2|a02323|b91c1c)|red|#f[a-f0-9]{5})/i.test(style))return false;
+  if(el.classList.contains('warn')||el.classList.contains('error')||el.getAttribute('role')==='alert')return false;
+  const computed=getComputedStyle(el);
+  const bg=computed.backgroundColor;
+  // The default information notice uses rgb(239,246,255). Do not conceal errors or warnings.
+  return bg==='rgb(239, 246, 255)'||bg==='rgba(0, 0, 0, 0)';
+ }
+ function migrate(root){
+  for(const notice of [...root.querySelectorAll('.notice')]){
+   if(!shouldConvert(notice))continue;
+   const head=closestHeading(notice,root);
+   if(!head)continue;
+   const anchor=document.createElement('span');anchor.className='hr-help-anchor';
+   const button=document.createElement('button');button.type='button';button.className='hr-help-trigger';button.textContent='!';
+   const id='hr-info-popup-'+(++seq);button.setAttribute('aria-label','안내 설명 보기');button.setAttribute('aria-describedby',id);button.setAttribute('aria-expanded','false');
+   const popup=document.createElement('span');popup.className='hr-help-popup';popup.id=id;popup.setAttribute('role','tooltip');
+   notice.classList.remove('notice');notice.removeAttribute('style');notice.classList.add('hr-help-content');
+   popup.appendChild(notice);anchor.append(button,popup);head.appendChild(anchor);
+   button.addEventListener('click',()=>{const on=anchor.classList.toggle('hr-help-open');button.setAttribute('aria-expanded',String(on));});
+   button.addEventListener('keydown',e=>{if(e.key==='Escape'){anchor.classList.remove('hr-help-open');button.setAttribute('aria-expanded','false');}});
+  }
+ }
+ let busy=false;
+ function update(){if(busy)return;busy=true;try{for(const root of roots())migrate(root);}finally{busy=false;}}
+ const obs=new MutationObserver(()=>update());
+ for(const root of roots())obs.observe(root,{childList:true,subtree:true});
+ update();
+ document.addEventListener('click',e=>{if(e.target.closest('.hr-help-anchor'))return;document.querySelectorAll('.hr-help-anchor.hr-help-open').forEach(a=>{a.classList.remove('hr-help-open');a.querySelector('.hr-help-trigger')?.setAttribute('aria-expanded','false');});});
 })();
 </script>
 </body></html>
