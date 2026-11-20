@@ -942,20 +942,29 @@ unionExportObserve.observe(mainContent,{childList:true});
  names[newView]=['정규직 전환 대상자','입사월 포함 3개월째 말일 기준 계약 만료 · 정규직 전환일 및 이력 관리'];
  const dateOnly=x=>/^\d{4}-\d{2}-\d{2}$/.test(String(x||''))?String(x):'';
  function contractEnd(date){const m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(date||''));if(!m)return '';const y=+m[1],month=+m[2];if(month<1||month>12)return '';const d=new Date(Date.UTC(y,month+2,0));return d.toISOString().slice(0,10)}
- function employmentType(e){
-  const explicit=String(e?.employment_type||'').trim();
-  if(explicit==='정규직'||explicit==='계약직')return explicit;
-  // Legacy data without an explicit type is a candidate only, never proof of a contract.
-  return (String(e?.position||'').trim()==='사원'||String(e?.grade||'').trim()==='사원')?'계약직':'미확인';
+ // An explicit regular employee or production staff must never be inferred as a contract
+ // from a stale grade/position. Only exact '사원' or '계약직' labels qualify.
+ const contractLabels=new Set(['사원','계약직']);
+ function isProductionRegular(e){return [e?.position,e?.grade].some(v=>String(v||'').trim()==='사원(생산)');}
+ function contractCandidate(e){
+  if(!e||e.status==='퇴사'||isProductionRegular(e))return false;
+  if(String(e.employment_type||'').trim()==='정규직')return false;
+  return [e.position,e.grade].some(v=>contractLabels.has(String(v||'').trim()));
  }
- function candidates(){return (db.employees||[]).filter(e=>e.status!=='퇴사'&&employmentType(e)==='계약직').sort((a,b)=>String(contractEnd(a.hire_date)).localeCompare(String(contractEnd(b.hire_date))))}
+ function employmentType(e){
+  if(isProductionRegular(e))return '정규직';
+  const explicit=String(e?.employment_type||'').trim();
+  if(explicit==='정규직')return '정규직';
+  return contractCandidate(e)?'계약직':'미확인';
+ }
+ function candidates(){return (db.employees||[]).filter(contractCandidate).sort((a,b)=>String(contractEnd(a.hire_date)).localeCompare(String(contractEnd(b.hire_date))))}
  const eventDate=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
  function category(e){const end=contractEnd(e.hire_date);if(!end)return '입사일 확인';const now=eventDate();const remain=Math.round((Date.parse(end+'T00:00:00Z')-Date.parse(now+'T00:00:00Z'))/86400000);return remain<0?'계약기간 경과':remain<=30?'30일 이내':'진행 중'}
- function tableRows(list){return list.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><button type="button" class="btn tiny" data-interview-id="${esc(String(e.id))}">${esc(e.name)}</button></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.position||'')}</td><td>${esc(e.hire_date||'')}</td><td><b>${esc(contractEnd(e.hire_date)||'확인 필요')}</b></td><td>${e.scheduled_conversion_date?'전환 예정: '+esc(e.scheduled_conversion_date):esc(category(e))}</td><td><button class="btn tiny primary" data-conversion-id="${esc(String(e.id))}">전환 처리</button></td></tr>`).join('')}
+ function tableRows(list){return list.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><button type="button" class="btn tiny" data-interview-id="${esc(String(e.id))}">${esc(e.name)}</button></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.position||'')}</td><td>${esc(e.grade||'')}</td><td>${esc(e.hire_date||'')}</td><td><b>${esc(contractEnd(e.hire_date)||'확인 필요')}</b></td><td>${e.scheduled_conversion_date?'전환 예정: '+esc(e.scheduled_conversion_date):esc(category(e))}</td><td><button class="btn tiny primary" data-conversion-id="${esc(String(e.id))}">전환 처리</button></td></tr>`).join('')}
  function conversionView(){const pending=candidates();const total=pending.length;const overdue=pending.filter(e=>category(e)==='계약기간 경과').length;const soon=pending.filter(e=>category(e)==='30일 이내').length;const converted=(db.employees||[]).filter(e=>e.employment_type==='정규직'&&e.conversion_date).sort((a,b)=>String(b.conversion_date).localeCompare(String(a.conversion_date)));const directHires=(db.employees||[]).filter(e=>e.status!=='퇴사'&&e.employment_type==='정규직'&&!e.conversion_date);
  return `<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">${card('계약직 전환 대상',total,'퇴사자 제외')}${card('만료 30일 이내',soon,'기준일 포함, 미전환자')}${card('계약기간 경과',overdue,'전환 여부 확인 필요','negative')}</div>
- <div class="notice">계약기간 = <b>입사한 월을 1개월째로 하여 3개월째 마지막 날</b>. 예: 10월 19일 입사 → 12월 31일 만료. 기존 데이터에 고용형태가 없고 직위 또는 직급이 ‘사원’인 경우에는 <b>계약직 추정 대상</b>으로 표시될 수 있습니다. 실제 입사부터 정규직인 경우 아래 ‘전환 처리’에서 <b>입사 시 정규직</b>으로 바로잡으세요. 정규직 전환일을 미리 등록하면 해당 날짜에 자동으로 정규직 처리됩니다.</div>
- <section class="panel"><div class="report-head"><h2>계약직 · 정규직 전환 대상 (${fmt(total)}명)</h2><button class="btn" onclick="downloadExcel('정규직전환대상')">대상자 Excel</button></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>직위</th><th>입사일</th><th>계약 만료일</th><th>구분</th><th>처리</th></tr></thead><tbody>${tableRows(pending)||'<tr><td colspan="9" class="empty">정규직 전환 대상자가 없습니다.</td></tr>'}</tbody></table></div></section>
+ <div class="notice">계약기간 = <b>입사한 월을 1개월째로 하여 3개월째 마지막 날</b>. 예: 10월 19일 입사 → 12월 31일 만료. 직위 또는 직급이 정확히 <b>‘사원’ 또는 ‘계약직’</b>인 직원만 전환 대상에 포함됩니다. <b>‘사원(생산)’은 제외</b>하며, 고용형태가 정규직으로 확정된 직원도 제외합니다. 과거의 서로 다른 값이 확인되면 직원 수정에서 함께 정정하세요. 정규직 전환일을 미리 등록하면 해당 날짜에 자동으로 정규직 처리됩니다.</div>
+ <section class="panel"><div class="report-head"><h2>계약직 · 정규직 전환 대상 (${fmt(total)}명)</h2><button class="btn" onclick="downloadExcel('정규직전환대상')">대상자 Excel</button></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>직위</th><th>직급</th><th>입사일</th><th>계약 만료일</th><th>구분</th><th>처리</th></tr></thead><tbody>${tableRows(pending)||'<tr><td colspan="10" class="empty">정규직 전환 대상자가 없습니다.</td></tr>'}</tbody></table></div></section>
  <section class="panel"><div class="report-head"><h2>정규직 전환 완료 (${fmt(converted.length)}명)</h2><button type="button" class="btn" onclick="window.hrBulkEstimateRegularDates()">전환일 미기록자 일괄 계산·저장</button></div><div class="hint">실제 전환일은 유지하고, 전환일이 없는 정규직 직원만 입사월 포함 3개월째 말일의 다음 날로 계산해 별도로 저장합니다. 계산일은 실제 확정일이 아닙니다.</div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>입사일</th><th>전환일</th><th>수정</th></tr></thead><tbody>${converted.map(e=>`<tr><td>${esc(e.employee_no)}</td><td><button class="btn tiny" data-interview-id="${esc(String(e.id))}">${esc(e.name)}</button></td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.hire_date||'')}</td><td>${esc(e.conversion_date||'')}</td><td><button class="btn tiny" data-conversion-id="${esc(String(e.id))}">전환일 수정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">전환 완료 기록이 없습니다.</td></tr>'}</tbody></table></div></section><section class="panel"><h2>입사 시 정규직 (${fmt(directHires.length)}명)</h2><p class="hint">계약직에서 전환한 이력이 없는 정규직 직원입니다. 실제 전환일을 임의로 생성하지 않습니다.</p><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>부서</th><th>직위</th><th>고용형태</th><th>관리</th></tr></thead><tbody>${directHires.map(e=>`<tr><td>${esc(e.employee_no)}</td><td>${esc(e.name)}</td><td>${esc(e.corporation)}</td><td>${esc(e.department)}</td><td>${esc(e.position)}</td><td>정규직</td><td><button type="button" class="btn tiny" data-conversion-id="${esc(String(e.id))}">구분 수정</button></td></tr>`).join('')||'<tr><td colspan="7" class="empty">등록된 대상자가 없습니다.</td></tr>'}</tbody></table></div></section>`}
  render=function(){if(view===newView){if(typeof session!=='undefined'&&!session){view='cloud';return currentRender()}document.getElementById('heading').textContent=names[newView][0];document.getElementById('subheading').textContent=names[newView][1];document.getElementById('content').innerHTML=conversionView();document.querySelectorAll('#content [data-conversion-id]').forEach(b=>b.addEventListener('click',()=>window.openConversion(b.dataset.conversionId)));document.querySelectorAll('#content [data-interview-id]').forEach(b=>b.addEventListener('click',()=>window.openInterview(b.dataset.interviewId)));document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===newView));return}currentRender()};
  window.openConversion=function(id){
@@ -966,7 +975,7 @@ unionExportObserve.observe(mainContent,{childList:true});
   const explicit=String(e.employment_type||'').trim();
   const current=explicit==='정규직'?(actual?'정규직 전환':'입사 시 정규직'):(scheduled?'정규직 전환':'계약직');
   const inferred=!['정규직','계약직'].includes(explicit);
-  modal(e.name+' · 고용형태 확인 및 정규직 전환',`<div class="notice">입사일: <b>${esc(e.hire_date||'-')}</b> · 3개월 계약 가정 만료일: <b>${esc(end||'확인 필요')}</b>${inferred?'<br><b>주의: 고용형태가 확정 등록되지 않아 직위·직급으로 계약직을 추정하고 있습니다.</b>':''}</div><div class="formgrid"><label>처리 구분<select id="convType"><option value="계약직">계약직 유지 / 예약 취소</option><option value="정규직 전환">계약직 → 정규직 전환</option><option value="입사 시 정규직">입사 당시부터 정규직 (기존 분류 정정)</option></select></label><label id="convDateLabel">정규직 전환일<input type="date" id="convDate" value="${esc(scheduled||actual)}"></label></div><div class="hint">'정규직 전환'을 확정하면 직위가 '계약직' 또는 '사원'인 경우 '사원(생산)'으로 자동 변경됩니다. 미래 일자는 전환 예정으로만 저장합니다. '입사 당시부터 정규직'은 실제 전환 이력이 없을 때 사용하는 분류 정정이며 전환일을 생성하거나 직위를 자동 변경하지 않습니다.</div><div class="modalactions"><button type="button" class="btn" id="convCancel">취소</button><button type="button" class="btn primary" id="convSave">변경 저장</button></div>`);
+  modal(e.name+' · 고용형태 확인 및 정규직 전환',`<div class="notice">입사일: <b>${esc(e.hire_date||'-')}</b> · 3개월 계약 가정 만료일: <b>${esc(end||'확인 필요')}</b>${inferred?'<br><b>주의: 고용형태가 확정 등록되지 않아 직위·직급으로 계약직을 추정하고 있습니다.</b>':''}</div><div class="formgrid"><label>처리 구분<select id="convType"><option value="계약직">계약직 유지 / 예약 취소</option><option value="정규직 전환">계약직 → 정규직 전환</option><option value="입사 시 정규직">입사 당시부터 정규직 (기존 분류 정정)</option></select></label><label id="convDateLabel">정규직 전환일<input type="date" id="convDate" value="${esc(scheduled||actual)}"></label></div><div class="hint">'정규직 전환' 또는 '입사 시 정규직 정정'을 확정하면 직위·직급이 정확히 '계약직' 또는 '사원'인 경우 '사원(생산)'으로 통일됩니다. 미래 일자는 전환 예정으로만 저장합니다. '입사 당시부터 정규직'은 실제 전환 이력이 없을 때 사용하는 분류 정정이며 전환일을 생성하지 않습니다.</div><div class="modalactions"><button type="button" class="btn" id="convCancel">취소</button><button type="button" class="btn primary" id="convSave">변경 저장</button></div>`);
   const typeEl=document.getElementById('convType');typeEl.value=current;
   const refresh=()=>{document.getElementById('convDateLabel').style.display=typeEl.value==='정규직 전환'?'flex':'none';document.getElementById('convDate').disabled=typeEl.value!=='정규직 전환';};
   typeEl.addEventListener('change',refresh);refresh();
@@ -989,18 +998,22 @@ unionExportObserve.observe(mainContent,{childList:true});
   const newScheduled=future?dt:'';
   const newDate=action==='정규직 전환'&&!future?dt:'';
   const previous={employment_type:String(e.employment_type||''),position:String(e.position||''),scheduled_conversion_date:String(e.scheduled_conversion_date||''),conversion_date:String(e.conversion_date||'')};
-  const newPosition=action==='정규직 전환'&&!future&&['계약직','사원'].includes(previous.position.trim())?'사원(생산)':previous.position;
-  if(previous.employment_type===newType&&previous.scheduled_conversion_date===newScheduled&&previous.conversion_date===newDate&&previous.position===newPosition){closeModal();return;}
+  const newPosition=(action==='정규직 전환'&&!future||action==='입사 시 정규직')&&contractLabels.has(previous.position.trim())?'사원(생산)':previous.position;
+  const previousGrade=String(e.grade||'');
+  const newGrade=(action==='정규직 전환'&&!future||action==='입사 시 정규직')&&contractLabels.has(previousGrade.trim())?'사원(생산)':previousGrade;
+  if(previous.employment_type===newType&&previous.scheduled_conversion_date===newScheduled&&previous.conversion_date===newDate&&previous.position===newPosition&&previousGrade===newGrade){closeModal();return;}
   const message=action==='입사 시 정규직'?'입사 당시부터 정규직으로 분류를 정정합니다. 실제 전환일은 등록하지 않습니다.':future?'전환 예정일을 등록합니다. 해당 일자가 되기 전에는 계약직으로 유지됩니다.':'고용형태와 직위 변경사항을 저장합니다.';
   if(!confirm(`${esc(e.name)} / ${message}\n\n고용형태: ${previous.employment_type||'미입력'} → ${newType}\n직위: ${previous.position||'-'} → ${newPosition||'-'}\n전환일: ${newDate||'없음'}\n계속하시겠습니까?`))return;
   e.employment_type=newType;
   if(newScheduled)e.scheduled_conversion_date=newScheduled;else delete e.scheduled_conversion_date;
   e.conversion_date=newDate;
   e.position=newPosition;
+  e.grade=newGrade;
   db.history??=[];
   const title=action==='입사 시 정규직'?'입사 고용형태 정정':future?'정규직 전환 예정 등록':action==='정규직 전환'?'정규직 전환':'고용형태 변경';
   const changes=[`고용형태: ${previous.employment_type||'미입력'} → ${newType}`];
   if(previous.position!==newPosition)changes.push(`직위: ${previous.position||'-'} → ${newPosition}`);
+  if(previousGrade!==newGrade)changes.push(`직급: ${previousGrade||'-'} → ${newGrade}`);
   if(newDate)changes.push('전환일: '+newDate);
   if(newScheduled)changes.push('전환 예정일: '+newScheduled);
   db.history.unshift({employee_id:e.id,event_date:todayValue,event_type:action==='입사 시 정규직'?'고용형태정정':future?'정규직전환예정':action==='정규직 전환'?'정규직전환':'고용형태변경',title,description:changes.join(' / '),department:e.department,grade:e.grade});
@@ -4079,7 +4092,7 @@ function logCompared(action,before){const entries=[];for(const [id,old] of befor
 function capture(ids){return new Map((ids||db.employees.map(e=>e.id)).map(id=>db.employees.find(e=>String(e.id)===String(id))).filter(Boolean).map(e=>[String(e.id),Object.fromEntries(Object.keys(EDIT_FIELDS).map(k=>[k,e[k]]))]));}
 function changeView(){const data=changes().filter(x=>!changeText||[x.name,x.employee_no,x.action,...(x.fields||[]).map(f=>f.label)].some(v=>txt(v).includes(changeText)));return `<section class="panel"><h2>인사정보 변경 전후 비교</h2><div class="notice">이 기능을 적용한 후 저장한 직원 수정·선택 인원 일괄수정·일괄 인사발령에 대해 비교 기록을 생성합니다. 과거의 변경 기록은 원래의 전후 값이 저장되지 않았다면 임의 복원하지 않습니다. 기준정보 명칭 일괄정정은 기존 기준정보 변경기록에서 확인합니다.</div><div class="toolbar"><input id="qaChangeText" placeholder="사번·성명·변경항목 검색" value="${safe(changeText)}"><span class="pill">${data.length}건</span></div><div class="tablewrap"><table><thead><tr><th>변경일시</th><th>사번 / 성명</th><th>변경 방식</th><th>변경 전 → 변경 후</th></tr></thead><tbody>${data.map(x=>`<tr><td>${safe(String(x.changed_at||x.day||'').replace('T',' ').slice(0,19))}</td><td>${safe(x.employee_no)}<br><b>${safe(x.name)}</b></td><td>${safe(x.action)}</td><td>${(x.fields||[]).map(f=>`<div style="padding:3px 0"><b>${safe(f.label)}</b> : ${safe(f.before)} → <b>${safe(f.after)}</b></div>`).join('')}</td></tr>`).join('')||'<tr><td colspan="4" class="empty">해당 기간에 저장된 비교 기록이 없습니다.</td></tr>'}</tbody></table></div></section>`;}
 function contractEnd(hire){if(!validDate(hire))return '';const [y,m]=hire.split('-').map(Number);return new Date(Date.UTC(y,m+2,0)).toISOString().slice(0,10);}
-function employmentType(e){return e.employment_type||((e.position==='사원'||e.grade==='사원')?'계약직':'미확인');}
+function employmentType(e){const pos=txt(e.position),grade=txt(e.grade),type=txt(e.employment_type);if(type==='정규직'||pos==='사원(생산)'||grade==='사원(생산)')return '정규직';return (pos==='사원'||pos==='계약직'||grade==='사원'||grade==='계약직')?'계약직':'미확인';}
 function alertRows(){const all=[];for(const e of live()){
  if(employmentType(e)==='계약직'){const end=contractEnd(e.hire_date),n=daysUntil(end);if(n!==null&&n<=30)all.push({id:e.id,kind:'계약 만료',date:end,days:n,detail:'3개월째 말일 기준 · 고용형태 확인 필요'});}
  if(validDate(e.scheduled_conversion_date)){const n=daysUntil(e.scheduled_conversion_date);if(n!==null&&n<=30)all.push({id:e.id,kind:'정규직 전환 예정',date:e.scheduled_conversion_date,days:n,detail:'등록된 전환 예정일'});}
@@ -5232,6 +5245,70 @@ executiveView=function(){
   db.ojt_plans.push(...prepared.plans);db.ojt_outcomes.push(...prepared.outcomes);
   prepared=null;closeModal();commit('OJT 일괄등록',`계획 ${n}건 / 이수 ${m}건`);
   alert(`OJT 교육계획 ${n}건, 직원별 이수 ${m}건을 저장 요청했습니다. 공동 DB 저장 완료 상태를 확인하세요.`);
+ };
+})();
+</script>
+<!-- HR-HISTORY-EDIT-V1 -->
+<script>
+/* History edits are available exclusively from the 개인별 연혁 view.
+   Keep existing save, cloud synchronization, and personnel-card renderers intact. */
+(function(){
+ const previousOpenPersonal=openPersonal;
+ const histId=h=>String(h?.employee_id??'');
+ function employeeFor(id){return (db.employees||[]).find(e=>String(e.id)===String(id));}
+ function eventsFor(id){return (db.history||[]).map((h,i)=>({h,i})).filter(x=>histId(x.h)===String(id)).sort((a,b)=>String(b.h.event_date||'').localeCompare(String(a.h.event_date||'')));}
+ function input(label,id,value='',type='text'){
+  return `<label>${esc(label)}<input id="${id}" type="${type}" value="${esc(value)}"></label>`;
+ }
+ window.openPersonal=function(id){
+  previousOpenPersonal(id);
+  if(view!=='history')return;
+  const e=employeeFor(id),body=document.getElementById('modalBody');
+  if(!e||!body)return;
+  const entries=eventsFor(id),nodes=body.querySelectorAll('.timeline .event');
+  entries.forEach(({i},n)=>{
+   if(!nodes[n])return;
+   const btn=document.createElement('button');
+   btn.type='button';btn.className='btn tiny';btn.textContent='연혁 수정';
+   btn.style.marginTop='9px';
+   btn.addEventListener('click',()=>window.openHistoryEdit(id,i));
+   nodes[n].appendChild(btn);
+  });
+ };
+ window.openHistoryEdit=function(id,index){
+  if(view!=='history')return;
+  const e=employeeFor(id),h=(db.history||[])[index];
+  if(!e||!h||histId(h)!==String(id))return alert('수정할 연혁을 다시 선택해 주세요.');
+  const appointment=Boolean(h.hr_card_appointment);
+  const special=appointment?`<div class="hint" style="margin:12px 0 6px">인사기록카드의 인사변동사항에도 반영되는 발령 항목입니다.</div>
+   ${input('발령구분','heCategory',h.appointment_category||'')}
+   ${input('현재부서(발령 전)','hePrevDept',h.previous_department||'')}
+   ${input('발령부서','heDept',h.appointed_department||'')}
+   ${input('발령직위','hePos',h.appointed_position||'')}
+   ${input('직책','heRole',h.appointed_role||'')}
+   <label class="wide">변동사유<textarea id="heReason" rows="2">${esc(h.change_reason||'')}</textarea></label>`:'';
+  modal(e.name+' · 연혁 수정',`<div class="notice">이 화면에서는 연혁 기록만 수정합니다. 직원의 현재 상태, 소속, 직위 및 다른 연혁은 변경되지 않습니다.</div>
+   <div class="formgrid">${input('일자 *','heDate',h.event_date||'','date')}
+   ${input('유형 *','heType',h.event_type||'')}
+   ${input('제목 *','heTitle',h.title||'')}
+   <label class="wide">내용<textarea id="heDesc" rows="4">${esc(h.description||'')}</textarea></label>
+   ${special}</div>
+   <div class="modalactions"><button class="btn" type="button" id="heBack">취소</button><button class="btn primary" type="button" id="heSave">수정 저장</button></div>`);
+  document.getElementById('heBack').onclick=()=>openPersonal(id);
+  document.getElementById('heSave').onclick=()=>{
+   if(view!=='history'||(db.history||[])[index]!==h||histId(h)!==String(id))return alert('연혁 목록이 변경되었습니다. 다시 선택해 주세요.');
+   const date=get('heDate'),title=get('heTitle'),type=get('heType');
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date))||new Date(date+'T00:00:00Z').toISOString().slice(0,10)!==date){alert('유효한 일자를 입력해 주세요.');return;}
+   if(!title||!type){alert('유형과 제목을 입력해 주세요.');return;}
+   const changes={event_date:date,event_type:type,title,description:get('heDesc')};
+   if(appointment){Object.assign(changes,{appointment_category:get('heCategory'),previous_department:get('hePrevDept'),appointed_department:get('heDept'),appointed_position:get('hePos'),appointed_role:get('heRole'),change_reason:get('heReason')});}
+   const modified=Object.entries(changes).some(([k,v])=>String(h[k]??'')!==v);
+   if(!modified){openPersonal(id);return;}
+   if(!confirm('선택한 연혁 1건을 수정하시겠습니까? 수정 내용은 인사기록카드에도 표시됩니다.'))return;
+   Object.assign(h,changes);
+   commit('개인별 연혁 수정',`${e.employee_no||''} / ${e.name||''} / ${date} / ${title}`);
+   openPersonal(id);
+  };
  };
 })();
 </script>
