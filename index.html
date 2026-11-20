@@ -5273,7 +5273,26 @@ executiveView=function(){
    btn.style.marginTop='9px';
    btn.addEventListener('click',()=>window.openHistoryEdit(id,i));
    nodes[n].appendChild(btn);
+   const del=document.createElement('button');
+   del.type='button';del.className='btn tiny danger';del.textContent='연혁 삭제';
+   del.style.margin='9px 0 0 7px';
+   del.addEventListener('click',()=>window.deletePersonalHistory(id,i,entries[n].h));
+   nodes[n].appendChild(del);
   });
+ };
+ window.deletePersonalHistory=function(id,index,original){
+  if(view!=='history')return;
+  const e=employeeFor(id),list=db.history||[],h=list[index];
+  if(!e||!h||h!==original||histId(h)!==String(id)){
+   alert('연혁 목록이 변경되었습니다. 다시 선택해 주세요.');return;
+  }
+  const detail=`${h.event_date||'일자 미등록'} / ${h.event_type||'유형 미등록'} / ${h.title||'제목 미등록'}`;
+  if(!confirm(`${e.name}님의 다음 연혁 1건을 삭제하시겠습니까?\n\n${detail}\n\n삭제 후에는 인사기록카드에서도 해당 이력이 사라집니다. 현재 직원 정보와 다른 연혁은 유지됩니다. 삭제 전 백업을 권장합니다.`))return;
+  // Another edit may have changed the list while the confirmation dialog was open.
+  if(view!=='history'||(db.history||[])[index]!==h){alert('연혁이 변경되었습니다. 다시 선택해 주세요.');return;}
+  db.history.splice(index,1);
+  commit('개인별 연혁 삭제',`${e.employee_no||''} / ${e.name||''} / ${detail}`);
+  openPersonal(id);
  };
  window.openHistoryEdit=function(id,index){
   if(view!=='history')return;
