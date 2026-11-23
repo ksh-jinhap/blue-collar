@@ -5498,4 +5498,97 @@ executiveView=function(){
  });
 })();
 </script>
+
+<style id="hrUnifiedOjtStyle20261123">
+.hr-today-work{margin:0 0 14px!important;padding:12px 15px!important}
+.hr-today-work .hr-today-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:9px}
+.hr-today-work .hr-today-head h2{margin:0;font-size:16px}
+.hr-today-work .hr-today-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.hr-today-work .hr-today-stat{border:1px solid #e2e8f0;background:#f8fafc;border-radius:8px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
+.hr-today-work .hr-today-stat span{font-size:12px;color:#52627b}
+.hr-today-work .hr-today-stat strong{font-size:19px;color:#182b4a;white-space:nowrap}
+.hr-unified-kpis{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:0 0 14px}
+.hr-unified-kpis .panel{padding:11px 12px;margin:0;min-width:0}
+.hr-unified-kpis .panel span{font-size:12px;color:#64748b}
+.hr-unified-kpis .panel strong{display:block;margin-top:4px;font-size:22px}
+.hr-unified-table td{vertical-align:middle}
+.hr-unified-sub{display:block;font-size:11px;color:#64748b;margin-top:4px}
+.hr-unified-toolbar{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin:12px 0}
+.hr-unified-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#64748b}
+.hr-unified-toolbar select,.hr-unified-toolbar input{min-width:125px}
+.hr-unified-actions{display:flex;gap:5px;flex-wrap:wrap}
+@media(max-width:850px){.hr-today-work .hr-today-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-unified-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:520px){.hr-unified-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-today-work .hr-today-stats{grid-template-columns:1fr 1fr}}
+</style>
+<script id="hrUnifiedOjt20261123">
+/* Read-only cross-module overview. Reuse existing employee, OJT plan/outcome and mentoring fields; no migration. */
+(function(){
+ 'use strict';
+ const PAGE='ojtUnified',START='2026-12-01';
+ names[PAGE]=['OJT·멘토 통합관리','입사일이 도래한 2026년 12월 1일 이후 입사자 · 멘토, 계획, 이수 및 면담기록 연계'];
+ const text=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const dateValue=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))?String(v):'';
+ const current=()=>typeof today==='function'?today():new Date().toLocaleDateString('sv-SE');
+ const daysBetween=(from,to)=>{const a=new Date(from+'T12:00:00Z'),b=new Date(to+'T12:00:00Z');return Math.floor((b-a)/86400000)};
+ const active=e=>String(e?.status||'')!=='퇴사';
+ const dueStages=[['day3',3],['week1',7],['month1',30]];
+ function eligible(){const now=current();return (db.employees||[]).filter(e=>{const hired=dateValue(e.hire_date);return active(e)&&hired&&hired>=START&&hired<=now;});}
+ function matchingPlans(e){return (db.ojt_plans||[]).filter(p=>String(p.corporation||'')===String(e.corporation||'')&&String(p.department||'')===String(e.department||'')&&(!p.headquarters||String(p.headquarters)===String(e.headquarters||'')));}
+ function interviewState(e,now){let due=0,missing=0,done=0;const age=Math.max(0,daysBetween(e.hire_date,now));for(const [key,days] of dueStages){const recorded=Boolean(dateValue(e.mentoring?.[key]?.date));if(recorded)done++;if(age>=days){due++;if(!recorded)missing++;}}return {due,missing,done,remaining:3-done};}
+ function record(e,now){const plans=matchingPlans(e);const ids=new Set(plans.map(p=>String(p.id)));const completed=new Set((db.ojt_outcomes||[]).filter(o=>String(o.employee_id)===String(e.id)&&o.completed&&ids.has(String(o.plan_id))).map(o=>String(o.plan_id)));const interview=interviewState(e,now);return {e,planCount:plans.length,completed:completed.size,missing:Math.max(0,plans.length-completed.size),interview,mentor:Boolean(String(e.mentor_name||'').trim())};}
+ function dataset(){const now=current();return eligible().map(e=>record(e,now));}
+ let corp='전체',status='전체',query='';
+ const statuses=['전체','멘토 미지정','OJT 미완료','계획 없음','면담 확인 필요','완료'];
+ function flags(r){return {mentor:!r.mentor,plan:r.planCount===0,ojt:r.planCount>0&&r.missing>0,interview:r.interview.missing>0};}
+ function fullyDone(r){const f=flags(r);return !f.mentor&&!f.plan&&!f.ojt&&!f.interview&&r.interview.remaining===0;}
+ const option=(value,label,selected)=>`<option value="${text(value)}" ${value===selected?'selected':''}>${text(label)}</option>`;
+ function viewHtml(){
+  const list=dataset();const corps=[...new Set(list.map(r=>r.e.corporation).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ko'));
+  if(corp!=='전체'&&!corps.includes(corp))corp='전체';
+  const scoped=list.filter(r=>corp==='전체'||r.e.corporation===corp);
+  const counts={total:scoped.length,mentor:scoped.filter(r=>!r.mentor).length,plan:scoped.filter(r=>r.planCount===0).length,ojt:scoped.filter(r=>r.planCount>0&&r.missing>0).length,interview:scoped.filter(r=>r.interview.missing>0).length};
+  const results=scoped.filter(r=>{
+   const f=flags(r);const valid=status==='전체'||(status==='멘토 미지정'&&f.mentor)||(status==='OJT 미완료'&&f.ojt)||(status==='계획 없음'&&f.plan)||(status==='면담 확인 필요'&&f.interview)||(status==='완료'&&fullyDone(r));
+   return valid&&(!query||[r.e.employee_no,r.e.name,r.e.corporation,r.e.headquarters,r.e.department,r.e.mentor_name].some(v=>String(v||'').toLocaleLowerCase('ko').includes(query.toLocaleLowerCase('ko'))));
+  }).sort((a,b)=>String(a.e.corporation).localeCompare(String(b.e.corporation),'ko')||String(a.e.department).localeCompare(String(b.e.department),'ko')||String(a.e.name).localeCompare(String(b.e.name),'ko'));
+  const card=(title,n)=>`<section class="panel"><span>${title}</span><strong>${n}명</strong></section>`;
+  return `<div class="hr-unified-kpis">${card('관리 대상',counts.total)}${card('멘토 미지정',counts.mentor)}${card('교육계획 없음',counts.plan)}${card('OJT 미완료',counts.ojt)}${card('면담 확인 필요',counts.interview)}</div>
+   <section class="panel"><div class="report-head"><div><h2>직원별 OJT·멘토 진행 현황</h2><p class="hint">2026년 12월 1일 이후 입사했고 입사일이 도래한 재직 직원만 조회합니다. 법인·본부·부서에 일치하는 OJT 계획을 연결합니다.</p></div><button type="button" class="btn" data-unified-go="mentorManagement">기존 멘토 관리</button></div>
+   <div class="hr-unified-toolbar"><label>법인<select id="hrUnifiedCorp">${option('전체','전체 법인',corp)}${corps.map(c=>option(c,c,corp)).join('')}</select></label><label>확인 항목<select id="hrUnifiedStatus">${statuses.map(x=>option(x,x,status)).join('')}</select></label><label>검색<input id="hrUnifiedSearch" value="${text(query)}" placeholder="사번·성명·조직·멘토"></label><button class="btn" type="button" id="hrUnifiedReset">초기화</button><span class="hint">조회 ${results.length}명</span></div>
+   <div class="tablewrap"><table class="hr-unified-table"><thead><tr><th>사번 / 성명</th><th>법인 / 부서</th><th>입사일</th><th>멘토</th><th>OJT 계획·이수</th><th>면담 (3일·1주·1개월)</th><th>바로가기</th></tr></thead><tbody>${results.map(r=>{
+    const e=r.e,inter=r.interview;
+    const plan=r.planCount===0?'계획 없음':`${r.completed} / ${r.planCount}건 완료`;
+    const interview=inter.missing?`${inter.missing}건 확인 필요`:inter.due===0?'면담 예정':inter.remaining===0?'면담 기록 완료':'면담 진행 중';
+    return `<tr><td><b>${text(e.name)}</b><span class="hr-unified-sub">${text(e.employee_no)}</span></td><td>${text(e.corporation)}<span class="hr-unified-sub">${text(e.headquarters)} / ${text(e.department)}</span></td><td>${text(e.hire_date)}</td><td>${r.mentor?text(e.mentor_name):'<span class="negative">미지정</span>'}</td><td>${text(plan)}${r.missing?`<span class="hr-unified-sub">미완료 ${r.missing}건</span>`:''}</td><td>${text(interview)}<span class="hr-unified-sub">기록 ${inter.done}/3 · 기한 도래 ${inter.due}/3</span></td><td><div class="hr-unified-actions"><button class="btn tiny" data-unified-edit="${text(e.id)}">멘토 수정</button><button class="btn tiny" data-unified-interview="${text(e.id)}">면담</button><button class="btn tiny" data-unified-ojt="${text(e.id)}">OJT 이수</button></div></td></tr>`;
+   }).join('')||'<tr><td colspan="7" class="empty">조회 대상자가 없습니다. 2026년 12월 1일 이후 입사자가 실제 입사하면 자동으로 나타납니다.</td></tr>'}</tbody></table></div>
+   <p class="hint">※ 교육계획이 없는 경우 미이수율에 포함하지 않습니다. 면담 확인 필요는 입사 3일·7일·30일이 지났으나 해당 단계 면담일이 비어 있는 경우입니다. 기록은 기존 OJT·면담 화면에서 수정합니다.</p></section>`;
+ }
+ const folder=[...document.querySelectorAll('.nav-folder')].find(f=>f.querySelector('.folder-head')?.textContent.includes('OJT 관리'))?.querySelector('.folder-items');
+ if(folder&&!folder.querySelector('[data-view="'+PAGE+'"]')){const b=document.createElement('button');b.className='nav';b.type='button';b.dataset.view=PAGE;b.textContent='OJT·멘토 통합관리';folder.appendChild(b);b.addEventListener('click',()=>setView(PAGE));}
+ const beforeSetView=setView;
+ setView=function(v){if(v===PAGE){view=PAGE;return render();}return beforeSetView.apply(this,arguments);};
+ const beforeRender=render;
+ render=function(){if(view!==PAGE)return beforeRender.apply(this,arguments);if(typeof session!=='undefined'&&!session){view='cloud';return beforeRender.apply(this,arguments);}document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===PAGE));document.getElementById('heading').textContent=names[PAGE][0];document.getElementById('subheading').textContent=names[PAGE][1];document.getElementById('content').innerHTML=viewHtml();};
+ const beforeDashboard=dashboard;
+ dashboard=function(){
+  const html=beforeDashboard.apply(this,arguments);const all=dataset();const count={mentor:all.filter(r=>!r.mentor).length,ojt:all.filter(r=>r.planCount>0&&r.missing>0).length,interview:all.filter(r=>r.interview.missing>0).length};
+  const now=current();const future=(db.employees||[]).filter(e=>active(e)&&dateValue(e.hire_date)>=START&&dateValue(e.hire_date)>now).length;
+  const regularLabels=new Set(['사원','계약직']);const conversion=(db.employees||[]).filter(e=>active(e)&&String(e.employment_type||'').trim()!=='정규직'&&![e.position,e.grade].some(v=>String(v||'').trim()==='사원(생산)')&&[e.position,e.grade].some(v=>regularLabels.has(String(v||'').trim()))).length;
+  const cell=(name,value)=>`<div class="hr-today-stat"><span>${name}</span><strong>${value}명</strong></div>`;
+  const panel=`<section class="panel hr-today-work no-print"><div class="hr-today-head"><div><h2>오늘의 인사업무</h2><span class="hint">신규 입사자 OJT 관리 · 기준일 ${text(now)}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn tiny" data-unified-go="conversion">전환 대상 확인</button><button type="button" class="btn tiny" data-unified-go="${PAGE}">OJT·멘토 통합관리 →</button></div></div><div class="hr-today-stats">${cell('입사 예정',future)}${cell('정규직 전환 검토',conversion)}${cell('멘토 미지정',count.mentor)}${cell('OJT 미완료',count.ojt)}${cell('면담 확인 필요',count.interview)}</div></section>`;
+  return panel+html;
+ };
+ document.addEventListener('click',ev=>{
+  const go=ev.target.closest('[data-unified-go]');if(go){setView(go.dataset.unifiedGo);return;}
+  if(ev.target.closest('#hrUnifiedReset')){corp='전체';status='전체';query='';render();return;}
+  const edit=ev.target.closest('[data-unified-edit]');if(edit){const e=(db.employees||[]).find(x=>String(x.id)===edit.dataset.unifiedEdit);if(e)window.openEmployee(e.id);return;}
+  const interview=ev.target.closest('[data-unified-interview]');if(interview){const e=(db.employees||[]).find(x=>String(x.id)===interview.dataset.unifiedInterview);if(e)window.openInterview(e.id);return;}
+  const ojt=ev.target.closest('[data-unified-ojt]');if(ojt){const e=(db.employees||[]).find(x=>String(x.id)===ojt.dataset.unifiedOjt);if(!e)return;setView('ojt');if(typeof window.setOjtFilter==='function'){window.setOjtFilter('corp',e.corporation);window.setOjtFilter('dept',e.department);window.setOjtFilter('employee',String(e.id));}return;}
+ });
+ document.addEventListener('change',ev=>{if(ev.target.id==='hrUnifiedCorp'){corp=ev.target.value;render();}else if(ev.target.id==='hrUnifiedStatus'){status=ev.target.value;render();}else if(ev.target.id==='hrUnifiedSearch'){query=ev.target.value.trim();render();}});
+ document.addEventListener('input',ev=>{if(ev.target.id==='hrUnifiedSearch')query=ev.target.value.trim();});
+ document.addEventListener('keydown',ev=>{if(ev.target.id==='hrUnifiedSearch'&&ev.key==='Enter')render();});
+ window.__hrUnifiedSummary=()=>({eligible:dataset().length,future:(db.employees||[]).filter(e=>active(e)&&dateValue(e.hire_date)>current()&&dateValue(e.hire_date)>=START).length});
+})();
+</script>
 </body></html>
