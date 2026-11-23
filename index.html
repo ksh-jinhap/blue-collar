@@ -5553,9 +5553,9 @@ executiveView=function(){
   }).sort((a,b)=>String(a.e.corporation).localeCompare(String(b.e.corporation),'ko')||String(a.e.department).localeCompare(String(b.e.department),'ko')||String(a.e.name).localeCompare(String(b.e.name),'ko'));
   const card=(title,n)=>`<section class="panel"><span>${title}</span><strong>${n}명</strong></section>`;
   return `<div class="hr-unified-kpis">${card('관리 대상',counts.total)}${card('멘토 미지정',counts.mentor)}${card('교육계획 없음',counts.plan)}${card('OJT 미완료',counts.ojt)}${card('면담 확인 필요',counts.interview)}</div>
-   <section class="panel"><div class="report-head"><div><h2>직원별 OJT·멘토 진행 현황</h2><p class="hint">2026년 12월 1일 이후 입사했고 입사일이 도래한 재직 직원만 조회합니다. 법인·본부·부서에 일치하는 OJT 계획을 연결합니다.</p></div><button type="button" class="btn" data-unified-go="mentorManagement">기존 멘토 관리</button></div>
+   <section class="panel"><div class="report-head"><div><h2>직원별 OJT·멘토 진행 현황</h2><p class="hint">2026년 12월 1일 이후 입사했고 입사일이 도래한 재직 직원만 조회합니다. 법인·본부·부서에 일치하는 OJT 계획을 연결합니다.</p></div></div>
    <div class="hr-unified-toolbar"><label>법인<select id="hrUnifiedCorp">${option('전체','전체 법인',corp)}${corps.map(c=>option(c,c,corp)).join('')}</select></label><label>확인 항목<select id="hrUnifiedStatus">${statuses.map(x=>option(x,x,status)).join('')}</select></label><label>검색<input id="hrUnifiedSearch" value="${text(query)}" placeholder="사번·성명·조직·멘토"></label><button class="btn" type="button" id="hrUnifiedReset">초기화</button><span class="hint">조회 ${results.length}명</span></div>
-   <div class="tablewrap"><table class="hr-unified-table"><thead><tr><th>사번 / 성명</th><th>법인 / 부서</th><th>입사일</th><th>멘토</th><th>OJT 계획·이수</th><th>면담 (3일·1주·1개월)</th><th>바로가기</th></tr></thead><tbody>${results.map(r=>{
+   <div class="tablewrap"><table class="hr-unified-table"><thead><tr><th>사번 / 성명</th><th>법인 / 부서</th><th>입사일</th><th>멘토</th><th>OJT 계획·이수</th><th>면담 (3일·1주·1개월)</th><th>관리</th></tr></thead><tbody>${results.map(r=>{
     const e=r.e,inter=r.interview;
     const plan=r.planCount===0?'계획 없음':`${r.completed} / ${r.planCount}건 완료`;
     const interview=inter.missing?`${inter.missing}건 확인 필요`:inter.due===0?'면담 예정':inter.remaining===0?'면담 기록 완료':'면담 진행 중';
@@ -5589,6 +5589,154 @@ executiveView=function(){
  document.addEventListener('input',ev=>{if(ev.target.id==='hrUnifiedSearch')query=ev.target.value.trim();});
  document.addEventListener('keydown',ev=>{if(ev.target.id==='hrUnifiedSearch'&&ev.key==='Enter')render();});
  window.__hrUnifiedSummary=()=>({eligible:dataset().length,future:(db.employees||[]).filter(e=>active(e)&&dateValue(e.hire_date)>current()&&dateValue(e.hire_date)>=START).length});
+})();
+</script>
+
+<style id="hrMenuManagementStyle20261123">
+.hr-mm-intro{font-size:12px;color:#64748b;margin:0 0 12px}
+.hr-mm-group{border:1px solid #e2e8f0;border-radius:10px;margin:0 0 12px;overflow:hidden;background:#fff}
+.hr-mm-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 15px;background:#f4f8fe}
+.hr-mm-head strong{font-size:14px}
+.hr-mm-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px;padding:5px 15px}
+.hr-mm-row{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:39px;border-bottom:1px solid #f1f5f9;font-size:13px}
+.hr-mm-row input,.hr-mm-head input{width:17px;height:17px;accent-color:#2563eb;cursor:pointer}
+.hr-mm-row label,.hr-mm-head label{display:flex;align-items:center;gap:8px;cursor:pointer}
+.hr-mm-locked{opacity:.62}
+@media(max-width:650px){.hr-mm-items{grid-template-columns:1fr}}
+</style>
+<script id="hrMenuAndMentorIntegration20261123">
+/* Menu visibility is shared with the existing cloud DB; legacy mentor data and edit fields remain intact. */
+(function(){
+ 'use strict';
+ const PAGE='menuManagement',UNIFIED='ojtUnified',OLD='mentorManagement';
+ const navs=document.querySelector('.sidebar .navs');
+ const escText=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+ const folderOf=t=>[...document.querySelectorAll('.nav-folder')].find(f=>f.querySelector('.folder-head')?.textContent.includes(t));
+ const ojt=folderOf('OJT 관리'),sys=folderOf('시스템 관리');
+ const ojtItems=ojt?.querySelector('.folder-items');
+ const unifiedButton=ojtItems?.querySelector('[data-view="'+UNIFIED+'"]');
+ const oldMenu=ojtItems?.querySelector('[data-view="'+OLD+'"]');
+ if(oldMenu)oldMenu.remove();
+ if(ojtItems){
+  // Keep the three menu links in the exact requested order.
+  const ordered=[UNIFIED,'ojt','interviews'];
+  for(const v of ordered){const el=ojtItems.querySelector('[data-view="'+v+'"]');if(el)ojtItems.appendChild(el);}
+ }
+ const systemItems=sys?.querySelector('.folder-items');
+ if(systemItems){
+  let btn=systemItems.querySelector('[data-view="'+PAGE+'"]');
+  if(!btn){btn=document.createElement('button');btn.type='button';btn.className='nav';btn.dataset.view=PAGE;btn.textContent='메뉴 관리';btn.addEventListener('click',()=>setView(PAGE));}
+  systemItems.appendChild(btn); // Always the last item
+ }
+ names[PAGE]=['메뉴 관리','전체 메뉴를 활성화하거나 비활성화합니다. 설정은 공동 DB에 저장됩니다.'];
+ const protectedIds=new Set([PAGE,'dashboard','cloud']);
+ // An enabled system group is necessary to avoid losing the recovery menu.
+ const protectedGroups=new Set(['시스템 관리']);
+ const cfg=()=>{if(!db.settings||typeof db.settings!=='object')db.settings={};if(!db.settings.menuVisibility||typeof db.settings.menuVisibility!=='object'||Array.isArray(db.settings.menuVisibility))db.settings.menuVisibility={};return db.settings.menuVisibility;};
+ const visibleId=v=>protectedIds.has(v)||cfg()[v]!==false;
+ function sections(){
+  const groups=[];
+  const top=[...navs.querySelectorAll(':scope > button.nav[data-view]')].filter(b=>b.dataset.view!==OLD);
+  if(top.length)groups.push({name:'기본 메뉴',group:null,buttons:top});
+  for(const folder of navs.querySelectorAll('.nav-folder')){
+   const name=folder.querySelector('.folder-head')?.textContent.trim().replace(/^▣\s*/,'').replace(/\s*▸\s*$/,'').trim()||'기타';
+   const buttons=[...folder.querySelectorAll('button.nav[data-view]')].filter(b=>b.dataset.view!==OLD);
+   if(buttons.length)groups.push({name,group:folder,buttons});
+  }
+  return groups;
+ }
+ function permitted(b){
+  if(protectedIds.has(b.dataset.view))return true;
+  const f=b.closest('.nav-folder');const title=f?.querySelector('.folder-head')?.textContent.trim().replace(/^▣\s*/,'').replace(/\s*▸\s*$/,'').trim();
+  return visibleId(b.dataset.view)&&(!title||protectedGroups.has(title)||cfg()['group:'+title]!==false);
+ }
+ function apply(){
+  for(const part of sections()){
+   for(const b of part.buttons)b.hidden=!permitted(b);
+   if(part.group){
+    const hidden=!protectedGroups.has(part.name)&&cfg()['group:'+part.name]===false;
+    const any=part.buttons.some(b=>!b.hidden);
+    part.group.hidden=hidden||!any;
+   }
+  }
+  // An obsolete direct link must not take users to the removed legacy page.
+ }
+ function menuHtml(){
+  const c=cfg();let total=0,active=0;
+  const groups=sections().map(part=>{
+   const locked=protectedGroups.has(part.name)||!part.group;
+   const enabled=locked||c['group:'+part.name]!==false;
+   const groupControl=part.group?`<label class="${locked?'hr-mm-locked':''}"><input type="checkbox" data-mm-group="${escText(part.name)}" ${enabled?'checked':''} ${locked?'disabled':''}><span>${enabled?'활성':'비활성'}</span></label>`:'<span class="hint">기본 메뉴</span>';
+   const buttons=part.buttons.map(b=>{
+    const v=b.dataset.view,label=b.textContent.trim(),lock=protectedIds.has(v);
+    const checked=lock||c[v]!==false;total++;if(checked&&enabled)active++;
+    return `<div class="hr-mm-row ${lock?'hr-mm-locked':''}"><span>${escText(label)}</span><label><input type="checkbox" data-mm-item="${escText(v)}" ${checked?'checked':''} ${lock?'disabled':''} aria-label="${escText(label)} 활성화"><span>${checked?'사용':'중지'}</span></label></div>`;
+   }).join('');
+   return `<section class="hr-mm-group"><div class="hr-mm-head"><strong>${escText(part.name)}</strong>${groupControl}</div><div class="hr-mm-items">${buttons}</div></section>`;
+  }).join('');
+  return `<section class="panel"><div class="report-head"><div><h2>메뉴 활성화 · 비활성화</h2><p class="hr-mm-intro">메뉴를 끄면 왼쪽 탐색에서 숨겨지며, 기록과 기능은 삭제되지 않습니다. 이 설정은 공동 DB를 사용하는 사용자에게 함께 적용됩니다.</p></div><button class="btn" id="hrMenuReset">전체 메뉴 활성화</button></div><div class="summaryline"><b>활성 ${active}개 / 전체 ${total}개</b><span class="hint">대시보드, 메뉴 관리, 로그인 경로는 보호됩니다. 시스템 관리 그룹은 항상 유지됩니다.</span></div>${groups}</section>`;
+ }
+ function redrawMenu(){document.getElementById('heading').textContent=names[PAGE][0];document.getElementById('subheading').textContent=names[PAGE][1];document.getElementById('content').innerHTML=menuHtml();document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===PAGE));}
+ function updateVisibility(key,enabled){
+  if(!window.__hrCloudConnected?.()){alert('공동 DB에 로그인한 후 메뉴를 변경해 주세요.');return;}
+  if(protectedIds.has(key)||(key.startsWith('group:')&&protectedGroups.has(key.slice(6))))return;
+  cfg()[key]=enabled;
+  commit('메뉴 활성화 설정 변경',key+' → '+(enabled?'활성':'비활성'));
+  apply();
+ }
+ // Existing employee edit screen keeps the mentor fields through the legacy wrapper.
+ // Unified editor edits ONLY mentor columns, never employee organisational or employment status fields.
+ function openMentor(id){
+  const e=(db.employees||[]).find(x=>String(x.id)===String(id));if(!e)return;
+  modal(e.name+' · 멘토 지정',`<div class="hint" style="margin-bottom:12px">${escText(e.employee_no||'')} · ${escText(e.corporation||'')} / ${escText(e.department||'')}</div><div class="formgrid"><label>멘토 성명<input id="hrUnifiedMentorName" value="${escText(e.mentor_name||'')}" placeholder="미지정 시 공란"></label><label>멘토 부서 / 비고<input id="hrUnifiedMentorDept" value="${escText(e.mentor_department||'')}" placeholder="선택 입력"></label></div><div class="modalactions"><button class="btn" type="button" id="hrUnifiedMentorCancel">취소</button><button class="btn primary" type="button" id="hrUnifiedMentorSave" data-mentor-id="${escText(e.id)}">멘토 저장</button></div>`);
+ }
+ function saveMentor(id){
+  if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 저장하세요.');return;}
+  const e=(db.employees||[]).find(x=>String(x.id)===String(id));if(!e)return;
+  const name=document.getElementById('hrUnifiedMentorName')?.value.trim()||'';
+  const dept=name?(document.getElementById('hrUnifiedMentorDept')?.value.trim()||''):'';
+  if(String(e.mentor_name||'').trim()===name&&String(e.mentor_department||'').trim()===dept){closeModal();return;}
+  const former=e.mentor_name||'미지정';e.mentor_name=name;e.mentor_department=dept;
+  closeModal();commit('멘토 지정 변경',String(e.employee_no||'')+' '+String(e.name||'')+' · '+former+' → '+(name||'미지정'));
+ }
+ const previousSetView=setView;
+ setView=function(v){
+  if(v===OLD)v=UNIFIED;
+  if(v!==PAGE&&(!visibleId(v)||(navs.querySelector('button.nav[data-view=\"'+v+'\"]')&&!permitted(navs.querySelector('button.nav[data-view=\"'+v+'\"]'))))){
+   alert('현재 비활성화된 메뉴입니다. [시스템 관리] → [메뉴 관리]에서 다시 활성화할 수 있습니다.');return;
+  }
+  if(v===PAGE){if(!window.__hrCloudConnected?.()){return previousSetView.call(this,'cloud');}view=PAGE;render();return;}
+  return previousSetView.apply(this,[v]);
+ };
+ const previousRender=render;
+ render=function(){
+  if(view===OLD)view=UNIFIED;
+  if(view!==PAGE&&!visibleId(view))view='dashboard';
+  if(view===PAGE){
+   if(!window.__hrCloudConnected?.()){view='cloud';previousRender.apply(this,arguments);}
+   else redrawMenu();
+  }else previousRender.apply(this,arguments);
+  apply();
+ };
+ document.addEventListener('click',event=>{
+  if(event.target.closest('#hrUnifiedMentorCancel')){closeModal();return;}
+  const saveButton=event.target.closest('#hrUnifiedMentorSave');if(saveButton){saveMentor(saveButton.dataset.mentorId);return;}
+  const edit=event.target.closest('[data-unified-edit]');if(edit){
+   event.stopImmediatePropagation();event.preventDefault();openMentor(edit.dataset.unifiedEdit);return;
+  }
+  const reset=event.target.closest('#hrMenuReset');if(reset){
+   if(!confirm('대시보드와 전체 메뉴를 다시 활성화하시겠습니까?'))return;
+   if(!window.__hrCloudConnected?.())return alert('공동 DB 연결 후 변경해 주세요.');
+   db.settings=db.settings||{};db.settings.menuVisibility={};commit('메뉴 설정 초기화','전체 메뉴 활성화');apply();return;
+  }
+ },true);
+ document.addEventListener('change',event=>{
+  const group=event.target.closest('[data-mm-group]');if(group){updateVisibility('group:'+group.dataset.mmGroup,group.checked);return;}
+  const item=event.target.closest('[data-mm-item]');if(item)updateVisibility(item.dataset.mmItem,item.checked);
+ });
+ // Keep sidebar consistent when a new shared snapshot is loaded.
+ apply();
+ window.__hrMenuManagementCheck=()=>({groups:sections().map(x=>({name:x.name,views:x.buttons.map(b=>b.dataset.view)})),mentorLegacyMenu:!!document.querySelector('.sidebar [data-view="'+OLD+'"]'),menuAdminAtBottom:systemItems?.lastElementChild?.dataset.view===PAGE});
 })();
 </script>
 </body></html>
