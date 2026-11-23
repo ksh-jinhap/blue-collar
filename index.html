@@ -947,7 +947,7 @@ unionExportObserve.observe(mainContent,{childList:true});
  const contractLabels=new Set(['사원','계약직']);
  function isProductionRegular(e){return [e?.position,e?.grade].some(v=>String(v||'').trim()==='사원(생산)');}
  function contractCandidate(e){
-  if(!e||e.status==='퇴사'||isProductionRegular(e))return false;
+  if(!e||e.status==='퇴사'||isProductionRegular(e)||window.__hrIsSeparateContract?.(e))return false;
   if(String(e.employment_type||'').trim()==='정규직')return false;
   return [e.position,e.grade].some(v=>contractLabels.has(String(v||'').trim()));
  }
@@ -4094,6 +4094,7 @@ function changeView(){const data=changes().filter(x=>!changeText||[x.name,x.empl
 function contractEnd(hire){if(!validDate(hire))return '';const [y,m]=hire.split('-').map(Number);return new Date(Date.UTC(y,m+2,0)).toISOString().slice(0,10);}
 function employmentType(e){const pos=txt(e.position),grade=txt(e.grade),type=txt(e.employment_type);if(type==='정규직'||pos==='사원(생산)'||grade==='사원(생산)')return '정규직';return (pos==='사원'||pos==='계약직'||grade==='사원'||grade==='계약직')?'계약직':'미확인';}
 function alertRows(){const all=[];for(const e of live()){
+ if(window.__hrIsSeparateContract?.(e))continue; // 별도 계약기간 관리자는 전환 및 인사 일정 알림에서 제외
  if(employmentType(e)==='계약직'){const end=contractEnd(e.hire_date),n=daysUntil(end);if(n!==null&&n<=30)all.push({id:e.id,kind:'계약 만료',date:end,days:n,detail:'3개월째 말일 기준 · 고용형태 확인 필요'});}
  if(validDate(e.scheduled_conversion_date)){const n=daysUntil(e.scheduled_conversion_date);if(n!==null&&n<=30)all.push({id:e.id,kind:'정규직 전환 예정',date:e.scheduled_conversion_date,days:n,detail:'등록된 전환 예정일'});}
  if(validDate(e.scheduled_exit_date)){const n=daysUntil(e.scheduled_exit_date);if(n!==null&&n<=30)all.push({id:e.id,kind:'퇴사 예정',date:e.scheduled_exit_date,days:n,detail:'등록된 퇴사 예정일'});}
@@ -4114,7 +4115,7 @@ function alertSeverity(a){if(a.days!==null){if(a.days<0)return 'overdue';if(a.da
 const alertTitle={overdue:'기한 경과',urgent:'7일 이내',soon:'30일 이내',info:'정보 확인'};
 const alertColor={overdue:'#b91c1c',urgent:'#c2410c',soon:'#a16207',info:'#2563eb'};
 function severityBadge(level){const color=alertColor[level];return `<span class="hr-alert-label hr-alert-${level}" style="color:${color}">${alertTitle[level]}</span>`;}
-function alertsView(){const employeeIndex=new Map(db.employees.map(e=>[String(e.id),e]));const alerts=alertRows(),types=[...new Set(alerts.map(a=>a.kind))],items=alerts.filter(a=>(alertKind==='전체'||a.kind===alertKind)&&(alertLevel==='전체'||alertSeverity(a)===alertLevel));const levels=['overdue','urgent','soon','info'];const counts=Object.fromEntries(levels.map(k=>[k,alerts.filter(a=>alertSeverity(a)===k).length]));return `<section class="panel"><h2>인사 일정 알림센터</h2><div class="notice">화면에서 확인하는 알림입니다. 자동 발송 기능은 없습니다. 계약기간·정년은 계산에 따른 점검 대상이며 확정 처리를 의미하지 않습니다. 정년예상은 생년월일이 확인되는 직원의 출생연도 기준으로만 표시합니다. 출생일 확인이 불가능한 직원은 포함하지 않습니다. 색상은 남은 기간과 확인 필요 여부에 따라 구분합니다.</div><div class="hr-alert-summary">${levels.map(k=>`<div class="hr-alert-tile hr-alert-${k}"><div>${alertTitle[k]}</div><strong>${fmt(counts[k])}건</strong><small>${k==='overdue'?'기한을 지난 일정':k==='urgent'?'오늘 포함 7일 이내':k==='soon'?'8~30일 이내':'날짜 없는 점검사항'}</small></div>`).join('')}</div><div class="toolbar"><label>알림 유형 ${select('qaAlertKind',types,alertKind,'전체')}</label><label>중요도 ${select('qaAlertLevel',levels.map(k=>alertTitle[k]),alertLevel==='전체'?'':alertTitle[alertLevel],'전체')}</label>${btnView('quality','데이터 점검센터')}</div><div class="tablewrap"><table><thead><tr><th>중요도</th><th>구분</th><th>예정일</th><th>사번 / 성명</th><th>남은 기간</th><th>상세</th><th>조치</th></tr></thead><tbody>${items.map(a=>{const e=employeeIndex.get(String(a.id));return e?`<tr class="hr-alert-row-${alertSeverity(a)}"><td>${severityBadge(alertSeverity(a))}</td><td>${safe(a.kind)}</td><td>${safe(a.date||'-')}</td><td>${safe(e.employee_no)} / ${safe(e.name)}</td><td class="${a.days!==null&&a.days<0?'negative':''}">${a.days===null?'-':a.days<0?'기한 '+(-a.days)+'일 경과':a.days===0?'오늘':a.days+'일'}</td><td>${safe(a.detail)}</td><td>${empButton(e,'직원 수정')}</td></tr>`:''}).join('')||'<tr><td colspan="7" class="empty">해당 조건의 알림이 없습니다.</td></tr>'}</tbody></table></div></section>`;}
+function alertsView(){const employeeIndex=new Map(db.employees.map(e=>[String(e.id),e]));const alerts=alertRows(),types=[...new Set(alerts.map(a=>a.kind))],items=alerts.filter(a=>(alertKind==='전체'||a.kind===alertKind)&&(alertLevel==='전체'||alertSeverity(a)===alertLevel));const levels=['overdue','urgent','soon','info'];const counts=Object.fromEntries(levels.map(k=>[k,alerts.filter(a=>alertSeverity(a)===k).length]));return `<section class="panel"><div class="report-head"><h2>인사 일정 알림센터</h2><button type="button" class="btn" data-qa-view="dashboard">대시보드로 돌아가기</button></div><div class="notice">화면에서 확인하는 알림입니다. 자동 발송 기능은 없습니다. 계약기간·정년은 계산에 따른 점검 대상이며 확정 처리를 의미하지 않습니다. 정년예상은 생년월일이 확인되는 직원의 출생연도 기준으로만 표시합니다. 출생일 확인이 불가능한 직원은 포함하지 않습니다. 색상은 남은 기간과 확인 필요 여부에 따라 구분합니다.</div><div class="hr-alert-summary">${levels.map(k=>`<div class="hr-alert-tile hr-alert-${k}"><div>${alertTitle[k]}</div><strong>${fmt(counts[k])}건</strong><small>${k==='overdue'?'기한을 지난 일정':k==='urgent'?'오늘 포함 7일 이내':k==='soon'?'8~30일 이내':'날짜 없는 점검사항'}</small></div>`).join('')}</div><div class="toolbar"><label>알림 유형 ${select('qaAlertKind',types,alertKind,'전체')}</label><label>중요도 ${select('qaAlertLevel',levels.map(k=>alertTitle[k]),alertLevel==='전체'?'':alertTitle[alertLevel],'전체')}</label>${btnView('quality','데이터 점검센터')}</div><div class="tablewrap"><table><thead><tr><th>중요도</th><th>구분</th><th>예정일</th><th>사번 / 성명</th><th>남은 기간</th><th>상세</th><th>조치</th></tr></thead><tbody>${items.map(a=>{const e=employeeIndex.get(String(a.id));return e?`<tr class="hr-alert-row-${alertSeverity(a)}"><td>${severityBadge(alertSeverity(a))}</td><td>${safe(a.kind)}</td><td>${safe(a.date||'-')}</td><td>${safe(e.employee_no)} / ${safe(e.name)}</td><td class="${a.days!==null&&a.days<0?'negative':''}">${a.days===null?'-':a.days<0?'기한 '+(-a.days)+'일 경과':a.days===0?'오늘':a.days+'일'}</td><td>${safe(a.detail)}</td><td>${empButton(e,'직원 수정')}</td></tr>`:''}).join('')||'<tr><td colspan="7" class="empty">해당 조건의 알림이 없습니다.</td></tr>'}</tbody></table></div></section>`;}
 function workforceTrendGroups(){const raw=[...(db.employees||[]),...(db.plans||[]),...(db.recruitment||[])],snaps=db.snapshots||[];for(const s of snaps){for(const key of Object.keys(s.units||{})){const [corporation,headquarters,department]=key.split('␟');raw.push({corporation,headquarters,department});}}return raw;}
 function trendCandidates(field,corp='',hq=''){return [...new Set(workforceTrendGroups().filter(e=>(!corp||e.corporation===corp)&&(!hq||e.headquarters===hq)).map(e=>e[field]).filter(Boolean))].sort((a,b)=>String(a).localeCompare(String(b),'ko'));}
 function trendMatches(e,corp=trendCorp,hq=trendHQ,dept=trendDept){return (!corp||e.corporation===corp)&&(!hq||e.headquarters===hq)&&(!dept||e.department===dept);}
@@ -5574,7 +5575,7 @@ executiveView=function(){
  dashboard=function(){
   const html=beforeDashboard.apply(this,arguments);const all=dataset();const count={mentor:all.filter(r=>!r.mentor).length,ojt:all.filter(r=>r.planCount>0&&r.missing>0).length,interview:all.filter(r=>r.interview.missing>0).length};
   const now=current();const future=(db.employees||[]).filter(e=>active(e)&&dateValue(e.hire_date)>=START&&dateValue(e.hire_date)>now).length;
-  const regularLabels=new Set(['사원','계약직']);const conversion=(db.employees||[]).filter(e=>active(e)&&String(e.employment_type||'').trim()!=='정규직'&&![e.position,e.grade].some(v=>String(v||'').trim()==='사원(생산)')&&[e.position,e.grade].some(v=>regularLabels.has(String(v||'').trim()))).length;
+  const regularLabels=new Set(['사원','계약직']);const conversion=(db.employees||[]).filter(e=>active(e)&&!window.__hrIsSeparateContract?.(e)&&String(e.employment_type||'').trim()!=='정규직'&&![e.position,e.grade].some(v=>String(v||'').trim()==='사원(생산)')&&[e.position,e.grade].some(v=>regularLabels.has(String(v||'').trim()))).length;
   const cell=(name,value)=>`<div class="hr-today-stat"><span>${name}</span><strong>${value}명</strong></div>`;
   const alarm=window.__hrDashboardAlertCounts?.()||{overdue:0,urgent:0,soon:0,info:0};
   const alarmTiles=[['overdue','기한경과'],['urgent','7일 이내'],['soon','30일 이내'],['info','정보확인']].map(([id,label])=>`<button type="button" class="hr-today-alert-pill hr-alert-${id}" data-qa-view="alerts" title="인사일정 알림센터에서 확인">${label} <strong>${alarm[id]||0}건</strong></button>`).join('');
@@ -5882,6 +5883,58 @@ executiveView=function(){
  },true);
  applyLayout();
  window.__hrMenuPlacementCheck=()=>({groups:folders().map(f=>({name:title(f),views:[...container(f).children].filter(el=>el.matches?.('button.nav[data-view]')).map(b=>b.dataset.view)})),saved:config()});
+})();
+</script>
+<script id="hrSeparateContract20261123">
+/* 별도 계약직 기간: employement_type + position exact match excludes conversion and alert cohorts. */
+(function(){
+ 'use strict';
+ const isSeparate=e=>String(e?.employment_type||'').trim()==='계약직'&&String(e?.position||'').trim()==='계약직';
+ window.__hrIsSeparateContract=isSeparate;
+ const isoDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''))&& !Number.isNaN(Date.parse(v+'T00:00:00Z'))&&new Date(v+'T00:00:00Z').toISOString().slice(0,10)===v;
+ const priorOpen=window.openEmployee;
+ window.openEmployee=function(id=null,encoded=''){
+  const result=priorOpen.apply(this,arguments);
+  const grid=document.querySelector('#modalBody .formgrid');
+  if(!grid||document.getElementById('hrContractPeriod'))return result;
+  const employee=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
+  const wrap=document.createElement('div');wrap.id='hrContractPeriod';wrap.style.cssText='grid-column:1/-1;border:1px solid var(--line,#dce4f0);border-radius:10px;padding:12px;display:none';
+  wrap.innerHTML='<strong style="display:block;margin-bottom:8px">계약직 계약기간 (별도 관리)</strong><div class="formgrid" style="margin:0"><label>계약 시작일<input id="hrContractStart" type="date"></label><label>계약 종료일<input id="hrContractEnd" type="date"></label></div><p class="hint" style="margin:8px 0 0">직위가 계약직인 경우 입력할 수 있습니다. 고용형태도 계약직이면 정규직 전환 검토 및 일정 알림 집계에서 제외됩니다.</p>';
+  grid.appendChild(wrap);
+  document.getElementById('hrContractStart').value=String(employee?.contract_start_date||'');
+  document.getElementById('hrContractEnd').value=String(employee?.contract_end_date||'');
+  function toggle(){const show=String(document.getElementById('ePosition')?.value||'').trim()==='계약직';wrap.style.display=show?'block':'none';}
+  document.getElementById('ePosition')?.addEventListener('input',toggle);
+  document.getElementById('ePosition')?.addEventListener('change',toggle);
+  toggle();return result;
+ };
+ const priorSave=window.saveEmployee;
+ window.saveEmployee=function(id){
+  const box=document.getElementById('hrContractPeriod');
+  const pos=String(document.getElementById('ePosition')?.value||'').trim();
+  const start=document.getElementById('hrContractStart')?.value||'';
+  const end=document.getElementById('hrContractEnd')?.value||'';
+  if(box&&pos==='계약직'){
+   if((start&&!isoDate(start))||(end&&!isoDate(end))){alert('계약 시작일과 종료일은 유효한 날짜로 입력하세요.');return;}
+   if(start&&end&&start>end){alert('계약 종료일은 시작일보다 빠를 수 없습니다.');return;}
+   if(Boolean(start)!==Boolean(end)){alert('계약 시작일과 종료일을 모두 입력하거나 모두 비워 주세요.');return;}
+  }
+  const beforeLength=(db.employees||[]).length;
+  const e=id==null?null:(db.employees||[]).find(x=>String(x.id)===String(id));
+  const prevStart=String(e?.contract_start_date||''),prevEnd=String(e?.contract_end_date||'');
+  const result=priorSave.apply(this,arguments);
+  if(!box||document.getElementById('modalWrap')?.classList.contains('open'))return result;
+  const target=e||((db.employees||[]).length>beforeLength?db.employees.at(-1):null);
+  if(!target)return result;
+  // Preserve historical contract dates on reclassification; do not silently discard values.
+  if(pos!=='계약직'||(prevStart===start&&prevEnd===end))return result;
+  target.contract_start_date=start;
+  target.contract_end_date=end;
+  db.history??=[];
+  db.history.unshift({employee_id:target.id,event_date:typeof today==='function'?today():new Date().toISOString().slice(0,10),event_type:'계약기간변경',title:'계약기간 등록·수정',description:(prevStart||'미입력')+' ~ '+(prevEnd||'미입력')+' → '+(start||'미입력')+' ~ '+(end||'미입력'),department:target.department,grade:target.grade});
+  commit('계약기간 수정',String(target.employee_no||'')+' / '+String(target.name||''));
+  return result;
+ };
 })();
 </script>
 </body></html>
