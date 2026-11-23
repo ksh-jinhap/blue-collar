@@ -5999,4 +5999,87 @@ executiveView=function(){
  window.__hrContractRosterCheck=()=>({available:!!document.querySelector('.sidebar [data-view="'+PAGE+'"]'),matching:all().length,view});
 })();
 </script>
+
+<style id="hrDashboardSelectedMonthFlowStyle20261123">
+/* Keep the two selected-month staff-flow cards in the same six-card KPI row. */
+#content .hr-dashboard-six-kpis {grid-template-columns:repeat(6,minmax(0,1fr));gap:10px}
+#content .hr-dashboard-six-kpis>.card {min-width:0}
+#content .hr-dashboard-six-kpis.hr-dashboard-flow-only{grid-template-columns:repeat(2,minmax(0,1fr))!important;max-width:560px;margin-top:12px}
+@media(max-width:1000px){#content .hr-dashboard-six-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:760px){#content .hr-dashboard-six-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+<script id="hrDashboardSelectedMonthFlow20261123">
+(function(){
+ 'use strict';
+ const previousDashboard=dashboard;
+ const ym=(y,m)=>String(y)+'-'+String(m).padStart(2,'0');
+ const todayKst=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'}).slice(0,10);
+ const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(String(v||''));
+ function selectedFlow(){
+  const key=ym(planYear,planMonth),now=todayKst();
+  if(key>now.slice(0,7))return {hires:null,exits:null,source:'아직 도래하지 않은 월'};
+  const saved=(db.snapshots||[]).find(s=>Number(s.year)===Number(planYear)&&Number(s.month)===Number(planMonth));
+  const num=v=>Number.isFinite(Number(v))?Number(v):0;
+  if(saved?.flow_units&&typeof saved.flow_units==='object'){
+   const items=Object.values(saved.flow_units);
+   return {hires:items.reduce((a,v)=>a+num(v?.hires),0),exits:items.reduce((a,v)=>a+num(v?.exits),0),source:'저장된 월별 입퇴사 실적'};
+  }
+  if(saved?.hire_count!=null&&saved?.exit_count!=null)
+   return {hires:num(saved.hire_count),exits:num(saved.exit_count),source:'저장된 월별 입퇴사 실적'};
+  const staff=Array.isArray(db.employees)?db.employees:[];
+  const hires=staff.filter(e=>validDate(e.hire_date)&&String(e.hire_date).slice(0,7)===key).length;
+  const exits=staff.filter(e=>{
+   const day=String((typeof exitDate==='function'?exitDate(e):'')||e.exit_date||e.retirement_date||'').slice(0,10);
+   return validDate(day)&&day.slice(0,7)===key&&day<=now;
+  }).length;
+  return {hires,exits,source:'직원 등록기록 기준 참고'};
+ }
+ function flowCard(label,n,source){
+  const node=document.createElement('div');node.className='card';
+  const lbl=document.createElement('div');lbl.className='label';lbl.textContent=label;
+  const val=document.createElement('div');val.className='num';val.textContent=n===null?'—':Number(n).toLocaleString('ko-KR');
+  const note=document.createElement('div');note.className='note';note.textContent=source;
+  node.append(lbl,val,note);
+  return node;
+ }
+ function updateCard(existing,label,value,source){
+  const val=existing.querySelector('.num');if(val)val.textContent=value===null?'—':Number(value).toLocaleString('ko-KR');
+  const note=existing.querySelector('.note');if(note){note.textContent=source;note.title=source;}
+  const title=existing.querySelector('.label');if(title){
+   const info=title.querySelector('.hr-to-info');
+   if(info){const tip=label+' · '+source;info.dataset.tip=tip;info.setAttribute('aria-label',tip);}
+  }
+ }
+ dashboard=function(){
+  const root=document.createElement('div');root.innerHTML=previousDashboard.apply(this,arguments);
+  // Remove the misplaced duplicate inside Today's HR Work if an earlier version provided it.
+  root.querySelectorAll('.hr-selected-month-flow').forEach(node=>node.remove());
+  const flow=selectedFlow(),source=flow.source;
+  let cards=root.querySelector('.cards');
+  if(!cards){
+   // Even when no historical month-end headcount exists, show available dated hire/exit counts.
+   cards=document.createElement('div');cards.className='cards';
+   const first=root.querySelector('section.panel:not(.hr-today-work)');
+   if(first)first.before(cards);else root.appendChild(cards);
+  }
+  const labelOf=node=>node.querySelector('.label')?.textContent.replace('!','').trim()||'';
+  const list=()=>[...cards.children].filter(node=>node.classList.contains('card'));
+  // Replace rather than duplicate cards already present for the current month.
+  for(const [label,value] of [['당월 퇴사자',flow.exits],['당월 입사자',flow.hires]]){
+   let node=list().find(el=>labelOf(el)===label);
+   if(node)updateCard(node,label,value,source);
+   else cards.appendChild(flowCard(label,value,source));
+  }
+  // The requested positions are fixed: departure then hire, at the right of the dashboard KPI row.
+  for(const label of ['당월 퇴사자','당월 입사자']){
+   const item=list().find(el=>labelOf(el)===label);
+   if(item)cards.appendChild(item);
+  }
+  cards.classList.add('hr-dashboard-six-kpis');
+  if(list().length<6)cards.classList.add('hr-dashboard-flow-only');
+  return root.innerHTML;
+ };
+ window.__hrDashboardSelectedFlow=selectedFlow;
+})();
+</script>
 </body></html>
