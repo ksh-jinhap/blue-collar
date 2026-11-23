@@ -5937,4 +5937,66 @@ executiveView=function(){
  };
 })();
 </script>
+
+<style id="hrContractRosterStyle20261123">
+.hr-contract-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:0 0 14px}
+.hr-contract-toolbar label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#475569}
+.hr-contract-toolbar select,.hr-contract-toolbar input{min-height:35px;border:1px solid #cbd5e1;border-radius:7px;padding:6px 10px;color:#0f172a;background:#fff}
+.hr-contract-toolbar input{min-width:225px}
+.hr-contract-roster td,.hr-contract-roster th{white-space:nowrap}
+.hr-contract-roster .hr-contract-expired{color:#b91c1c;font-weight:700}
+.hr-contract-roster .hr-contract-soon{color:#b45309;font-weight:700}
+</style>
+<script id="hrContractRoster20261123">
+/* Contract roster: match all THREE explicit employee values exactly; no inferred employment type. */
+(function(){
+ 'use strict';
+ const PAGE='contractRoster';
+ const todayLocal=()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');};
+ const safe=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const folder=[...document.querySelectorAll('.sidebar .nav-folder')].find(f=>f.querySelector('.folder-head')?.textContent.includes('명부/현황'));
+ const root=folder?.querySelector('.folder-items');
+ if(!root)return;
+ let btn=root.querySelector('[data-view="'+PAGE+'"]');
+ if(!btn){btn=document.createElement('button');btn.type='button';btn.className='nav';btn.dataset.view=PAGE;btn.textContent='계약직';btn.addEventListener('click',()=>setView(PAGE));}
+ const anchor=root.querySelector('[data-view="conversion"]')||root.querySelector('[data-view="exits"]');
+ if(anchor)anchor.insertAdjacentElement('afterend',btn);else root.appendChild(btn);
+ names[PAGE]=['계약직','직위·직급·고용형태가 모두 계약직인 현재 근무 인원을 조회합니다.'];
+ let corp='전체',word='';
+ const matches=e=>e&&String(e.status||'').trim()!=='퇴사'&&String(e.status||'').trim()!=='입사예정'&&(!/^\d{4}-\d{2}-\d{2}$/.test(String(e.hire_date||''))||String(e.hire_date)<=todayLocal())&&String(e.position||'').trim()==='계약직'&&String(e.grade||'').trim()==='계약직'&&String(e.employment_type||'').trim()==='계약직';
+ const all=()=>Array.isArray(db.employees)?db.employees.filter(matches):[];
+ const remaining=end=>{
+  const d=String(end||'');if(!/^\d{4}-\d{2}-\d{2}$/.test(d))return '<span class="hint">미등록</span>';
+  const day=todayLocal(),a=Date.parse(d+'T00:00:00Z'),b=Date.parse(day+'T00:00:00Z');
+  if(!Number.isFinite(a))return '<span class="hint">확인 필요</span>';
+  const n=Math.round((a-b)/86400000);
+  return n<0?'<span class="hr-contract-expired">종료일 '+(-n)+'일 경과</span>':n===0?'<span class="hr-contract-soon">오늘 종료</span>':n<=30?'<span class="hr-contract-soon">'+n+'일 남음</span>':n+'일 남음';
+ };
+ function page(){
+  const data=all();
+  const corps=[...new Set(data.map(e=>String(e.corporation||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  if(corp!=='전체'&&!corps.includes(corp))corp='전체';
+  const rows=data.filter(e=>(corp==='전체'||String(e.corporation||'').trim()===corp)&&(!word||[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.mentor_name].some(v=>String(v||'').toLocaleLowerCase().includes(word.toLocaleLowerCase())))).sort((a,b)=>String(a.corporation||'').localeCompare(String(b.corporation||''),'ko')||String(a.headquarters||'').localeCompare(String(b.headquarters||''),'ko')||String(a.department||'').localeCompare(String(b.department||''),'ko')||String(a.employee_no||'').localeCompare(String(b.employee_no||''),'ko'));
+  const expired=data.filter(e=>/^\d{4}-\d{2}-\d{2}$/.test(String(e.contract_end_date||''))&&e.contract_end_date<todayLocal()).length;
+  const missing=data.filter(e=>!e.contract_start_date||!e.contract_end_date).length;
+  const options=['전체',...corps].map(v=>'<option value="'+safe(v)+'"'+(v===corp?' selected':'')+'>'+safe(v)+'</option>').join('');
+  const tr=rows.map(e=>'<tr><td>'+safe(e.employee_no)+'</td><td><b>'+safe(e.name)+'</b></td><td>'+safe(e.corporation)+'</td><td>'+safe(e.headquarters)+'</td><td>'+safe(e.department)+'</td><td>'+safe(e.position)+'</td><td>'+safe(e.grade)+'</td><td>'+safe(e.employment_type)+'</td><td>'+safe(e.hire_date||'-')+'</td><td>'+safe(e.contract_start_date||'-')+'</td><td>'+safe(e.contract_end_date||'-')+'</td><td>'+remaining(e.contract_end_date)+'</td><td><button type="button" class="btn tiny" data-contract-edit="'+safe(e.id)+'">수정</button></td></tr>').join('');
+  document.getElementById('heading').textContent=names[PAGE][0];
+  document.getElementById('subheading').textContent=names[PAGE][1];
+  document.querySelectorAll('.nav').forEach(b=>b.classList.toggle('active',b.dataset.view===PAGE));
+  document.getElementById('content').innerHTML='<div class="cards">'+card('계약직 재직 인원',data.length,'직위·직급·고용형태 모두 계약직')+card('계약기간 미등록',missing,'시작일 또는 종료일 확인 필요')+card('계약 종료일 경과',expired,'종료일 확인 필요','warning')+'</div><section class="panel"><div class="report-head"><h2>계약직 명부</h2><span class="hint">퇴사자·미입사 예정자 제외</span></div><p class="hint">직위, 직급, 고용형태가 모두 정확히 <b>계약직</b>인 직원만 표시합니다. 정규직 전환 검토 대상과 구분하여 관리하며 계약기간은 직원 수정에서 등록합니다.</p><div class="hr-contract-toolbar"><label>법인<select id="hrContractRosterCorp">'+options+'</select></label><label>직원 검색<input id="hrContractRosterSearch" value="'+safe(word)+'" placeholder="사번·성명·부서 검색"></label><button type="button" class="btn" id="hrContractRosterSearchBtn">조회</button><span class="pill">조회 '+rows.length.toLocaleString('ko-KR')+'명</span></div><div class="tablewrap"><table class="hr-contract-roster"><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부</th><th>부서</th><th>직위</th><th>직급</th><th>고용형태</th><th>입사일</th><th>계약 시작일</th><th>계약 종료일</th><th>잔여기간</th><th>관리</th></tr></thead><tbody>'+(tr||'<tr><td colspan="13" class="empty">조건에 해당하는 계약직 직원이 없습니다.</td></tr>')+'</tbody></table></div></section>';
+ }
+ const previousRender=render;
+ render=function(){if(view===PAGE){if(typeof session!=='undefined'&&!session){view='cloud';return previousRender.apply(this,arguments);}page();return;}return previousRender.apply(this,arguments);};
+ document.addEventListener('change',ev=>{if(ev.target.id==='hrContractRosterCorp'){corp=ev.target.value;render();}});
+ document.addEventListener('input',ev=>{if(ev.target.id==='hrContractRosterSearch')word=ev.target.value;});
+ document.addEventListener('click',ev=>{
+  const edit=ev.target.closest('[data-contract-edit]');if(edit){ev.preventDefault();if(typeof openEmployee==='function')openEmployee(edit.dataset.contractEdit);return;}
+  if(ev.target.closest('#hrContractRosterSearchBtn')){render();return;}
+ });
+ document.addEventListener('keydown',ev=>{if(ev.target.id==='hrContractRosterSearch'&&ev.key==='Enter'){ev.preventDefault();render();}});
+ // Reapply existing menu visibility and saved placement without modifying any employee records.
+ window.__hrContractRosterCheck=()=>({available:!!document.querySelector('.sidebar [data-view="'+PAGE+'"]'),matching:all().length,view});
+})();
+</script>
 </body></html>
