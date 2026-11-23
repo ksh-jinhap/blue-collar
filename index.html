@@ -6082,4 +6082,112 @@ executiveView=function(){
  window.__hrDashboardSelectedFlow=selectedFlow;
 })();
 </script>
+
+<style id="hrPersonnelInterviewStyles20261123">
+.hr-pi-controls{display:flex;align-items:end;gap:9px;flex-wrap:wrap;margin-bottom:14px}
+.hr-pi-controls label{display:flex;flex-direction:column;gap:5px;font-size:12px;font-weight:600}
+.hr-pi-controls input,.hr-pi-controls select{min-height:36px;min-width:145px}
+.hr-pi-summary{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.hr-pi-summary span{border:1px solid #dbe4f2;border-radius:8px;padding:8px 12px;background:#f8fbff;font-size:13px}
+.hr-pi-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:11px;margin-top:14px}
+.hr-pi-form label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}
+.hr-pi-form input,.hr-pi-form select,.hr-pi-form textarea{width:100%;min-width:0}
+.hr-pi-wide{grid-column:1/-1}
+.hr-pi-records{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto;margin:10px 0}
+.hr-pi-record{border:1px solid #dbe4f2;padding:11px 12px;border-radius:8px}
+.hr-pi-record-header{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between}
+.hr-pi-record-actions{display:flex;gap:5px;flex-wrap:wrap}
+.hr-pi-record p{white-space:pre-wrap;overflow-wrap:anywhere;margin:7px 0 2px;font-size:13px}
+@media(max-width:700px){.hr-pi-form{grid-template-columns:1fr}}
+</style>
+<script id="hrPersonnelInterviews20261123">
+/* General personnel interviews. Separate from OJT mentoring; records live on each employee. */
+(function(){
+ 'use strict';
+ const PAGE='personnelInterviews';
+ const navs=document.querySelector('.sidebar .navs');
+ const folder=[...document.querySelectorAll('.sidebar .nav-folder')].find(f=>f.querySelector('.folder-head')?.textContent.includes('인원관리'));
+ const target=folder?.querySelector('.folder-items');
+ if(!target||navs.querySelector('[data-view="'+PAGE+'"]'))return;
+ const btn=document.createElement('button');btn.type='button';btn.className='nav';btn.dataset.view=PAGE;btn.textContent='면담기록';
+ const anchor=target.querySelector('[data-view="history"]');
+ if(anchor)anchor.insertAdjacentElement('afterend',btn);else target.appendChild(btn);
+ btn.addEventListener('click',()=>setView(PAGE));
+ names[PAGE]=['면담기록','생산직 직원별 일반 인사면담을 검색·작성·조회합니다. OJT 단계별 면담과 별도로 관리됩니다.'];
+ const safe=v=>esc(String(v??''));
+ const iso=()=>new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Seoul'});
+ const employees=()=>Array.isArray(db.employees)?db.employees:[];
+ const person=id=>employees().find(e=>String(e.id)===String(id));
+ const entries=e=>Array.isArray(e?.hr_interviews)?e.hr_interviews:[];
+ const validDate=v=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&!Number.isNaN(new Date(v+'T00:00:00').valueOf())&&new Date(v+'T00:00:00').toISOString().slice(0,10)===v;
+ let term='',corp='',state='전체',searchPerformed=false;
+ const hasEntry=e=>entries(e).length>0;
+ function viewHtml(){
+  const list=employees().filter(e=>(!corp||String(e.corporation||'')===corp)&&(state==='전체'||(state==='기록 있음'?hasEntry(e):!hasEntry(e)))&&(!term||[e.name,e.employee_no,e.corporation,e.headquarters,e.department].some(v=>String(v||'').toLocaleLowerCase('ko').includes(term.toLocaleLowerCase('ko'))))).sort((a,b)=>String(a.corporation||'').localeCompare(String(b.corporation||''),'ko')||String(a.department||'').localeCompare(String(b.department||''),'ko')||String(a.name||'').localeCompare(String(b.name||''),'ko'));
+  const orgs=[...new Set(employees().map(e=>String(e.corporation||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const total=employees().reduce((n,e)=>n+entries(e).length,0),recorded=employees().filter(hasEntry).length;
+  const trs=list.slice(0,350).map(e=>{const rec=entries(e).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')))[0];return `<tr><td>${safe(e.employee_no)}</td><td><b>${safe(e.name)}</b></td><td>${safe(e.corporation)}</td><td>${safe(e.headquarters)}</td><td>${safe(e.department)}</td><td>${safe(e.status||'')}</td><td>${entries(e).length}건</td><td>${safe(rec?.date||'-')}</td><td><button type="button" class="btn tiny primary" data-pi-open="${safe(e.id)}">면담 작성·조회</button></td></tr>`;}).join('');
+  return `<section class="panel"><div class="report-head"><h2>생산직 일반 면담기록</h2><span class="hint">OJT 단계별 면담과 별도 관리 · 직원별 누적 기록</span></div><div class="hr-pi-summary"><span>전체 직원 <b>${employees().length.toLocaleString('ko-KR')}명</b></span><span>면담기록 보유 <b>${recorded.toLocaleString('ko-KR')}명</b></span><span>면담 누계 <b>${total.toLocaleString('ko-KR')}건</b></span></div><div class="hr-pi-controls"><label>직원 검색<input id="hrPiSearch" value="${safe(term)}" placeholder="성명·사번·부서"></label><label>법인<select id="hrPiCorp"><option value="">전체 법인</option>${orgs.map(v=>`<option value="${safe(v)}" ${v===corp?'selected':''}>${safe(v)}</option>`).join('')}</select></label><label>면담기록<select id="hrPiStatus">${['전체','기록 있음','기록 없음'].map(v=>`<option value="${v}" ${v===state?'selected':''}>${v}</option>`).join('')}</select></label><button type="button" class="btn primary" id="hrPiSearchButton">조회</button><button type="button" class="btn" id="hrPiReset">초기화</button></div><div class="summaryline">조회 결과 <b>${list.length.toLocaleString('ko-KR')}명</b> · 목록에서 직원을 선택하면 기록 작성·수정·삭제가 가능합니다.</div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부</th><th>부서</th><th>상태</th><th>면담 누계</th><th>최근 면담일</th><th>관리</th></tr></thead><tbody>${trs||'<tr><td colspan="9" class="empty">조회 조건에 맞는 직원이 없습니다.</td></tr>'}</tbody></table></div>${list.length>350?'<p class="hint">앞의 350명만 표시합니다. 검색어 또는 법인 필터를 사용해 주세요.</p>':''}</section>`;
+ }
+ function openList(id){
+  const e=person(id);if(!e)return;
+  const all=entries(e).slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||'')));
+  const cards=all.map(r=>`<div class="hr-pi-record"><div class="hr-pi-record-header"><div><b>${safe(r.date)}</b> · ${safe(r.type||'일반면담')} · ${safe(r.subject||'제목 없음')}<div class="hint">면담자: ${safe(r.interviewer||'-')} · 후속 처리: ${safe(r.follow_status||'미정')}</div></div><div class="hr-pi-record-actions"><button type="button" class="btn tiny" data-pi-edit="${safe(e.id)}" data-pi-record="${safe(r.id)}">수정</button><button type="button" class="btn tiny danger" data-pi-delete="${safe(e.id)}" data-pi-record="${safe(r.id)}">삭제</button></div></div><p>${safe(r.content||'')}</p>${r.followup?`<p><b>후속 조치:</b> ${safe(r.followup)}</p>`:''}${r.follow_date?`<div class="hint">후속 확인일: ${safe(r.follow_date)}</div>`:''}</div>`).join('');
+  modal(e.name+' · 일반 면담기록',`<div class="hint">${safe(e.employee_no)} · ${safe(e.corporation)} / ${safe(e.department)} · 현재 ${safe(e.status||'미확인')}</div><div class="toolbar" style="margin:12px 0"><button type="button" class="btn primary" data-pi-new="${safe(e.id)}">+ 새 면담 작성</button><button type="button" class="btn" id="hrPiClose">닫기</button></div><div class="summaryline">면담기록 ${all.length}건</div><div class="hr-pi-records">${cards||'<div class="empty">등록된 일반 면담기록이 없습니다.</div>'}</div>`);
+ }
+ const types=['일반면담','고충면담','근무상담','업무지도','복귀면담','기타'];
+ function editForm(employeeId,recordId){
+  const e=person(employeeId);if(!e)return;
+  const r=entries(e).find(x=>String(x.id)===String(recordId))||{};
+  const date=r.date||iso();
+  modal(e.name+(r.id?' · 면담기록 수정':' · 새 면담 작성'),`<div class="hint">사번 ${safe(e.employee_no)} · ${safe(e.corporation)} / ${safe(e.department)} · OJT 기록과 구분하여 저장</div><div class="hr-pi-form"><label>면담일 *<input id="hrPiDate" type="date" value="${safe(date)}"></label><label>면담 유형<select id="hrPiType">${types.map(v=>`<option value="${v}" ${r.type===v?'selected':''}>${v}</option>`).join('')}</select></label><label>면담자<input id="hrPiInterviewer" value="${safe(r.interviewer)}" placeholder="면담 담당자"></label><label>후속 처리<select id="hrPiFollowStatus">${['미정','조치 예정','진행 중','완료','해당 없음'].map(v=>`<option ${r.follow_status===v?'selected':''}>${v}</option>`).join('')}</select></label><label class="hr-pi-wide">면담 제목 *<input id="hrPiSubject" value="${safe(r.subject)}" maxlength="150" placeholder="예: 근무 적응 관련 상담"></label><label class="hr-pi-wide">주요 면담 내용 *<textarea id="hrPiContent" rows="5" maxlength="10000" placeholder="면담 내용을 작성하세요.">${safe(r.content)}</textarea></label><label class="hr-pi-wide">후속 조치<textarea id="hrPiFollowup" rows="3" maxlength="5000" placeholder="필요한 후속 조치 또는 확인 내용">${safe(r.followup)}</textarea></label><label>후속 확인일<input id="hrPiFollowDate" type="date" value="${safe(r.follow_date)}"></label></div><div class="modalactions"><button type="button" class="btn" data-pi-back="${safe(e.id)}">목록으로</button><button type="button" class="btn primary" data-pi-save="${safe(e.id)}" data-pi-record="${safe(r.id||'')}">면담 저장</button></div>`);
+ }
+ function saveEntry(id,recordId){
+  if(!window.__hrCloudConnected?.()){alert('공동 DB에 로그인한 후 기록을 저장할 수 있습니다.');return;}
+  const e=person(id);if(!e)return;
+  const get=id=>document.getElementById(id)?.value.trim()||'';
+  const date=get('hrPiDate'),subject=get('hrPiSubject'),content=get('hrPiContent'),follow_date=get('hrPiFollowDate');
+  if(!validDate(date)||!subject||!content){alert('면담일·면담 제목·주요 면담 내용은 필수입니다.');return;}
+  if(follow_date&&!validDate(follow_date)){alert('후속 확인일을 확인하세요.');return;}
+  const value={date,type:get('hrPiType'),interviewer:get('hrPiInterviewer'),subject,content,followup:get('hrPiFollowup'),follow_date,follow_status:get('hrPiFollowStatus')};
+  if(!Array.isArray(e.hr_interviews))e.hr_interviews=[];
+  const existing=e.hr_interviews.find(x=>String(x.id)===String(recordId));
+  if(existing)Object.assign(existing,value,{updated_at:new Date().toISOString()});
+  else e.hr_interviews.push({id:String(uid()),...value,created_at:new Date().toISOString()});
+  closeModal();commit('일반 면담기록 '+(existing?'수정':'등록'),String(e.employee_no||'')+' '+String(e.name||'')+' · '+date+' · '+subject);
+  openList(id);
+ }
+ function deleteEntry(id,recordId){
+  if(!window.__hrCloudConnected?.()){alert('공동 DB에 로그인한 후 삭제할 수 있습니다.');return;}
+  const e=person(id),record=entries(e).find(x=>String(x.id)===String(recordId));if(!e||!record)return;
+  if(!confirm(e.name+' 직원의 '+record.date+' 면담기록을 삭제하시겠습니까? 삭제 후에는 이 기록을 복구할 수 없습니다.'))return;
+  e.hr_interviews=e.hr_interviews.filter(x=>String(x.id)!==String(recordId));
+  closeModal();commit('일반 면담기록 삭제',String(e.employee_no||'')+' '+String(e.name||'')+' · '+String(record.date||'')+' · '+String(record.subject||''));openList(id);
+ }
+ const previousRender=render;
+ render=function(){
+  if(view!==PAGE)return previousRender.apply(this,arguments);
+  if(!window.__hrCloudConnected?.()){view='cloud';return previousRender.apply(this,arguments);}
+  document.getElementById('heading').textContent=names[PAGE][0];
+  document.getElementById('subheading').textContent=names[PAGE][1];
+  document.getElementById('content').innerHTML=viewHtml();
+  document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===PAGE));
+ };
+ document.addEventListener('click',ev=>{
+  const clicked=ev.target.closest('[data-pi-open],[data-pi-new],[data-pi-edit],[data-pi-delete],[data-pi-save],[data-pi-back],#hrPiClose,#hrPiSearchButton,#hrPiReset');if(!clicked)return;
+  const data=clicked.dataset;
+  if(data.piOpen){openList(data.piOpen);return;}
+  if(data.piNew){editForm(data.piNew,'');return;}
+  if(data.piEdit){editForm(data.piEdit,data.piRecord);return;}
+  if(data.piDelete){deleteEntry(data.piDelete,data.piRecord);return;}
+  if(data.piSave){saveEntry(data.piSave,data.piRecord);return;}
+  if(data.piBack){openList(data.piBack);return;}
+  if(clicked.id==='hrPiClose'){closeModal();return;}
+  if(clicked.id==='hrPiReset'){term='';corp='';state='전체';render();return;}
+  if(clicked.id==='hrPiSearchButton'){term=document.getElementById('hrPiSearch')?.value.trim()||'';corp=document.getElementById('hrPiCorp')?.value||'';state=document.getElementById('hrPiStatus')?.value||'전체';render();}
+ });
+ document.addEventListener('keydown',ev=>{if(ev.target.id==='hrPiSearch'&&ev.key==='Enter'){ev.preventDefault();term=ev.target.value.trim();corp=document.getElementById('hrPiCorp')?.value||'';state=document.getElementById('hrPiStatus')?.value||'전체';render();}});
+ window.__hrPersonnelInterviewCheck=()=>({menu:!!navs.querySelector('[data-view="'+PAGE+'"]'),employees:employees().length,records:employees().reduce((a,e)=>a+entries(e).length,0)});
+})();
+</script>
 </body></html>
