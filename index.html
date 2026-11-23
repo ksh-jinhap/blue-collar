@@ -5399,4 +5399,95 @@ executiveView=function(){
  document.addEventListener('click',e=>{if(e.target.closest('.hr-help-anchor'))return;document.querySelectorAll('.hr-help-anchor.hr-help-open').forEach(a=>{a.classList.remove('hr-help-open');a.querySelector('.hr-help-trigger')?.setAttribute('aria-expanded','false');});});
 })();
 </script>
+<style id="hrMentorManagementStyle">
+.hr-mentor-summary{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.hr-mentor-summary>.panel{margin:0;padding:14px}
+.hr-mentor-summary strong{font-size:22px;display:block;margin-top:6px}
+@media(max-width:680px){.hr-mentor-summary{grid-template-columns:1fr}}
+</style>
+<script id="hrMentorManagement20261123">
+(function(){
+ 'use strict';
+ const PAGE='mentorManagement';
+ names[PAGE]=['멘토 관리','직원별 멘토 지정 현황과 미지정 대상자를 조회합니다.'];
+ let corpFilter='전체',statusFilter='전체',query='';
+ const safeText=v=>typeof safe==='function'?safe(String(v??'')):String(v??'').replace(/[&<>"']/g,ch=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+ const active=e=>String(e.status||'')!=='퇴사';
+ function list(){return (db.employees||[]).filter(active)}
+ function mentorPage(){
+  const all=list();
+  const corps=[...new Set(all.map(e=>String(e.corporation||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  const inCorp=all.filter(e=>corpFilter==='전체'||e.corporation===corpFilter);
+  const assigned=inCorp.filter(e=>String(e.mentor_name||'').trim());
+  const rows=inCorp.filter(e=>(statusFilter==='전체'||(statusFilter==='지정' ? Boolean(String(e.mentor_name||'').trim()) : !String(e.mentor_name||'').trim()))&&(!query||[e.employee_no,e.name,e.corporation,e.headquarters,e.department,e.mentor_name].some(value=>String(value||'').toLocaleLowerCase('ko').includes(query.toLocaleLowerCase('ko'))))).sort((a,b)=>String(a.corporation||'').localeCompare(String(b.corporation||''),'ko')||String(a.department||'').localeCompare(String(b.department||''),'ko')||String(a.name||'').localeCompare(String(b.name||''),'ko'));
+  const opt=(value,label,current)=>`<option value="${safeText(value)}" ${value===current?'selected':''}>${safeText(label)}</option>`;
+  return `<div class="hr-mentor-summary"><section class="panel"><span>조회 대상 직원</span><strong>${inCorp.length}명</strong></section><section class="panel"><span>멘토 지정</span><strong>${assigned.length}명</strong></section><section class="panel"><span>멘토 미지정</span><strong>${inCorp.length-assigned.length}명</strong></section></div><section class="panel"><div class="report-head"><h2>직원별 멘토 지정 현황</h2><span class="hint">직원 수정 화면에서 멘토를 등록·변경·해제할 수 있습니다.</span></div><div class="toolbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0"><label>법인 <select id="hrMentorCorp">${opt('전체','전체 법인',corpFilter)}${corps.map(c=>opt(c,c,corpFilter)).join('')}</select></label><label>지정 상태 <select id="hrMentorStatus">${['전체','지정','미지정'].map(c=>opt(c,c,statusFilter)).join('')}</select></label><label>검색 <input id="hrMentorQuery" value="${safeText(query)}" placeholder="사번·성명·부서·멘토" autocomplete="off"></label><button type="button" class="btn" id="hrMentorReset">초기화</button><span class="hint">조회 ${rows.length}명</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부</th><th>부서</th><th>현재상태</th><th>멘토</th><th>멘토 부서 / 비고</th><th>관리</th></tr></thead><tbody>${rows.map(e=>`<tr><td>${safeText(e.employee_no)}</td><td>${safeText(e.name)}</td><td>${safeText(e.corporation)}</td><td>${safeText(e.headquarters)}</td><td>${safeText(e.department)}</td><td>${safeText(e.status)}</td><td>${safeText(e.mentor_name||'미지정')}</td><td>${safeText(e.mentor_department||'-')}</td><td><button type="button" class="btn tiny" data-hr-mentor-edit="${safeText(e.id)}">직원 수정</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">해당 조건의 직원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+ }
+ const folder=[...document.querySelectorAll('.nav-folder')].find(g=>g.querySelector('.folder-head')?.textContent.includes('OJT 관리'));
+ const group=folder?.querySelector('.folder-items');
+ if(group&&!group.querySelector('[data-view="'+PAGE+'"]')){
+  const btn=document.createElement('button');btn.type='button';btn.className='nav';btn.dataset.view=PAGE;btn.textContent='멘토 관리';
+  group.appendChild(btn);
+  btn.addEventListener('click',()=>setView(PAGE));
+ }
+ const prevOpen=window.openEmployee;
+ window.openEmployee=function(id=null,encoded=''){
+  const result=prevOpen.apply(this,arguments);
+  const grid=document.querySelector('#modalBody .formgrid');
+  if(!grid||document.getElementById('eMentorName'))return result;
+  const emp=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
+  const label=document.createElement('label');label.textContent='멘토';
+  const input=document.createElement('input');input.id='eMentorName';input.type='text';input.autocomplete='off';input.placeholder='멘토 성명 (미지정 시 공란)';input.value=String(emp?.mentor_name||'');
+  label.appendChild(input);
+  const deptLabel=document.createElement('label');deptLabel.textContent='멘토 부서 / 비고';
+  const dept=document.createElement('input');dept.id='eMentorDept';dept.type='text';dept.autocomplete='off';dept.placeholder='선택 입력';dept.value=String(emp?.mentor_department||'');deptLabel.appendChild(dept);
+  grid.append(label,deptLabel);
+  return result;
+ };
+ const prevSave=window.saveEmployee;
+ window.saveEmployee=function(id){
+  const input=document.getElementById('eMentorName');
+  const dept=document.getElementById('eMentorDept');
+  const intended=input?{name:input.value.trim(),department:dept?.value.trim()||''}:null;
+  const employee=id==null?null:(db.employees||[]).find(e=>String(e.id)===String(id));
+  const before=(db.employees||[]).length;
+  const result=prevSave.apply(this,arguments);
+  if(!intended||document.getElementById('modalWrap')?.classList.contains('open'))return result;
+  const target=employee||((db.employees||[]).length>before?db.employees.at(-1):null);
+  if(!target)return result;
+  const oldName=String(target.mentor_name||'').trim(),oldDept=String(target.mentor_department||'').trim();
+  if(oldName===intended.name&&oldDept===intended.department)return result;
+  target.mentor_name=intended.name;
+  target.mentor_department=intended.name?intended.department:'';
+  if(employee&&Array.isArray(db.audit))db.audit.unshift({id:uid(),date:new Date().toLocaleString('ko-KR'),action:'멘토 지정 변경',detail:String(target.employee_no||'')+' / '+(oldName||'미지정')+' → '+(intended.name||'미지정')});
+  save();render();
+  return result;
+ };
+ const prevSetView=setView;
+ setView=function(v){
+  if(v===PAGE){view=v;return render();}
+  return prevSetView.apply(this,arguments);
+ };
+ const prevRender=render;
+ render=function(){
+  if(view!==PAGE)return prevRender.apply(this,arguments);
+  if(typeof session!=='undefined'&&!session){view='cloud';return prevRender.apply(this,arguments)}
+  document.getElementById('heading').textContent=names[PAGE][0];
+  document.getElementById('subheading').textContent=names[PAGE][1];
+  document.getElementById('content').innerHTML=mentorPage();
+  document.querySelectorAll('.nav').forEach(n=>n.classList.toggle('active',n.dataset.view===PAGE));
+ };
+ document.addEventListener('change',event=>{
+  if(event.target.id==='hrMentorCorp'){corpFilter=event.target.value;render();}
+  if(event.target.id==='hrMentorStatus'){statusFilter=event.target.value;render();}
+ });
+ document.addEventListener('input',event=>{if(event.target.id==='hrMentorQuery')query=event.target.value.trim();});
+ document.addEventListener('keydown',event=>{if(event.target.id==='hrMentorQuery'&&event.key==='Enter')render();});
+ document.addEventListener('click',event=>{
+  if(event.target.closest('#hrMentorReset')){corpFilter='전체';statusFilter='전체';query='';render();}
+  const button=event.target.closest('[data-hr-mentor-edit]');
+  if(button){const e=(db.employees||[]).find(x=>String(x.id)===button.dataset.hrMentorEdit);if(e)openEmployee(e.id);}
+ });
+})();
+</script>
 </body></html>
