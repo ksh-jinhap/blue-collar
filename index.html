@@ -3820,7 +3820,7 @@ function install(){
  const submenu=document.createElement('div');submenu.id='hrCardBulkSubmenu';submenu.className='hr-card-submenu';submenu.hidden=true;
  for(const [key,cfg] of Object.entries(configs)){const button=document.createElement('button');button.type='button';button.className='nav';button.textContent=cfg.title;button.addEventListener('click',()=>modalFor(key));submenu.append(button);}
  const dobButton=document.createElement('button');dobButton.type='button';dobButton.className='nav';dobButton.dataset.view='hrDobBulk';dobButton.textContent='생년월일 일괄 반영';dobButton.addEventListener('click',()=>{if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용할 수 있습니다.');return;}submenu.hidden=false;parent.setAttribute('aria-expanded','true');setView('hrDobBulk');});submenu.append(dobButton);
- parent.addEventListener('click',()=>{if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용할 수 있습니다.');return;}submenu.hidden=false;parent.setAttribute('aria-expanded','true');setView('hrCardBulkStatus');});target.append(parent,submenu);
+ parent.addEventListener('click',()=>{if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 이용할 수 있습니다.');return;}const opening=submenu.hidden;submenu.hidden=!opening;parent.setAttribute('aria-expanded',String(opening));if(opening)setView('hrCardBulkStatus');});target.append(parent,submenu);
 }
 // Dashboard for registration completeness. This is read-only: never mutates db.
 const statusView='hrCardBulkStatus';
@@ -4170,7 +4170,8 @@ let qaSearchTimer=null;
 document.addEventListener('input',ev=>{if(!['qaText','qaChangeText'].includes(ev.target.id))return;const id=ev.target.id,at=ev.target.selectionStart??ev.target.value.length;if(id==='qaText')qText=ev.target.value;else changeText=ev.target.value;clearTimeout(qaSearchTimer);if(ev.isComposing)return;qaSearchTimer=setTimeout(()=>{if(document.activeElement?.id!==id)return;render();const next=document.getElementById(id);if(next){next.focus({preventScroll:true});try{next.setSelectionRange(at,at);}catch(_){}}},300);});
 document.addEventListener('change',ev=>{if(ev.target.id==='qaText'||ev.target.id==='qaChangeText'){clearTimeout(qaSearchTimer);render();}});
 const previousDashboard=dashboard;
-dashboard=function(){const html=previousDashboard();if((db.employees||[]).length===0)return html;const allAlerts=alertRows(),n=allAlerts.filter(x=>x.kind!=='필수정보 누락').length;const levels={overdue:0,urgent:0,soon:0,info:0};allAlerts.forEach(a=>levels[alertSeverity(a)]++);const issues=problems().length;return html+`<section class="panel no-print"><div class="report-head"><div><h2>인사관리 확인사항</h2><p class="hint">일정 알림 ${n}건 · 인사정보 점검 ${issues}건 (직원별 중복 포함)</p><div class="hr-dashboard-alerts">${['overdue','urgent','soon','info'].map(k=>`<span class="hr-alert-label hr-alert-${k}">${alertTitle[k]} ${levels[k]}건</span>`).join('')}</div></div><div class="actions">${btnView('alerts','일정 알림 확인')}${btnView('quality','정보 점검하기')}${btnView('trends','인력 증감 보기')}</div></div></section>`;};
+window.__hrDashboardAlertCounts=()=>{const result={overdue:0,urgent:0,soon:0,info:0};alertRows().forEach(a=>{const level=alertSeverity(a);if(Object.prototype.hasOwnProperty.call(result,level))result[level]++;});return result;};
+dashboard=function(){return previousDashboard();};
 })();
 </script>
 <script>
@@ -5575,7 +5576,9 @@ executiveView=function(){
   const now=current();const future=(db.employees||[]).filter(e=>active(e)&&dateValue(e.hire_date)>=START&&dateValue(e.hire_date)>now).length;
   const regularLabels=new Set(['사원','계약직']);const conversion=(db.employees||[]).filter(e=>active(e)&&String(e.employment_type||'').trim()!=='정규직'&&![e.position,e.grade].some(v=>String(v||'').trim()==='사원(생산)')&&[e.position,e.grade].some(v=>regularLabels.has(String(v||'').trim()))).length;
   const cell=(name,value)=>`<div class="hr-today-stat"><span>${name}</span><strong>${value}명</strong></div>`;
-  const panel=`<section class="panel hr-today-work no-print"><div class="hr-today-head"><div><h2>오늘의 인사업무</h2><span class="hint">신규 입사자 OJT 관리 · 기준일 ${text(now)}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn tiny" data-unified-go="conversion">전환 대상 확인</button><button type="button" class="btn tiny" data-unified-go="${PAGE}">OJT·멘토 통합관리 →</button></div></div><div class="hr-today-stats">${cell('입사 예정',future)}${cell('정규직 전환 검토',conversion)}${cell('멘토 미지정',count.mentor)}${cell('OJT 미완료',count.ojt)}${cell('면담 확인 필요',count.interview)}</div></section>`;
+  const alarm=window.__hrDashboardAlertCounts?.()||{overdue:0,urgent:0,soon:0,info:0};
+  const alarmTiles=[['overdue','기한경과'],['urgent','7일 이내'],['soon','30일 이내'],['info','정보확인']].map(([id,label])=>`<button type="button" class="hr-today-alert-pill hr-alert-${id}" data-qa-view="alerts" title="인사일정 알림센터에서 확인">${label} <strong>${alarm[id]||0}건</strong></button>`).join('');
+  const panel=`<section class="panel hr-today-work no-print"><div class="hr-today-head"><div><h2>오늘의 인사업무</h2><span class="hint">신규 입사자 OJT 관리 · 기준일 ${text(now)}</span></div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn tiny" data-unified-go="conversion">전환 대상 확인</button><button type="button" class="btn tiny" data-unified-go="${PAGE}">OJT·멘토 통합관리 →</button></div></div><div class="hr-today-stats">${cell('입사 예정',future)}${cell('정규직 전환 검토',conversion)}${cell('멘토 미지정',count.mentor)}${cell('OJT 미완료',count.ojt)}${cell('면담 확인 필요',count.interview)}</div><div class="hr-today-alarm-line">${alarmTiles}</div></section>`;
   return panel+html;
  };
  document.addEventListener('click',ev=>{
@@ -5592,6 +5595,24 @@ executiveView=function(){
 })();
 </script>
 
+<style id="hrTodayAlertsCompact20261123">
+.hr-today-alarm-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px;padding-top:9px;border-top:1px solid #e2e8f0}
+.hr-today-alert-pill{border:1px solid currentColor;border-radius:20px;padding:5px 10px;background:#fff;font:inherit;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.hr-today-alert-pill strong{margin-left:5px;font-weight:800}
+.hr-today-alert-pill:hover,.hr-today-alert-pill:focus-visible{filter:brightness(.95);outline-offset:2px}
+</style>
+<script id="hrAlertCenterMenu20261123">
+/* Makes the existing alert center available as an ordinary System Management sub-menu. */
+(function(){
+ 'use strict';
+ const folder=[...document.querySelectorAll('.sidebar .nav-folder')].find(f=>f.querySelector('.folder-head')?.textContent.includes('시스템 관리'));
+ const items=folder?.querySelector('.folder-items');if(!items)return;
+ let button=items.querySelector('[data-view="alerts"]');
+ if(!button){button=document.createElement('button');button.type='button';button.className='nav';button.dataset.view='alerts';button.textContent='인사일정 알림센터';button.addEventListener('click',()=>setView('alerts'));}
+ const quality=items.querySelector('[data-view="quality"]');
+ if(quality)quality.insertAdjacentElement('afterend',button);else items.prepend(button);
+})();
+</script>
 <style id="hrMenuManagementStyle20261123">
 .hr-mm-intro{font-size:12px;color:#64748b;margin:0 0 12px}
 .hr-mm-group{border:1px solid #e2e8f0;border-radius:10px;margin:0 0 12px;overflow:hidden;background:#fff}
@@ -5789,6 +5810,10 @@ executiveView=function(){
    const remaining=direct.filter(b=>!sorted.includes(b));
    for(const b of [...sorted,...remaining])target.appendChild(b);
   }
+  // Newly introduced alert center defaults immediately after Data Quality, unless the administrator explicitly moved it.
+  const alert=menuButton('alerts'),quality=menuButton('quality');
+  const userPositioned=Object.prototype.hasOwnProperty.call(c.placements,'alerts')||Object.values(c.order).some(ids=>Array.isArray(ids)&&ids.includes('alerts'));
+  if(alert&&quality&&!userPositioned&&alert.parentElement===quality.parentElement)quality.insertAdjacentElement('afterend',alert);
   // Recovery menu is never movable and always remains at the bottom of System Management.
   const system=container(folderByName('시스템 관리'));
   const admin=menuButton('menuManagement');if(system&&admin&&admin.parentElement===system)system.appendChild(admin);
