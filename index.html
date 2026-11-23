@@ -5739,4 +5739,124 @@ executiveView=function(){
  window.__hrMenuManagementCheck=()=>({groups:sections().map(x=>({name:x.name,views:x.buttons.map(b=>b.dataset.view)})),mentorLegacyMenu:!!document.querySelector('.sidebar [data-view="'+OLD+'"]'),menuAdminAtBottom:systemItems?.lastElementChild?.dataset.view===PAGE});
 })();
 </script>
+
+<style id="hrMenuPlacementStyle20261123">
+.hr-mm-move{display:flex;align-items:center;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+.hr-mm-move select{font:inherit;font-size:12px;max-width:145px;min-width:100px;padding:5px;border:1px solid #cbd5e1;border-radius:6px;background:#fff;color:#1e293b}
+.hr-mm-move button{font-size:12px;min-width:29px;min-height:28px;border-radius:6px;border:1px solid #cbd5e1;background:#fff;cursor:pointer;color:#1e293b}
+.hr-mm-move button:disabled{opacity:.35;cursor:not-allowed}
+.hr-mm-row{gap:9px}.hr-mm-row>.hr-mm-move{margin-left:auto}.hr-mm-row>label{flex-shrink:0}
+@media(max-width:760px){.hr-mm-row{flex-wrap:wrap;padding:7px 0}.hr-mm-row>.hr-mm-move{order:3;width:100%;justify-content:flex-start}}
+</style>
+<script id="hrMenuPlacement20261123">
+/* Shared menu placement/order; moves existing nav buttons only, preserving their handlers and view IDs. */
+(function(){
+ 'use strict';
+ const navs=document.querySelector('.sidebar .navs');
+ if(!navs)return;
+ const PROTECTED=new Set(['dashboard','menuManagement','cloud']);
+ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+ const folders=()=>[...navs.querySelectorAll(':scope > .nav-folder')];
+ const title=f=>f?.querySelector(':scope > .folder-head')?.textContent.trim().replace(/^▣\s*/,'').replace(/\s*▸\s*$/,'').trim()||'';
+ const folderByName=name=>folders().find(f=>title(f)===name);
+ const container=f=>f?.querySelector(':scope > .folder-items');
+ const menuButton=id=>[...navs.querySelectorAll('button.nav[data-view]')].find(b=>b.dataset.view===id);
+ const movable=b=>!!b&&b.classList.contains('nav')&&b.dataset.view&&!PROTECTED.has(b.dataset.view)&&!!b.closest('.nav-folder')&&b.parentElement?.classList.contains('folder-items');
+ function options(){return folders().filter(f=>container(f)).map(f=>title(f)).filter(Boolean);}
+ function config(){
+  if(!db.settings||typeof db.settings!=='object'||Array.isArray(db.settings))db.settings={};
+  if(!db.settings.menuLayout||typeof db.settings.menuLayout!=='object'||Array.isArray(db.settings.menuLayout))db.settings.menuLayout={};
+  const x=db.settings.menuLayout;
+  if(!x.placements||typeof x.placements!=='object'||Array.isArray(x.placements))x.placements={};
+  if(!x.order||typeof x.order!=='object'||Array.isArray(x.order))x.order={};
+  return x;
+ }
+ function applyLayout(){
+  const c=config(), valid=new Set(options());
+  // Apply only to direct child menu buttons so nested HR-record controls keep their parent behavior.
+  for(const [id,destination] of Object.entries(c.placements)){
+   const b=menuButton(id),f=folderByName(destination);
+   if(!movable(b)||!valid.has(destination)||!f)continue;
+   const target=container(f);if(b.parentElement!==target)target.appendChild(b);
+  }
+  for(const [name,ids] of Object.entries(c.order)){
+   const f=folderByName(name),target=container(f);
+   if(!target||!Array.isArray(ids))continue;
+   const direct=[...target.children].filter(el=>el.matches?.('button.nav[data-view]'));
+   const map=new Map(direct.map(b=>[b.dataset.view,b]));
+   const sorted=[...new Set(ids)].map(id=>map.get(id)).filter(Boolean);
+   // Reorder direct buttons in place, preserve other items and nested submenus.
+   const remaining=direct.filter(b=>!sorted.includes(b));
+   for(const b of [...sorted,...remaining])target.appendChild(b);
+  }
+  // Recovery menu is never movable and always remains at the bottom of System Management.
+  const system=container(folderByName('시스템 관리'));
+  const admin=menuButton('menuManagement');if(system&&admin&&admin.parentElement===system)system.appendChild(admin);
+ }
+ function storeOrder(){
+  const c=config();c.order={};
+  for(const f of folders()){
+   const group=title(f),root=container(f);if(!group||!root)continue;
+   c.order[group]=[...root.children].filter(el=>el.matches?.('button.nav[data-view]')).map(b=>b.dataset.view);
+  }
+ }
+ function decorate(){
+  if(view!=='menuManagement')return;
+  const panel=document.querySelector('#content .panel');if(!panel)return;
+  const intro=panel.querySelector('.hr-mm-intro');
+  if(intro&&!intro.dataset.placementHelp){intro.dataset.placementHelp='1';intro.insertAdjacentText('beforeend','  ·  소속 메뉴를 선택하면 이동하며, ↑/↓ 버튼으로 같은 그룹 내 순서를 조절할 수 있습니다.');}
+  const groupNames=options();
+  for(const row of panel.querySelectorAll('.hr-mm-row')){
+   const checkbox=row.querySelector('[data-mm-item]');if(!checkbox||row.querySelector('.hr-mm-move'))continue;
+   const id=checkbox.dataset.mmItem,b=menuButton(id);
+   if(!movable(b))continue;
+   const current=title(b.closest('.nav-folder'));
+   const controls=document.createElement('div');controls.className='hr-mm-move';
+   const label=document.createElement('label');label.style.cssText='display:flex;gap:5px;align-items:center';
+   const text=document.createElement('span');text.textContent='소속';text.style.fontSize='12px';
+   const select=document.createElement('select');select.dataset.mmMove=id;select.setAttribute('aria-label',b.textContent.trim()+' 소속 메뉴');
+   for(const name of groupNames){const op=document.createElement('option');op.value=name;op.textContent=name;op.selected=name===current;select.appendChild(op);}
+   label.append(text,select);
+   const siblings=[...b.parentElement.children].filter(movable);
+   const idx=siblings.indexOf(b);
+   const up=document.createElement('button');up.type='button';up.textContent='↑';up.title='위로 이동';up.setAttribute('aria-label',b.textContent.trim()+' 위로 이동');up.dataset.mmOrderUp=id;up.disabled=idx<=0;
+   const down=document.createElement('button');down.type='button';down.textContent='↓';down.title='아래로 이동';down.setAttribute('aria-label',b.textContent.trim()+' 아래로 이동');down.dataset.mmOrderDown=id;down.disabled=idx<0||idx>=siblings.length-1;
+   controls.append(label,up,down);
+   row.insertBefore(controls,row.querySelector('label'));
+  }
+ }
+ function saveChange(action,detail){
+  if(!window.__hrCloudConnected?.()){alert('공동 DB에 로그인한 후 메뉴를 변경해 주세요.');render();return;}
+  storeOrder();commit(action,detail);
+ }
+ const oldRender=render;
+ render=function(){applyLayout();oldRender.apply(this,arguments);decorate();};
+ document.addEventListener('change',event=>{
+  const select=event.target.closest('[data-mm-move]');if(!select)return;
+  event.stopImmediatePropagation();
+  if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 변경해 주세요.');render();return;}
+  const id=select.dataset.mmMove,b=menuButton(id),destination=select.value,target=container(folderByName(destination));
+  if(!movable(b)||!target||!options().includes(destination))return;
+  const former=title(b.closest('.nav-folder'));
+  if(former===destination)return;
+  target.appendChild(b);
+  config().placements[id]=destination;
+  saveChange('메뉴 위치 변경',b.textContent.trim()+' · '+former+' → '+destination);
+ });
+ document.addEventListener('click',event=>{
+  const button=event.target.closest('[data-mm-order-up],[data-mm-order-down]');if(!button)return;
+  event.stopImmediatePropagation();event.preventDefault();
+  if(!window.__hrCloudConnected?.()){alert('공동 DB 로그인 후 변경해 주세요.');return;}
+  const id=button.dataset.mmOrderUp||button.dataset.mmOrderDown,b=menuButton(id);
+  if(!movable(b))return;
+  const siblings=[...b.parentElement.children].filter(movable),index=siblings.indexOf(b);
+  const delta=button.hasAttribute('data-mm-order-up')?-1:1,other=siblings[index+delta];
+  if(!other)return;
+  if(delta<0)other.before(b);else other.after(b);
+  saveChange('메뉴 순서 변경',title(b.closest('.nav-folder'))+' · '+b.textContent.trim()+' '+(delta<0?'위':'아래')+'로 이동');
+ },true);
+ applyLayout();
+ window.__hrMenuPlacementCheck=()=>({groups:folders().map(f=>({name:title(f),views:[...container(f).children].filter(el=>el.matches?.('button.nav[data-view]')).map(b=>b.dataset.view)})),saved:config()});
+})();
+</script>
 </body></html>
