@@ -4073,8 +4073,23 @@ function completeness(e){
  const expected=Object.keys(REQUIRED).length+(contract?0:Object.keys(RECOMMENDED).length);
  return {required,recommended,pct:Math.round(100*(expected-required.length-recommended.length)/expected)};
 }
+function tGradeYearNeedsAttention(e){
+ const grade=String(e?.grade||'').trim().toUpperCase();
+ if(!/^T[1-6]$/.test(grade))return false;
+ const manual=String(e?.t_grade_year_override??'').trim();
+ const nowYear=new Date().getFullYear();
+ if(/^[1-9]\d*$/.test(manual)&&Number(manual)<=60)return false;
+ const validDateKey=v=>{const m=String(v||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);if(!m)return '';const d=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));return d.getFullYear()===Number(m[1])&&d.getMonth()+1===Number(m[2])&&d.getDate()===Number(m[3])?m[0]:'';};
+ const today=`${nowYear}-${String(new Date().getMonth()+1).padStart(2,'0')}-${String(new Date().getDate()).padStart(2,'0')}`;
+ const histories=(db.history||[]).filter(h=>String(h.employee_id)===String(e.id)&&validDateKey(h.event_date)&&validDateKey(h.event_date)<=today).slice().sort((a,b)=>String(b.event_date).localeCompare(String(a.event_date)));
+ const promotion=histories.find(h=>{const text=[h.event_type,h.title,h.appointment_category,h.change_reason,h.description].map(v=>String(v||'')).join(' ');if(!/(승급|승진|직급변경|직급 변경|직급:|직급：|grade:|T[1-6]\s*(?:→|->)\s*T[1-6])/i.test(text))return false;const explicit=[h.grade,h.appointed_grade,h.new_grade,h.to_grade].some(v=>String(v||'').trim().toUpperCase()===grade);const target=new RegExp('(?:→|->|승급|승진|직급변경|직급 변경|직급\\s*[:：]\\s*)\\s*'+grade+'(?![0-9])','i').test(text);return explicit||target;});
+ if(promotion)return false;
+ const hire=validDateKey(e.hire_date);if(!hire)return true;
+ const level=Number(grade.slice(1));const completed=[0,0,3,6,9,12,16][level];
+ return Number(hire.slice(0,4))+completed>nowYear;
+}
 function problems(){qualityMasterCache=null;const out=[],seen=new Map();for(const e of db.employees){const no=txt(e.employee_no);if(no){seen.set(no,(seen.get(no)||0)+1);}}
- for(const e of db.employees){const m=completeness(e);for(const v of m.required)out.push({id:e.id,kind:'필수정보 누락',what:v});for(const v of m.recommended)out.push({id:e.id,kind:'권장정보 누락',what:v});if(txt(e.employee_no)&&seen.get(txt(e.employee_no))>1)out.push({id:e.id,kind:'중복 사번',what:'동일 사번 '+seen.get(txt(e.employee_no))+'건'});
+ for(const e of db.employees){if(tGradeYearNeedsAttention(e))out.push({id:e.id,kind:'직급 연차 확인',what:'T직급 ○년차 미표시'});const m=completeness(e);for(const v of m.required)out.push({id:e.id,kind:'필수정보 누락',what:v});for(const v of m.recommended)out.push({id:e.id,kind:'권장정보 누락',what:v});if(txt(e.employee_no)&&seen.get(txt(e.employee_no))>1)out.push({id:e.id,kind:'중복 사번',what:'동일 사번 '+seen.get(txt(e.employee_no))+'건'});
  for(const [k,lab] of Object.entries(TYPES))if(referenceProblem(e,k))out.push({id:e.id,kind:'기준정보 불일치',what:lab+' · '+normalizeEmpValue(e,k)});
  for(const [k,lab] of Object.entries({hire_date:'입사일',exit_date:'퇴사일',leave_date:'휴직 시작일',scheduled_exit_date:'퇴사 예정일',conversion_date:'전환일'})){const v=txt(e[k]);if(v&&!validDate(v))out.push({id:e.id,kind:'날짜 오류',what:lab});}
  if(e.status==='퇴사'&&!validDate(e.exit_date))out.push({id:e.id,kind:'퇴사일 확인',what:'퇴사일 미등록 또는 형식 오류'});
@@ -4117,6 +4132,10 @@ function qualityIssueInfo(r,e){
      const key=QUALITY_FIELD_KEYS[name]||({입사일:'hire_date',퇴사일:'exit_date'}[name]);result.type='날짜 형식·유효성 오류';result.field=name;result.value=txt(e[key])||'미입력';
      result.reason='날짜가 올바른 YYYY-MM-DD 형식이 아니거나 존재하지 않는 날짜입니다.';result.action='실제 날짜를 확인해 YYYY-MM-DD 형식으로 수정하세요.';
    }
+ }else if(category==='직급 연차 확인'){
+   result.type='T직급 연차 미표시';result.field='직급 연차';result.value=txt(e.grade)||'미등록';
+   result.reason='인사기록카드에서 T직급의 ○년차를 계산할 수 있는 입사일 또는 해당 직급 승급기록이 확인되지 않습니다.';
+   result.action='입사일과 인사변동사항의 직급 승급기록을 확인한 뒤, 기록카드 추가항목 수정에서 연차를 직접 입력하거나 누락된 이력을 보완하세요.';
  }else if(category==='퇴사일 확인'){
    result.type='퇴사자 퇴사일 확인 필요';result.field='재직 상태 / 퇴사일';result.value='퇴사 / '+(txt(e.exit_date)||'미입력');
    result.reason='재직 상태가 퇴사인데 유효한 퇴사일이 없습니다.';result.action='퇴사일을 확인해 입력하거나 재직 상태를 정정하세요.';
@@ -4134,7 +4153,7 @@ function qualityView(){
   const e=employeeIndex.get(String(x.issue.id));return [e?.name,e?.employee_no,x.issue.kind,x.detail.type,x.detail.field,x.detail.value,x.detail.reason,x.detail.action].some(v=>String(v||'').toLocaleLowerCase('ko').includes(matching));});
  const selectedKinds=[...new Set(all.map(x=>x.kind))].sort();const flagged=new Set(all.map(x=>String(x.id)));const noIssue=db.employees.length-flagged.size;
  const issuesRows=records.map(({issue,detail})=>{const e=employeeIndex.get(String(issue.id));return e?`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(issue.kind)}</td><td><b>${safe(detail.type)}</b></td><td>${safe(detail.field)}</td><td>${safe(detail.value)}</td><td style="min-width:260px"><div>${safe(detail.reason)}</div><div class="hint" style="margin-top:4px">조치: ${safe(detail.action)}</div></td><td>${empButton(e)}</td></tr>`:''}).join('');
- return `<section class="panel"><div class="report-head"><div><h2>인사 데이터 점검센터</h2><p class="hint">문제 분류·세부 유형·현재 입력값·발생 사유와 조치 방법을 구분하여 표시합니다. 점검은 조회만 수행하며 수정 버튼은 기존 직원 수정 화면을 엽니다. 고용형태가 계약직인 직원은 권장정보 누락에서 제외합니다.</p></div>${btnView('master','기준정보 관리')}</div><div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">${card('점검 대상',db.employees.length,'퇴사자 포함')}${card('발견 문제',all.length,'직원당 여러 건 발생 가능')}${card('이상 없음',noIssue,'현재 점검 규칙 기준')}</div><div class="toolbar"><label>문제 분류 ${select('qaKind',selectedKinds,qKind,'전체')}</label><label>세부 유형 ${select('qaDetail',detailKinds,qDetail,'전체')}</label><input id="qaText" placeholder="사번·성명·문제 항목·원인 검색" value="${safe(qText)}"><button class="btn" data-qa-reset="1">초기화</button><span class="pill">표시 ${records.length}건</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>문제 분류</th><th>세부 문제유형</th><th>문제 항목</th><th>현재 입력값</th><th>발생 사유 및 조치 방법</th><th>처리</th></tr></thead><tbody>${issuesRows||'<tr><td colspan="8" class="empty">해당 조건에서 점검 결과가 없습니다.</td></tr>'}</tbody></table></div></section><section class="panel"><h2>직원별 정보 완성도</h2><p class="hint">일반 직원은 필수 7개·권장 4개 항목, 계약직은 필수 7개 항목으로 계산합니다. 완성도는 인사평가 점수가 아닙니다.</p><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>완성도</th><th>필수 누락</th><th>권장 누락</th><th>관리</th></tr></thead><tbody>${db.employees.map(e=>{const p=completeness(e);return `<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td><b>${p.pct}%</b><div class="bar"><i style="width:${p.pct}%"></i></div></td><td>${safe(p.required.join(', ')||'-')}</td><td>${safe(p.recommended.join(', ')||'-')}</td><td>${empButton(e)}</td></tr>`}).join('')||'<tr><td colspan="6" class="empty">직원 정보가 없습니다.</td></tr>'}</tbody></table></div></section>`;
+ return `<section class="panel"><div class="report-head"><div><h2>인사 데이터 점검센터</h2><p class="hint">문제 분류·세부 유형·현재 입력값·발생 사유와 조치 방법을 구분하여 표시합니다. T1~T6 직급 중 인사기록카드에 ○년차를 표시할 수 없는 직원도 별도 점검합니다. 점검은 조회만 수행하며 수정 버튼은 기존 직원 수정 화면을 엽니다. 고용형태가 계약직인 직원은 권장정보 누락에서 제외합니다.</p></div>${btnView('master','기준정보 관리')}</div><div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr))">${card('점검 대상',db.employees.length,'퇴사자 포함')}${card('발견 문제',all.length,'직원당 여러 건 발생 가능')}${card('이상 없음',noIssue,'현재 점검 규칙 기준')}</div><div class="toolbar"><label>문제 분류 ${select('qaKind',selectedKinds,qKind,'전체')}</label><label>세부 유형 ${select('qaDetail',detailKinds,qDetail,'전체')}</label><input id="qaText" placeholder="사번·성명·문제 항목·원인 검색" value="${safe(qText)}"><button class="btn" data-qa-reset="1">초기화</button><span class="pill">표시 ${records.length}건</span></div><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>문제 분류</th><th>세부 문제유형</th><th>문제 항목</th><th>현재 입력값</th><th>발생 사유 및 조치 방법</th><th>처리</th></tr></thead><tbody>${issuesRows||'<tr><td colspan="8" class="empty">해당 조건에서 점검 결과가 없습니다.</td></tr>'}</tbody></table></div></section><section class="panel"><h2>직원별 정보 완성도</h2><p class="hint">일반 직원은 필수 7개·권장 4개 항목, 계약직은 필수 7개 항목으로 계산합니다. 완성도는 인사평가 점수가 아닙니다.</p><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>완성도</th><th>필수 누락</th><th>권장 누락</th><th>관리</th></tr></thead><tbody>${db.employees.map(e=>{const p=completeness(e);return `<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td><b>${p.pct}%</b><div class="bar"><i style="width:${p.pct}%"></i></div></td><td>${safe(p.required.join(', ')||'-')}</td><td>${safe(p.recommended.join(', ')||'-')}</td><td>${empButton(e)}</td></tr>`}).join('')||'<tr><td colspan="6" class="empty">직원 정보가 없습니다.</td></tr>'}</tbody></table></div></section>`;
 }
 function changes(){return Array.isArray(db.hr_change_comparisons)?db.hr_change_comparisons:[];}
 function diff(before,after){return Object.entries(EDIT_FIELDS).filter(([k])=>txt(before?.[k])!==txt(after?.[k])).map(([k,label])=>({key:k,label,before:txt(before?.[k])||'—',after:txt(after?.[k])||'—'}));}
