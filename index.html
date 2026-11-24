@@ -3478,9 +3478,15 @@ window.saveRetirementContractConversion=function(id){
  const dateKey=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v||''));if(!m)return '';const d=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));return d.getFullYear()===Number(m[1])&&d.getMonth()+1===Number(m[2])&&d.getDate()===Number(m[3])?m[0]:'';};
  const tGradeYearInfo=(e,x)=>{
   const grade=tGrade(e.grade);if(!grade)return null;
+  const now=new Date(),currentYear=now.getFullYear();
   const manual=String(x.t_grade_year_override??'').trim();
-  if(/^[1-9]\d*$/.test(manual)&&Number(manual)<=60)return {years:Number(manual),source:'수동 설정'};
-  const now=new Date(),todayKey=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+  if(/^[1-9]\d*$/.test(manual)&&Number(manual)<=60){
+   // Existing manual values without a baseline year are treated as set in 2026.
+   const savedYear=Number(x.t_grade_year_override_year);
+   const baseYear=Number.isInteger(savedYear)&&savedYear>=2020&&savedYear<=currentYear?savedYear:2026;
+   return {years:Math.min(60,Number(manual)+Math.max(0,currentYear-baseYear)),source:'수동 설정 · 연도 자동 증가'};
+  }
+  const todayKey=[currentYear,String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
   const all=(db.history||[]).filter(h=>String(h.employee_id)===String(e.id)&&dateKey(h.event_date)&&dateKey(h.event_date)<=todayKey).slice().sort((a,b)=>String(b.event_date).localeCompare(String(a.event_date)));
   // Ignore ordinary history snapshots: grade may be copied to them without an actual promotion.
   const promotion=all.find(h=>{
@@ -3611,10 +3617,10 @@ window.saveRetirementContractConversion=function(id){
   // Only show the T-grade override in the record-card editor, not the employee editor.
   if(tGrade(e.grade)){
    const info=tGradeYearInfo(e,x);
-   const manual=String(x.t_grade_year_override??'').trim();
+   const manual=info?.years?String(info.years):String(x.t_grade_year_override??'').trim();
    const grid=root.querySelector('.hr-record-edit-grid');
    const label=document.createElement('label');
-   label.innerHTML=`직급 연차 (수동 설정)<input type="number" min="1" max="60" step="1" data-t-grade-override placeholder="비우면 자동 계산" value="${safe(manual)}"><small style="font-size:11px;font-weight:400;line-height:1.4;color:#64748b">현재 ${safe(e.grade)} · 자동: ${info?.years?info.years+'년차':'확인 필요'} (${safe(info?.source||'')}). 비워두면 자동 계산하며, 인사기록카드에만 표시됩니다.</small>`;
+   label.innerHTML=`직급 연차 (수동 설정)<input type="number" min="1" max="60" step="1" data-t-grade-override placeholder="비우면 자동 계산" value="${safe(manual)}"><small style="font-size:11px;font-weight:400;line-height:1.4;color:#64748b">현재 ${safe(e.grade)} · 표시 연차: ${info?.years?info.years+'년차':'확인 필요'} (${safe(info?.source||'')}). 수동 입력한 연차도 매년 1년씩 자동 증가합니다. 비우면 자동 계산합니다.</small>`;
    grid.appendChild(label);
   }
   const listContainer=root.querySelector('#hrRecordListEditor');
@@ -3629,7 +3635,7 @@ window.saveRetirementContractConversion=function(id){
    const updated={...extraOf(e)};
    root.querySelectorAll('[data-card-field]').forEach(input=>updated[input.dataset.cardField]=input.value.trim());
    const override=root.querySelector('[data-t-grade-override]');
-   if(override){const val=override.value.trim();if(val&&(!/^[1-9]\d*$/.test(val)||Number(val)>60)){alert('직급 연차는 1~60 사이의 정수로 입력하거나 비워 주세요.');override.focus();return;}if(val)updated.t_grade_year_override=String(Number(val));else delete updated.t_grade_year_override;}
+   if(override){const val=override.value.trim();if(val&&(!/^[1-9]\d*$/.test(val)||Number(val)>60)){alert('직급 연차는 1~60 사이의 정수로 입력하거나 비워 주세요.');override.focus();return;}if(val){updated.t_grade_year_override=String(Number(val));updated.t_grade_year_override_year=new Date().getFullYear();}else{delete updated.t_grade_year_override;delete updated.t_grade_year_override_year;}}
 
    for(const item of lists){const rows=[];root.querySelectorAll(`[data-list="${item.key}"] .hr-record-edit-row`).forEach(row=>{const obj={};row.querySelectorAll('[data-column]').forEach(input=>obj[input.dataset.column]=input.value.trim());if(Object.values(obj).some(Boolean))rows.push(obj)});updated[item.key]=rows;}
    e.hr_record_card=updated;
