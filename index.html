@@ -3473,6 +3473,38 @@ window.saveRetirementContractConversion=function(id){
  const getEmp=id=>(db.employees||[]).find(e=>String(e.id)===String(id));
  let currentId=null,photoUrl=null;
  const tenure=(start,end)=>window.hrFormatTenureDays(start,end||new Date())||'-';
+ // Card-only T-grade year display. Never changes the employee's stored grade.
+ const tGrade=v=>{const m=/^T([1-6])$/i.exec(String(v||'').trim());return m?'T'+m[1]:'';};
+ const dateKey=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v||''));if(!m)return '';const d=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));return d.getFullYear()===Number(m[1])&&d.getMonth()+1===Number(m[2])&&d.getDate()===Number(m[3])?m[0]:'';};
+ const tGradeYearInfo=(e,x)=>{
+  const grade=tGrade(e.grade);if(!grade)return null;
+  const manual=String(x.t_grade_year_override??'').trim();
+  if(/^[1-9]\d*$/.test(manual)&&Number(manual)<=60)return {years:Number(manual),source:'수동 설정'};
+  const now=new Date(),todayKey=[now.getFullYear(),String(now.getMonth()+1).padStart(2,'0'),String(now.getDate()).padStart(2,'0')].join('-');
+  const all=(db.history||[]).filter(h=>String(h.employee_id)===String(e.id)&&dateKey(h.event_date)&&dateKey(h.event_date)<=todayKey).slice().sort((a,b)=>String(b.event_date).localeCompare(String(a.event_date)));
+  // Ignore ordinary history snapshots: grade may be copied to them without an actual promotion.
+  const promotion=all.find(h=>{
+   const kind=[h.event_type,h.title,h.appointment_category,h.change_reason,h.description].map(v=>String(v||'')).join(' ');
+   if(!/(승급|승진|직급변경|직급 변경|직급:|직급：|grade:|T[1-6]\s*(?:→|->)\s*T[1-6])/i.test(kind))return false;
+   const explicit=[h.grade,h.appointed_grade,h.new_grade,h.to_grade].some(v=>tGrade(v)===grade);
+   const targetInText=new RegExp('(?:→|->|승급|승진|직급변경|직급 변경|직급\\s*[:：]\\s*)\\s*'+grade+'(?![0-9])','i').test(kind);
+   return explicit||targetInText;
+  });
+  if(promotion)return {years:Math.max(1,now.getFullYear()-Number(promotion.event_date.slice(0,4))+1),source:'인사변동 기록'};
+  const hire=dateKey(e.hire_date);
+  if(!hire)return {years:null,source:'입사일 미등록'};
+  const level=Number(grade.slice(1));
+  // T1→T2, T2→T3, T3→T4, T4→T5: 3 years each; T5→T6: 4 years.
+  const completedYears=[0,0,3,6,9,12,16][level];
+  const estimatedStartYear=Number(hire.slice(0,4))+completedYears;
+  if(estimatedStartYear>now.getFullYear())return {years:null,source:'승급기록 확인 필요'};
+  return {years:now.getFullYear()-estimatedStartYear+1,source:level===1?'입사연도 기준':'입사연도·승급기간 추정'};
+ };
+ const cardGrade=(e,x)=>{
+  const grade=tGrade(e.grade);if(!grade)return show(e.grade);
+  const info=tGradeYearInfo(e,x);
+  return show(info&&info.years?grade+'('+info.years+'년차)':grade+'(연차 확인 필요)');
+ };
  function cardValue(e,x,k,latestChangeDate=''){const values={
   'employee_no':e.employee_no,'name':e.name,'hanja_name':x.hanja_name,'gender':e.gender,
   'birth_date':typeof employeeBirthDate==='function'?employeeBirthDate(e):e.birth_date,
@@ -3486,7 +3518,7 @@ window.saveRetirementContractConversion=function(id){
   'manager_role':e.field_leader_role,'status':e.status,'resident_address':x.resident_address,
   'age':typeof displayAge==='function'?displayAge(e):e.age,
   'union_status':e.union_status||'미확인'
- };return show(values[k]);}
+ };return k==='grade'?cardGrade(e,x):show(values[k]);}
  const basic=[
   ['생년월일','birth_date'],['근무기간','work_period'],['나이','age'],
   ['법인','corporation'],['본부','headquarters'],['부서','department'],
@@ -3576,6 +3608,15 @@ window.saveRetirementContractConversion=function(id){
   try{const blob=await window.__hrPhotoStorage.load(id);if(!blob||currentId!==String(id)||!target.isConnected)return;const url=URL.createObjectURL(blob);if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=url;target.innerHTML='';const image=document.createElement('img');image.alt='직원 사진';image.src=url;target.append(image);}catch(err){console.warn('인사기록카드 사진 조회:',err?.message||err);}}
  function editCard(id){const e=getEmp(id);if(!e)return;const x=extraOf(e),root=overlay();root.dataset.mode='edit';
   root.innerHTML=`<div class="hr-record-editor"><div class="hr-record-actions"><b>${show(e.name)} · 인사기록카드 추가항목 수정</b><button type="button" class="btn" id="hrCardEditCancel">취소</button></div><div class="notice">기존 사번·입사일·소속 등은 직원 [수정]에서 관리합니다. 이 화면은 인사기록카드의 추가 항목과 가족·학력·경력·자격 내역만 저장합니다.</div><div class="hr-record-edit-grid">${fieldDefs.map(([key,label])=>`<label class="${key==='resident_address'?'hr-record-address-field':''}">${safe(label)}${key==='resident_address'?`<textarea data-card-field="${safe(key)}" rows="2">${safe(x[key]||'')}</textarea>`:`<input data-card-field="${safe(key)}" value="${safe(x[key]||'')}">`}</label>`).join('')}</div><div id="hrRecordListEditor"></div><div class="hr-record-actions"><button type="button" class="btn" id="hrCardCancelBottom">취소</button><button type="button" class="btn primary" id="hrCardSave">추가항목 저장</button></div></div>`;
+  // Only show the T-grade override in the record-card editor, not the employee editor.
+  if(tGrade(e.grade)){
+   const info=tGradeYearInfo(e,x);
+   const manual=String(x.t_grade_year_override??'').trim();
+   const grid=root.querySelector('.hr-record-edit-grid');
+   const label=document.createElement('label');
+   label.innerHTML=`직급 연차 (수동 설정)<input type="number" min="1" max="60" step="1" data-t-grade-override placeholder="비우면 자동 계산" value="${safe(manual)}"><small style="font-size:11px;font-weight:400;line-height:1.4;color:#64748b">현재 ${safe(e.grade)} · 자동: ${info?.years?info.years+'년차':'확인 필요'} (${safe(info?.source||'')}). 비워두면 자동 계산하며, 인사기록카드에만 표시됩니다.</small>`;
+   grid.appendChild(label);
+  }
   const listContainer=root.querySelector('#hrRecordListEditor');
   for(const item of lists){const box=document.createElement('section');box.className='hr-record-edit-section';box.dataset.list=item.key;
    box.innerHTML=`<div class="hr-record-edit-head"><h3>${safe(item.title)}</h3><button type="button" class="btn tiny" data-add-list="${safe(item.key)}">+ 행 추가</button></div><div class="hr-record-edit-rows"></div>`;listContainer.append(box);
@@ -3587,6 +3628,9 @@ window.saveRetirementContractConversion=function(id){
   root.querySelector('#hrCardSave').onclick=()=>{
    const updated={...extraOf(e)};
    root.querySelectorAll('[data-card-field]').forEach(input=>updated[input.dataset.cardField]=input.value.trim());
+   const override=root.querySelector('[data-t-grade-override]');
+   if(override){const val=override.value.trim();if(val&&(!/^[1-9]\d*$/.test(val)||Number(val)>60)){alert('직급 연차는 1~60 사이의 정수로 입력하거나 비워 주세요.');override.focus();return;}if(val)updated.t_grade_year_override=String(Number(val));else delete updated.t_grade_year_override;}
+
    for(const item of lists){const rows=[];root.querySelectorAll(`[data-list="${item.key}"] .hr-record-edit-row`).forEach(row=>{const obj={};row.querySelectorAll('[data-column]').forEach(input=>obj[input.dataset.column]=input.value.trim());if(Object.values(obj).some(Boolean))rows.push(obj)});updated[item.key]=rows;}
    e.hr_record_card=updated;
    close();commit('인사기록카드 추가항목 수정',String(e.employee_no||'')+' / 인사기록카드 보완');
