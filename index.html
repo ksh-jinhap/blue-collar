@@ -1376,21 +1376,27 @@ document.addEventListener('change',ev=>{
  function monthlyUnion(){const c=ctx();const active=(c.records||[]).filter(e=>e.status!=='퇴사'&&String(e.position||'').trim()!=='계약직'),members=active.filter(e=>e.union_status==='가입');const office=c.office;
   const build=(field,title)=>{const keys=[...new Set(active.map(e=>e[field]||'미지정'))].sort((a,b)=>field==='corporation'?['진합','제이앤드에프','지노스','진우정공'].indexOf(a)-['진합','제이앤드에프','지노스','진우정공'].indexOf(b):field==='position'?((v)=>{const order=['직장','부직장','주임','사원(생산)','사원','촉탁직','외국인'];const ai=order.indexOf(a),bi=order.indexOf(b);return (ai<0?order.length:ai)-(bi<0?order.length:bi)||String(a).localeCompare(String(b),'ko');})():String(a).localeCompare(String(b),'ko'));return `<section class="panel"><h2>${title}</h2><div class="tablewrap"><table><thead><tr><th>구분</th><th>대상 근로자</th><th>가입 조합원</th><th>가입률</th></tr></thead><tbody>${keys.map(k=>{const all=active.filter(e=>(e[field]||'미지정')===k),joined=all.filter(e=>e.union_status==='가입').length;return `<tr><td>${safe(k)}</td><td>${all.length}</td><td>${joined}</td><td>${all.length?(100*joined/all.length).toFixed(1)+'%':'-'}</td></tr>`}).join('')}</tbody></table></div></section>`};
   const roleFilter=String(window.__unionRoleFilter||'');
-  // Always use today's shared employee records for role assignment searches.
-  // Past month-end snapshots may not contain union_role and must not hide recent edits.
+  // Current role roster combines live production employees with the separately
+  // registered office union roster. Monthly snapshot counts remain unchanged.
   const live=(db.employees||[]).filter(e=>e.status!=='퇴사'&&String(e.position||'').trim()!=='계약직');
-  const cleanRole=e=>String(e.union_role||'').trim();
   const roleKnown=['조합원','대의원','회계감사','사무국장','부위원장','위원장'];
-  const roleCandidates=live.filter(e=>e.union_status==='가입'||roleKnown.includes(cleanRole(e)));
-  const roleRoster=roleCandidates.filter(e=>!roleFilter||(roleFilter==='미지정'?e.union_status==='가입'&&!cleanRole(e):cleanRole(e)===roleFilter)).slice().sort(orgsort);
-  const mismatched=roleRoster.filter(e=>roleKnown.includes(cleanRole(e))&&e.union_status!=='가입').length;
-  const latestRoleTable=`<section class="panel"><h2>노조 담당 직책별 현재 명단 · ${roleRoster.length}명</h2><div class="toolbar"><label>노조 담당 직책 <select id="unionRoleFilter"><option value="" ${!roleFilter?'selected':''}>전체 직책</option>${['조합원','대의원','회계감사','사무국장','부위원장','위원장','미지정'].map(v=>`<option value="${safe(v)}" ${roleFilter===v?'selected':''}>${safe(v)}</option>`).join('')}</select></label><span class="hint">최신 직원정보 기준 · 대상 ${roleCandidates.length}명 · 선택 ${roleRoster.length}명</span></div><p class="hint">직책 필터는 현재 등록된 직원정보를 기준으로 조회합니다. 과거 월말 확정 통계와 다를 수 있습니다. 직책이 등록되어 있으나 가입 여부가 '가입'이 아닌 직원도 누락 없이 표시합니다.</p>${mismatched?`<p class="notice" style="border-color:#f59e0b">직책이 있지만 노조 가입 여부가 '가입'이 아닌 직원 ${mismatched}명은 가입 여부를 확인해 주세요.</p>`:''}<div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서</th><th>직위</th><th>가입여부</th><th>노조 담당 직책</th><th>관리</th></tr></thead><tbody>${roleRoster.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.corporation)}</td><td>${safe(e.headquarters)}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>${safe(e.union_status||'미확인')}</td><td>${safe(cleanRole(e)||'미지정')}</td><td><button class="btn tiny" data-union-edit="${safe(e.id)}">수정</button></td></tr>`).join('')||'<tr><td colspan="9" class="empty">해당 직책 직원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
-  if(!c.records)return reportsToolbar('노조 명부')+latestRoleTable+banner(c.s)+noData('기준월 노조 통계');
+  const cleanRole=e=>String(e.union_role||'').trim();
+  const productionRoleCandidates=live.filter(e=>e.union_status==='가입'||roleKnown.includes(cleanRole(e)))
+    .map(e=>({...e,__union_category:'생산직',__union_role:cleanRole(e)}));
+  const officeRoleCandidates=(Array.isArray(db.office_union_members)?db.office_union_members:[])
+    .filter(e=>e.status!=='퇴사'&&(e.union_status==='가입'||!e.union_status||roleKnown.includes(cleanRole(e))))
+    .map(e=>({...e,__union_category:'사무직',__union_role:roleKnown.includes(cleanRole(e))?cleanRole(e):(typeof window.hrUnionOfficeRole==='function'?window.hrUnionOfficeRole(e):'조합원')}));
+  const roleCandidates=[...productionRoleCandidates,...officeRoleCandidates];
+  const roleRoster=roleCandidates.filter(e=>!roleFilter||(roleFilter==='미지정'?e.union_status==='가입'&&!e.__union_role:e.__union_role===roleFilter))
+    .sort((a,b)=>String(a.__union_category).localeCompare(String(b.__union_category),'ko')||String(a.corporation||'').localeCompare(String(b.corporation||''),'ko')||String(a.department||'').localeCompare(String(b.department||''),'ko')||String(a.name||'').localeCompare(String(b.name||''),'ko'));
+  const mismatched=roleRoster.filter(e=>e.__union_category==='생산직'&&roleKnown.includes(e.__union_role)&&e.union_status!=='가입').length;
+  const latestRoleTable=`<section class="panel" id="unionCurrentRoleRoster"><h2>노조 담당 직책별 현재 명단 · ${roleRoster.length}명</h2><div class="toolbar"><label>노조 담당 직책 <select id="unionRoleFilter"><option value="" ${!roleFilter?'selected':''}>전체 직책</option>${['조합원','대의원','회계감사','사무국장','부위원장','위원장','미지정'].map(v=>`<option value="${safe(v)}" ${roleFilter===v?'selected':''}>${safe(v)}</option>`).join('')}</select></label><span class="hint">현재 등록자료 기준 · 생산직 ${productionRoleCandidates.length}명 / 사무직 ${officeRoleCandidates.length}명 · 선택 ${roleRoster.length}명</span></div><p class="hint">생산직은 최신 직원정보, 사무직은 별도 등록된 사무직 조합원 명부를 기준으로 조회합니다. 과거 월말 확정 통계와 다를 수 있습니다. 직책이 등록되어 있으나 가입 여부가 '가입'이 아닌 생산직 직원도 누락 없이 표시합니다.</p>${mismatched?`<p class="notice" style="border-color:#f59e0b">직책이 있지만 노조 가입 여부가 '가입'이 아닌 생산직 직원 ${mismatched}명은 가입 여부를 확인해 주세요.</p>`:''}<div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>구분</th><th>법인</th><th>본부/실</th><th>부서</th><th>직위</th><th>가입여부</th><th>노조 담당 직책</th><th>관리</th></tr></thead><tbody>${roleRoster.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.__union_category)}</td><td>${safe(e.corporation||'-')}</td><td>${safe(e.headquarters||'-')}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>${safe(e.union_status|| (e.__union_category==='사무직'?'가입':'미확인'))}</td><td>${safe(e.__union_role||'미지정')}</td><td>${e.__union_category==='생산직'?`<button class="btn tiny" data-union-edit="${safe(e.id)}">수정</button>`:'사무직 명부'}</td></tr>`).join('')||'<tr><td colspan="10" class="empty">해당 직책 조합원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
+  if(!c.records)return reportsToolbar('노조 명부')+banner(c.s)+window.hrUnionRoleSummary(live.filter(e=>e.union_status==='가입'),db.office_union_members||[],(db.office_union_members||[]).length>0)+latestRoleTable+noData('기준월 노조 통계');
   const roster=members.slice().sort(orgsort);
   const officeMembers=c.now?(db.office_union_members||[]):(Array.isArray(c.s?.office_union_members)?c.s.office_union_members:[]);
   const memberTable=`<section class="panel"><h2>기준월 생산직 조합원 명단 · ${roster.length}명</h2><p class="hint">선택한 기준월에 저장된 조합원 명단입니다.</p><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>법인</th><th>본부/실</th><th>부서</th><th>직위</th><th>가입상태</th><th>노조 담당 직책</th><th>관리</th></tr></thead><tbody>${roster.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.corporation)}</td><td>${safe(e.headquarters)}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>가입</td><td>${safe(e.union_role||'미지정')}</td><td>${c.now?`<button class="btn tiny" data-union-edit="${safe(e.id)}">수정</button>`:'월말 기록'}</td></tr>`).join('')||'<tr><td colspan="9" class="empty">해당 조건의 생산직 조합원이 없습니다.</td></tr>'}</tbody></table></div></section>`;
   const officeTable=officeMembers.length?`<section class="panel"><h2>사무직 조합원 명단 · ${officeMembers.length}명</h2><div class="tablewrap"><table><thead><tr><th>사번</th><th>성명</th><th>부서</th><th>직위</th><th>직급</th><th>노조 담당 직책</th></tr></thead><tbody>${officeMembers.map(e=>`<tr><td>${safe(e.employee_no)}</td><td>${safe(e.name)}</td><td>${safe(e.department)}</td><td>${safe(e.position)}</td><td>${safe(e.grade)}</td><td>${safe(window.hrUnionOfficeRole(e))}</td></tr>`).join('')}</tbody></table></div></section>`:'';
-  return reportsToolbar('노조 명부')+latestRoleTable+banner(c.s)+`<div class="cards">${card('대상 생산직',active.length,'퇴사·계약직 제외')}${card('생산직 가입',members.length,'월말 기록 기준')}${card('사무직 가입',office,'생산직 총인원 제외')}${card('전체 가입',members.length+office,'생산직+사무직')}</div>${build('corporation','법인별 가입 현황')}${build('position','직위별 가입 현황')}${window.hrUnionRoleSummary(members,officeMembers,officeMembers.length>0)}${memberTable}${officeTable}`;
+  return reportsToolbar('노조 명부')+banner(c.s)+`<div class="cards">${card('대상 생산직',active.length,'퇴사·계약직 제외')}${card('생산직 가입',members.length,'월말 기록 기준')}${card('사무직 가입',office,'생산직 총인원 제외')}${card('전체 가입',members.length+office,'생산직+사무직')}</div>${build('corporation','법인별 가입 현황')}${build('position','직위별 가입 현황')}${window.hrUnionRoleSummary(members,officeMembers,officeMembers.length>0)}${latestRoleTable}${memberTable}${officeTable}`;
  }
  const priorRender=render;
  render=function(){if(!window.__hrCloudConnected?.()){return priorRender()}if(view==='hires'||view==='exits'||view==='organization'||view==='union'){
@@ -2747,14 +2753,16 @@ window.saveRetirementContractConversion=function(id){
     if(!content||content.querySelector('#unionActualSearch'))return;
     const panels=[...content.querySelectorAll('section.panel')].filter(panel=>{
       const heading=panel.querySelector('h2');
-      return heading&&/^(생산직 조합원 명단|사무직 조합원 명단)/.test(heading.textContent.trim())&&panel.querySelector('table');
+      return heading&&/^(기준월 생산직 조합원 명단|사무직 조합원 명단)/.test(heading.textContent.trim())&&panel.querySelector('table');
     });
     if(!panels.length)return;
     for(const panel of panels)panel.querySelector('table').setAttribute('data-union-roster-table','');
     const bar=document.createElement('section');
     bar.className='panel no-print';
     bar.innerHTML='<h2>조합원 검색</h2><div class="toolbar"><input id="unionActualSearch" type="search" autocomplete="off" placeholder="사번 또는 이름 검색" aria-label="조합원 사번 또는 성명 검색" style="min-width:220px;flex:1"><span class="hint" id="unionActualResultCount"></span></div><p class="hint">아래 생산직·사무직 조합원 명단에서 일치하는 인원만 표시합니다.</p>';
-    panels[0].parentNode.insertBefore(bar,panels[0]);
+    const production=panels.find(panel=>panel.querySelector('h2')?.textContent.trim().startsWith('기준월 생산직 조합원 명단'));
+    const anchor=production||panels[0];
+    anchor.parentNode.insertBefore(bar,anchor);
     const field=bar.querySelector('#unionActualSearch');
     field.value=query;
     field.addEventListener('input',applyFilter);
