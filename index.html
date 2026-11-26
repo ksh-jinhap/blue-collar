@@ -96,6 +96,15 @@
 <style id="hr-alert-trend-20261109">
 .hr-alert-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:18px 0}.hr-alert-tile{border:1px solid #e2e8f0;border-left:5px solid;border-radius:10px;padding:14px;background:#fff;display:flex;flex-direction:column;gap:7px}.hr-alert-tile strong{font-size:25px}.hr-alert-tile small{color:#64748b}.hr-alert-label{display:inline-block;border-radius:20px;font-weight:700;padding:5px 10px;border:1px solid currentColor;background:#fff;white-space:nowrap;font-size:12px}.hr-alert-overdue{color:#b91c1c;border-color:#b91c1c;background:#fef2f2}.hr-alert-urgent{color:#c2410c;border-color:#c2410c;background:#fff7ed}.hr-alert-soon{color:#a16207;border-color:#a16207;background:#fefce8}.hr-alert-info{color:#2563eb;border-color:#2563eb;background:#eff6ff}.hr-alert-tile.hr-alert-overdue{border-left-color:#b91c1c}.hr-alert-tile.hr-alert-urgent{border-left-color:#c2410c}.hr-alert-tile.hr-alert-soon{border-left-color:#a16207}.hr-alert-tile.hr-alert-info{border-left-color:#2563eb}.hr-dashboard-alerts{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}.hr-trend-filters{display:grid;grid-template-columns:110px repeat(3,minmax(125px,1fr)) 130px auto;gap:8px;align-items:end;margin:15px 0}.hr-trend-filters label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:#64748b}.hr-trend-filters select,.hr-trend-filters input{width:100%}.hr-trend-mini{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:15px 0}.hr-trend-selected td{background:#eff6ff!important;font-weight:700}@media(max-width:1100px){.hr-trend-filters{grid-template-columns:repeat(3,minmax(0,1fr))}}@media(max-width:720px){.hr-alert-summary,.hr-trend-mini{grid-template-columns:repeat(2,minmax(0,1fr))}.hr-trend-filters{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
+<style id="hrRecordAppointmentEditStyle">
+.hr-appointment-editor .hr-appointment-edit-list{max-height:440px;overflow-y:auto;overflow-x:auto;padding-right:4px}
+.hr-appointment-edit-row{display:flex;align-items:end;gap:8px;margin:8px 0 12px;border-bottom:1px solid #e2e8f0;padding-bottom:10px;min-width:840px}
+.hr-appointment-edit-fields{display:grid;grid-template-columns:1fr 1.15fr 1.2fr 1.2fr 1fr .9fr 1.6fr;gap:6px;flex:1}
+.hr-appointment-edit-fields label{min-width:0;font-size:11px;font-weight:700;color:#54657c;display:flex;flex-direction:column;gap:5px}
+.hr-appointment-edit-fields input{min-width:0;width:100%;box-sizing:border-box;padding:7px 5px;font:inherit;font-weight:400}
+.hr-appointment-edit-row>.btn{flex-shrink:0;margin-bottom:1px}
+@media(max-width:900px){.hr-appointment-editor .hr-appointment-edit-list{overflow-x:auto}}
+</style>
 </head><body><div class="shell"><aside class="sidebar"><div class="brand">생산직 인사관리</div><div class="subtitle">WORKFORCE · TO CONTROL</div><div class="navs"><button class="nav active" data-view="dashboard">대시보드</button><button class="nav" data-view="employees">♙ 생산직 인원관리</button><button class="nav" data-view="plans">▤ 사업계획 정원 · TO</button><button class="nav" data-view="recruitment">▦ 채용 진행관리</button><button class="nav" data-view="executive">▣ 경영진 보고서</button><button class="nav" data-view="organization">◫ 부서별 · 성별</button><button class="nav" data-view="history">◷ 개인별 연혁</button><button class="nav" data-view="audit">≡ 변경 기록</button><button class="nav" data-view="backup">⇩ 저장 · 백업</button></div></aside><main class="main"><div class="top"><div><h1 id="heading">대시보드</h1><div class="desc" id="subheading">생산직 인력 운영 현황을 한눈에 확인하세요.</div></div><div class="actions"><span class="pill" id="saveBadge">저장 상태 확인 중</span><button class="btn primary" id="saveNow">현재 내용 저장</button></div></div><div id="content"></div></main></div><div class="modalwrap" id="modalWrap"><div class="modal"><h2 id="modalTitle"></h2><div id="modalBody"></div></div></div>
 <script>const SEED={employees:[],plans:[],history:[],audit:[],recruitment:[],snapshots:[],settings:{retirementAge:60}};
 const KEY='production-hr-single-html-v1';const today=()=>new Date().toISOString().slice(0,10);const year=()=>new Date().getFullYear();const $=s=>document.querySelector(s);const fmt=n=>Number(n||0).toLocaleString('ko-KR');const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const uid=()=>Math.floor(Date.now()*1000+Math.random()*1000);const occupied=e=>e.status!=='퇴사';const keyOf=x=>[x.corporation||'',x.headquarters||'',x.department||''].join('␟');
@@ -3619,8 +3628,88 @@ window.saveRetirementContractConversion=function(id){
  }
  async function loadPhoto(id){const target=document.getElementById('hrRecordPhoto');if(!target||!window.__hrPhotoStorage?.ready())return;
   try{const blob=await window.__hrPhotoStorage.load(id);if(!blob||currentId!==String(id)||!target.isConnected)return;const url=URL.createObjectURL(blob);if(photoUrl)URL.revokeObjectURL(photoUrl);photoUrl=url;target.innerHTML='';const image=document.createElement('img');image.alt='직원 사진';image.src=url;target.append(image);}catch(err){console.warn('인사기록카드 사진 조회:',err?.message||err);}}
+ // Edit the same db.history records used by the record card and 개인별 연혁.
+ // Changes are staged in the editor and applied only after the common Save button.
+ const appointmentColumns=[['category','발령구분'],['date','변동일자'],['previous','현재부서'],['department','발령부서'],['position','발령직위'],['role','직책'],['reason','변동사유']];
+ const appointmentFields=h=>h.hr_card_appointment?{
+  category:String(h.appointment_category||''),date:String(h.event_date||''),previous:String(h.previous_department||''),
+  department:String(h.appointed_department||''),position:String(h.appointed_position||''),role:String(h.appointed_role||''),reason:String(h.change_reason||'')
+ }:{
+  category:String(h.appointment_category||h.event_type||''),date:String(h.event_date||''),previous:String(h.previous_department||''),
+  department:String(h.department||''),position:String(h.position||''),role:String(h.field_leader_role||''),
+  reason:String(h.description||h.title||h.event_type||'')
+ };
+ function addAppointmentRow(container,record,index){
+  const row=document.createElement('div');row.className='hr-appointment-edit-row';
+  if(index!==null)row.dataset.historyIndex=String(index);
+  row.innerHTML='<div class="hr-appointment-edit-fields">'+appointmentColumns.map(([key,label])=>`<label>${safe(label)}<input data-appointment-field="${safe(key)}" ${key==='date'?'type="date"':''} value="${safe(record[key]||'')}"></label>`).join('')+'</div><button type="button" class="btn tiny danger" title="저장 시 선택한 기록을 삭제합니다">삭제</button>';
+  row.querySelector('button').onclick=()=>row.remove();container.appendChild(row);
+ }
+ function renderAppointmentEditor(root,e){
+  const section=document.createElement('section');section.className='hr-record-edit-section hr-appointment-editor';
+  section.innerHTML='<div class="hr-record-edit-head"><h3>인사변동사항</h3><button type="button" class="btn tiny" id="hrAddAppointment">+ 인사변동 추가</button></div><div class="hint" style="margin:4px 0 10px">[개인별 연혁]과 동일한 기록을 수정합니다. 직원의 현재 소속·직위는 변경되지 않습니다. 행 삭제는 [추가항목 저장] 시 확정됩니다.</div><div class="hr-appointment-edit-list"></div>';
+  root.querySelector('#hrRecordListEditor').appendChild(section);
+  const history=db.history||[],originals=new Map(),target=section.querySelector('.hr-appointment-edit-list');
+  history.forEach((h,index)=>{if(String(h.employee_id)!==String(e.id))return;originals.set(index,h);});
+  [...originals.entries()].sort((a,b)=>String(b[1].event_date||'').localeCompare(String(a[1].event_date||''))).forEach(([index,h])=>addAppointmentRow(target,appointmentFields(h),index));
+  if(!originals.size)target.innerHTML='<div class="hint hr-appointment-empty">등록된 인사변동사항이 없습니다. [+ 인사변동 추가]로 등록할 수 있습니다.</div>';
+  root.__hrAppointmentOriginals=originals;
+  root.querySelector('#hrAddAppointment').onclick=()=>{target.querySelector('.hr-appointment-empty')?.remove();addAppointmentRow(target,{},null);};
+ }
+ function prepareAppointmentChanges(root,e){
+  const originals=root.__hrAppointmentOriginals;
+  if(!(originals instanceof Map))return null;
+  const history=db.history||[];
+  // Prevent overwriting edits made since the card editor opened.
+  for(const [index,h] of originals)if(history[index]!==h||String(h.employee_id)!==String(e.id)){
+   alert('인사변동 기록이 변경되었습니다. 창을 닫고 다시 조회한 뒤 수정해 주세요.');return null;
+  }
+  const rows=[...root.querySelectorAll('.hr-appointment-edit-row')];
+  const keep=new Set(),updates=[],additions=[];
+  for(const row of rows){
+   const vals={};row.querySelectorAll('[data-appointment-field]').forEach(input=>vals[input.dataset.appointmentField]=input.value.trim());
+   const idx=row.hasAttribute('data-history-index')?Number(row.dataset.historyIndex):null;
+   if(idx!==null&&!originals.has(idx)){alert('인사변동 목록이 변경되었습니다. 다시 조회해 주세요.');return null;}
+   if(idx!==null)keep.add(idx);
+   const old=idx!==null?appointmentFields(originals.get(idx)):null;
+   if(old&&appointmentColumns.every(([k])=>old[k]===vals[k]))continue;
+   if(!Object.values(vals).some(Boolean)&&idx===null)continue;
+   if(!dateKey(vals.date)){
+    alert('인사변동사항의 변동일자는 유효한 YYYY-MM-DD 날짜로 입력해 주세요.');row.querySelector('[data-appointment-field="date"]')?.focus();return null;
+   }
+   if(!vals.category||!appointmentColumns.some(([k])=>k!=='date'&&k!=='category'&&vals[k])){
+    alert('인사변동사항의 발령구분과 변경 내용(부서·직위·직책·사유 중 하나)을 입력해 주세요.');return null;
+   }
+   if(old)updates.push({record:originals.get(idx),old,vals});else additions.push(vals);
+  }
+  const removed=[...originals.entries()].filter(([i])=>!keep.has(i)).map(([,h])=>h);
+  if(removed.length&&!confirm(`인사변동사항 ${removed.length}건을 삭제하시겠습니까? 삭제된 기록은 [개인별 연혁]과 인사기록카드에서도 사라집니다.`))return null;
+  return {updates,additions,removed};
+ }
+ function applyAppointmentChanges(e,changes){
+  for(const {record:h,old,vals:v} of changes.updates){
+   const different=k=>old[k]!==v[k];
+   if(different('date'))h.event_date=v.date;
+   if(h.hr_card_appointment){
+    for(const [field,key] of [['appointment_category','category'],['previous_department','previous'],['appointed_department','department'],['appointed_position','position'],['appointed_role','role'],['change_reason','reason']])if(different(key))h[field]=v[key];
+    // Keep title/description in the personal history useful after editing.
+    if(different('category')&&(!h.title||h.title===old.category))h.title=v.category;
+    if(different('reason'))h.description=v.reason;
+   }else{
+    if(different('category')){if(h.appointment_category)h.appointment_category=v.category;else h.event_type=v.category;}
+    for(const [field,key] of [['previous_department','previous'],['department','department'],['position','position'],['field_leader_role','role']])if(different(key))h[field]=v[key];
+    if(different('reason')){h.description=v.reason;if(!h.title||h.title===old.reason)h.title=v.reason||h.title;}
+   }
+  }
+  if(changes.removed.length){const removed=new Set(changes.removed);db.history=db.history.filter(h=>!removed.has(h));}
+  for(const v of changes.additions){db.history.unshift({id:uid(),employee_id:e.id,event_date:v.date,
+   event_type:'인사변동',title:v.category,hr_card_appointment:true,
+   appointment_category:v.category,previous_department:v.previous,appointed_department:v.department,
+   appointed_position:v.position,appointed_role:v.role,change_reason:v.reason,
+   description:v.reason,department:v.department,position:v.position,field_leader_role:v.role});}
+ }
  function editCard(id){const e=getEmp(id);if(!e)return;const x=extraOf(e),root=overlay();root.dataset.mode='edit';
-  root.innerHTML=`<div class="hr-record-editor"><div class="hr-record-actions"><b>${show(e.name)} · 인사기록카드 추가항목 수정</b><button type="button" class="btn" id="hrCardEditCancel">취소</button></div><div class="notice">기존 사번·입사일·소속 등은 직원 [수정]에서 관리합니다. 이 화면은 인사기록카드의 추가 항목과 가족·학력·경력·자격 내역만 저장합니다.</div><div class="hr-record-edit-grid">${fieldDefs.map(([key,label])=>`<label class="${key==='resident_address'?'hr-record-address-field':''}">${safe(label)}${key==='resident_address'?`<textarea data-card-field="${safe(key)}" rows="2">${safe(x[key]||'')}</textarea>`:`<input data-card-field="${safe(key)}" value="${safe(x[key]||'')}">`}</label>`).join('')}</div><div id="hrRecordListEditor"></div><div class="hr-record-actions"><button type="button" class="btn" id="hrCardCancelBottom">취소</button><button type="button" class="btn primary" id="hrCardSave">추가항목 저장</button></div></div>`;
+  root.innerHTML=`<div class="hr-record-editor"><div class="hr-record-actions"><b>${show(e.name)} · 인사기록카드 추가항목 수정</b><button type="button" class="btn" id="hrCardEditCancel">취소</button></div><div class="notice">기존 사번·입사일·소속 등은 직원 [수정]에서 관리합니다. 이 화면은 인사기록카드 추가 항목과 인사변동사항을 관리합니다. 인사변동 기록 수정은 직원의 현재 소속·직위를 바꾸지 않습니다.</div><div class="hr-record-edit-grid">${fieldDefs.map(([key,label])=>`<label class="${key==='resident_address'?'hr-record-address-field':''}">${safe(label)}${key==='resident_address'?`<textarea data-card-field="${safe(key)}" rows="2">${safe(x[key]||'')}</textarea>`:`<input data-card-field="${safe(key)}" value="${safe(x[key]||'')}">`}</label>`).join('')}</div><div id="hrRecordListEditor"></div><div class="hr-record-actions"><button type="button" class="btn" id="hrCardCancelBottom">취소</button><button type="button" class="btn primary" id="hrCardSave">추가항목 저장</button></div></div>`;
   // Only show the T-grade override in the record-card editor, not the employee editor.
   if(tGrade(e.grade)){
    const info=tGradeYearInfo(e,x);
@@ -3635,6 +3724,7 @@ window.saveRetirementContractConversion=function(id){
    box.innerHTML=`<div class="hr-record-edit-head"><h3>${safe(item.title)}</h3><button type="button" class="btn tiny" data-add-list="${safe(item.key)}">+ 행 추가</button></div><div class="hr-record-edit-rows"></div>`;listContainer.append(box);
    const rows=box.querySelector('.hr-record-edit-rows');arrOf(x,item.key).forEach(rec=>addRow(rows,item,rec));if(!rows.children.length)addRow(rows,item,{});
   }
+  renderAppointmentEditor(root,e);
   root.querySelector('#hrCardEditCancel').onclick=()=>renderCard(e);
   root.querySelector('#hrCardCancelBottom').onclick=()=>renderCard(e);
   root.querySelectorAll('[data-add-list]').forEach(btn=>btn.onclick=()=>{const item=lists.find(x=>x.key===btn.dataset.addList);addRow(root.querySelector(`[data-list="${item.key}"] .hr-record-edit-rows`),item,{})});
@@ -3645,8 +3735,11 @@ window.saveRetirementContractConversion=function(id){
    if(override){const val=override.value.trim();if(val&&(!/^[1-9]\d*$/.test(val)||Number(val)>60)){alert('직급 연차는 1~60 사이의 정수로 입력하거나 비워 주세요.');override.focus();return;}if(val){updated.t_grade_year_override=String(Number(val));updated.t_grade_year_override_year=new Date().getFullYear();}else{delete updated.t_grade_year_override;delete updated.t_grade_year_override_year;}}
 
    for(const item of lists){const rows=[];root.querySelectorAll(`[data-list="${item.key}"] .hr-record-edit-row`).forEach(row=>{const obj={};row.querySelectorAll('[data-column]').forEach(input=>obj[input.dataset.column]=input.value.trim());if(Object.values(obj).some(Boolean))rows.push(obj)});updated[item.key]=rows;}
+   const appointmentChanges=prepareAppointmentChanges(root,e);
+   if(!appointmentChanges)return;
    e.hr_record_card=updated;
-   close();commit('인사기록카드 추가항목 수정',String(e.employee_no||'')+' / 인사기록카드 보완');
+   applyAppointmentChanges(e,appointmentChanges);
+   close();commit('인사기록카드 추가항목 수정',String(e.employee_no||'')+' / 인사기록카드 보완 · 인사변동 추가 '+appointmentChanges.additions.length+'건, 수정 '+appointmentChanges.updates.length+'건, 삭제 '+appointmentChanges.removed.length+'건');
    currentId=String(id);renderCard(e);
   };
  }
