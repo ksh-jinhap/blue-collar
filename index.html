@@ -6415,4 +6415,51 @@ executiveView=function(){
  window.__hrPersonnelInterviewCheck=()=>({menu:!!navs.querySelector('[data-view="'+PAGE+'"]'),employees:employees().length,records:employees().reduce((a,e)=>a+entries(e).length,0)});
 })();
 </script>
+
+<script id="hrDashboardCompanyMonthAndOrder20261127">
+/* Dashboard display-only adjustments: use the chosen month in the company table, then order existing panels. */
+(function(){
+ 'use strict';
+ const earlierDashboard=dashboard;
+ dashboard=function(){
+  const html=earlierDashboard.apply(this,arguments);
+  const root=document.createElement('div');root.innerHTML=html;
+  const month=Number(planMonth);
+  if(Number.isInteger(month)&&month>=1&&month<=12){
+   const company=root.querySelector('.hr-company-summary');
+   if(company){
+    for(const th of company.querySelectorAll('thead th')){
+     const text=th.textContent.trim();
+     if(text==='선택월 입사')th.textContent=month+'월 입사';
+     else if(text==='선택월 퇴사')th.textContent=month+'월 퇴사';
+     else if(text==='선택월 인원')th.textContent=month+'월 인원';
+    }
+   }
+  }
+  const titleOf=panel=>panel?.querySelector('h2')?.textContent.trim()||'';
+  const panels=[...root.querySelectorAll('section.panel')];
+  const personPanels=panels.filter(p=>/^당월 (입사자|퇴사자)(\s|$)/.test(titleOf(p)));
+  const hires=personPanels.find(p=>/^당월 입사자(\s|$)/.test(titleOf(p)));
+  const exits=personPanels.find(p=>/^당월 퇴사자(\s|$)/.test(titleOf(p)));
+  const manager=panels.find(p=>titleOf(p)==='현장관리자 현황');
+  const company=root.querySelector('.hr-company-summary');
+  const corp=panels.find(p=>['법인별 운영 인원','선택월 말 법인별 인원'].includes(titleOf(p)));
+  const corpContainer=corp?(corp.closest('.section')||corp):null;
+  const toLists=root.querySelector('.dashboard-org-to-summary');
+  const cards=root.querySelector('.cards');
+  // Preserve every panel and its existing event controls: only move the original nodes.
+  const anchor=cards||toLists;
+  if(anchor){
+   let tail=anchor;
+   for(const item of [toLists,corpContainer,company,hires,exits,manager]){
+    if(item&&item!==tail&&!item.contains(tail)){
+     tail.insertAdjacentElement('afterend',item);
+     tail=item;
+    }
+   }
+  }
+  return root.innerHTML;
+ };
+})();
+</script>
 </body></html>
