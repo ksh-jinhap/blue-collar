@@ -3510,6 +3510,32 @@ window.saveRetirementContractConversion=function(id){
  // Card-only T-grade year display. Never changes the employee's stored grade.
  const tGrade=v=>{const m=/^T([1-6])$/i.exec(String(v||'').trim());return m?'T'+m[1]:'';};
  const dateKey=v=>{const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(String(v||''));if(!m)return '';const d=new Date(Number(m[1]),Number(m[2])-1,Number(m[3]));return d.getFullYear()===Number(m[1])&&d.getMonth()+1===Number(m[2])&&d.getDate()===Number(m[3])?m[0]:'';};
+ // Record-card editor date entry: 20261127 -> 2026.11.27 (display only).
+ // Appointment history continues to store ISO YYYY-MM-DD.
+ const cardDateDigits=v=>String(v||'').replace(/\D/g,'').slice(0,8);
+ const cardDateDisplay=v=>{const digits=cardDateDigits(v);return digits.length===8?`${digits.slice(0,4)}.${digits.slice(4,6)}.${digits.slice(6,8)}`:String(v||'');};
+ const cardDateISO=v=>{const digits=cardDateDigits(v);if(digits.length!==8)return '';const iso=`${digits.slice(0,4)}-${digits.slice(4,6)}-${digits.slice(6,8)}`;return dateKey(iso);};
+ function setupCardDateEntry(root){
+  root.querySelectorAll('input[data-card-date]').forEach(input=>{
+   input.setAttribute('inputmode','numeric');input.setAttribute('maxlength','10');
+   input.placeholder='YYYY.MM.DD (숫자 8자리)';
+   input.value=cardDateDisplay(input.value);
+  });
+  if(root.__cardDateListener)return;
+  root.__cardDateListener=true;
+  root.addEventListener('input',event=>{
+   const input=event.target;if(!input.matches?.('input[data-card-date]'))return;
+   const before=input.value;const cursor=input.selectionStart??before.length;
+   const preceding=cardDateDigits(before.slice(0,cursor)).length;
+   const digits=cardDateDigits(before);
+   const formatted=digits.length>4?digits.slice(0,4)+'.'+(digits.length>6?digits.slice(4,6)+'.'+digits.slice(6):digits.slice(4)):digits;
+   input.value=formatted;
+   let pos=0,seen=0;while(pos<formatted.length&&seen<preceding){if(/\d/.test(formatted[pos]))seen++;pos++;}
+   if(preceding>0&&pos<formatted.length&&formatted[pos]==='.')pos++;
+   try{input.setSelectionRange(pos,pos)}catch(_error){}
+  });
+ }
+
  const tGradeYearInfo=(e,x)=>{
   const grade=tGrade(e.grade);if(!grade)return null;
   const now=new Date(),currentYear=now.getFullYear();
@@ -3660,8 +3686,8 @@ window.saveRetirementContractConversion=function(id){
  function addAppointmentRow(container,record,index){
   const row=document.createElement('div');row.className='hr-appointment-edit-row';
   if(index!==null)row.dataset.historyIndex=String(index);
-  row.innerHTML='<div class="hr-appointment-edit-fields">'+appointmentColumns.map(([key,label])=>`<label>${safe(label)}<input data-appointment-field="${safe(key)}" ${key==='date'?'type="date"':''} value="${safe(record[key]||'')}"></label>`).join('')+'</div><button type="button" class="btn tiny danger" title="저장 시 선택한 기록을 삭제합니다">삭제</button>';
-  row.querySelector('button').onclick=()=>row.remove();container.appendChild(row);
+  row.innerHTML='<div class="hr-appointment-edit-fields">'+appointmentColumns.map(([key,label])=>`<label>${safe(label)}<input data-appointment-field="${safe(key)}" ${key==='date'?'data-card-date="appointment"':''} value="${safe(key==='date'?cardDateDisplay(record[key]):(record[key]||''))}"></label>`).join('')+'</div><button type="button" class="btn tiny danger" title="저장 시 선택한 기록을 삭제합니다">삭제</button>';
+  row.querySelector('button').onclick=()=>row.remove();container.appendChild(row);setupCardDateEntry(container.closest('#hrRecordOverlay')||container);
  }
  function renderAppointmentEditor(root,e){
   const section=document.createElement('section');section.className='hr-record-edit-section hr-appointment-editor';
@@ -3686,6 +3712,7 @@ window.saveRetirementContractConversion=function(id){
   const keep=new Set(),updates=[],additions=[];
   for(const row of rows){
    const vals={};row.querySelectorAll('[data-appointment-field]').forEach(input=>vals[input.dataset.appointmentField]=input.value.trim());
+   const rawAppointmentDate=vals.date;vals.date=cardDateISO(rawAppointmentDate)||rawAppointmentDate;
    const idx=row.hasAttribute('data-history-index')?Number(row.dataset.historyIndex):null;
    if(idx!==null&&!originals.has(idx)){alert('인사변동 목록이 변경되었습니다. 다시 조회해 주세요.');return null;}
    if(idx!==null)keep.add(idx);
@@ -3693,7 +3720,7 @@ window.saveRetirementContractConversion=function(id){
    if(old&&appointmentColumns.every(([k])=>old[k]===vals[k]))continue;
    if(!Object.values(vals).some(Boolean)&&idx===null)continue;
    if(!dateKey(vals.date)){
-    alert('인사변동사항의 변동일자는 유효한 YYYY-MM-DD 날짜로 입력해 주세요.');row.querySelector('[data-appointment-field="date"]')?.focus();return null;
+    alert('인사변동사항의 변동일자는 유효한 YYYY.MM.DD 날짜(숫자 8자리)로 입력해 주세요.');row.querySelector('[data-appointment-field="date"]')?.focus();return null;
    }
    if(!vals.category||!appointmentColumns.some(([k])=>k!=='date'&&k!=='category'&&vals[k])){
     alert('인사변동사항의 발령구분과 변경 내용(부서·직위·직책·사유 중 하나)을 입력해 주세요.');return null;
@@ -3743,6 +3770,7 @@ window.saveRetirementContractConversion=function(id){
    const rows=box.querySelector('.hr-record-edit-rows');arrOf(x,item.key).forEach(rec=>addRow(rows,item,rec));if(!rows.children.length)addRow(rows,item,{});
   }
   renderAppointmentEditor(root,e);
+  setupCardDateEntry(root);
   root.querySelector('#hrCardEditCancel').onclick=()=>renderCard(e);
   root.querySelector('#hrCardCancelBottom').onclick=()=>renderCard(e);
   root.querySelectorAll('[data-add-list]').forEach(btn=>btn.onclick=()=>{const item=lists.find(x=>x.key===btn.dataset.addList);addRow(root.querySelector(`[data-list="${item.key}"] .hr-record-edit-rows`),item,{})});
@@ -3753,6 +3781,9 @@ window.saveRetirementContractConversion=function(id){
    if(override){const val=override.value.trim();if(val&&(!/^[1-9]\d*$/.test(val)||Number(val)>60)){alert('직급 연차는 1~60 사이의 정수로 입력하거나 비워 주세요.');override.focus();return;}if(val){updated.t_grade_year_override=String(Number(val));updated.t_grade_year_override_year=new Date().getFullYear();}else{delete updated.t_grade_year_override;delete updated.t_grade_year_override_year;}}
 
    for(const item of lists){const rows=[];root.querySelectorAll(`[data-list="${item.key}"] .hr-record-edit-row`).forEach(row=>{const obj={};row.querySelectorAll('[data-column]').forEach(input=>obj[input.dataset.column]=input.value.trim());if(Object.values(obj).some(Boolean))rows.push(obj)});updated[item.key]=rows;}
+   for(const input of root.querySelectorAll('input[data-card-date="list"]')){
+    if(input.value.trim()&&!cardDateISO(input.value)){alert('학력·경력 날짜는 유효한 YYYY.MM.DD 형식으로 입력해 주세요.');input.focus();return;}
+   }
    const appointmentChanges=prepareAppointmentChanges(root,e);
    if(!appointmentChanges)return;
    e.hr_record_card=updated;
@@ -3762,8 +3793,8 @@ window.saveRetirementContractConversion=function(id){
   };
  }
  function addRow(target,item,data){const row=document.createElement('div');row.className='hr-record-edit-row';
-  row.innerHTML=item.columns.map(([key,label])=>`<label>${safe(label)}<input data-column="${safe(key)}" value="${safe(item.key==='school'&&key==='category'?(getEmp(currentId)?.education||''):(data[key]||''))}" ${item.key==='school'&&key==='category'?'readonly title="생산직 인원관리의 학력 항목에서 자동 반영"':''}></label>`).join('')+(item.key==='career'&&data.period?`<input type="hidden" data-column="period" value="${safe(data.period)}">`:'')+'<button type="button" class="btn tiny danger">삭제</button>';
-  row.querySelector('button').onclick=()=>row.remove();target.append(row);
+  row.innerHTML=item.columns.map(([key,label])=>`<label>${safe(label)}<input data-column="${safe(key)}" value="${safe(['admission','graduation','start_date','end_date'].includes(key)?cardDateDisplay(data[key]||''):(item.key==='school'&&key==='category'?(getEmp(currentId)?.education||''):(data[key]||'')))}" ${['admission','graduation','start_date','end_date'].includes(key)?'data-card-date="list"':''} ${item.key==='school'&&key==='category'?'readonly title="생산직 인원관리의 학력 항목에서 자동 반영"':''}></label>`).join('')+(item.key==='career'&&data.period?`<input type="hidden" data-column="period" value="${safe(data.period)}">`:'')+'<button type="button" class="btn tiny danger">삭제</button>';
+  row.querySelector('button').onclick=()=>row.remove();target.append(row);setupCardDateEntry(target.closest('#hrRecordOverlay')||target);
  }
  window.__hrRecordCardOpen=function(id){if(typeof window.__hrCloudConnected==='function'&&!window.__hrCloudConnected()){alert('공동 DB 로그인 후 열 수 있습니다.');return;}
   const e=getEmp(id);if(!e){alert('직원을 찾을 수 없습니다.');return;}currentId=String(id);renderCard(e);
