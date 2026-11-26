@@ -6417,47 +6417,79 @@ executiveView=function(){
 </script>
 
 <script id="hrDashboardCompanyMonthAndOrder20261127">
-/* Dashboard display-only adjustments: use the chosen month in the company table, then order existing panels. */
+/* Display-only dashboard ordering: preserve existing panels and move individual panels, not whole sections. */
 (function(){
  'use strict';
- const earlierDashboard=dashboard;
+ const priorDashboard=dashboard;
  dashboard=function(){
-  const html=earlierDashboard.apply(this,arguments);
-  const root=document.createElement('div');root.innerHTML=html;
-  const month=Number(planMonth);
-  if(Number.isInteger(month)&&month>=1&&month<=12){
-   const company=root.querySelector('.hr-company-summary');
-   if(company){
-    for(const th of company.querySelectorAll('thead th')){
-     const text=th.textContent.trim();
-     if(text==='선택월 입사')th.textContent=month+'월 입사';
-     else if(text==='선택월 퇴사')th.textContent=month+'월 퇴사';
-     else if(text==='선택월 인원')th.textContent=month+'월 인원';
-    }
-   }
+  const raw=priorDashboard.apply(this,arguments);
+  const root=document.createElement('div');root.innerHTML=raw;
+  const month=Number(planMonth),year=Number(planYear);
+  if(!Number.isInteger(month)||month<1||month>12)return raw;
+  const monthKey=String(year)+'-'+String(month).padStart(2,'0');
+  const header=p=>p?.querySelector('h2')?.textContent.trim()||'';
+  const panels=()=>[...root.querySelectorAll('section.panel')];
+  const find=re=>panels().find(p=>re.test(header(p)));
+  const employees=Array.isArray(db.employees)?db.employees:[];
+  const date=e=>String(e?.hire_date||'').slice(0,10);
+  const departed=e=>String((typeof exitDate==='function'?exitDate(e):e?.exit_date)||e?.exit_date||'').slice(0,10);
+  const validDate=x=>/^\d{4}-\d{2}-\d{2}$/.test(x);
+  // Only create a missing dated employee roster; existing current-month lists keep their original markup.
+  function makeRoster(kind){
+   const hire=kind==='hire',records=employees.filter(e=>{const d=hire?date(e):departed(e);return validDate(d)&&d.slice(0,7)===monthKey;});
+   const cols=hire?['이름','법인','부서','입사일']:['이름','부서','입사일','퇴사일','근속기간'];
+   const values=e=>hire?[e.name,e.corporation,e.department,date(e)]:[e.name,e.department,date(e),departed(e),typeof durationOf==='function'?durationOf(e):'확인 필요'];
+   const section=document.createElement('section');section.className='panel';
+   section.innerHTML='<h2>당월 '+(hire?'입사자':'퇴사자')+' <span class="muted">'+records.length+'명 · '+monthKey+'</span></h2>'+
+    '<p class="hint">직원별 등록일자 기준 참고 명단 · 과거 삭제된 직원은 포함되지 않습니다.</p>'+
+    '<div class="tablewrap"><table><thead><tr>'+cols.map(s=>'<th>'+s+'</th>').join('')+'</tr></thead><tbody>'+
+    (records.map(e=>'<tr>'+values(e).map(v=>'<td>'+esc(v||'미기록')+'</td>').join('')+'</tr>').join('')||'<tr><td colspan="'+cols.length+'" class="empty">해당 월 입퇴사 기록이 없습니다.</td></tr>')+
+    '</tbody></table></div>';
+   return section;
   }
-  const titleOf=panel=>panel?.querySelector('h2')?.textContent.trim()||'';
-  const panels=[...root.querySelectorAll('section.panel')];
-  const personPanels=panels.filter(p=>/^당월 (입사자|퇴사자)(\s|$)/.test(titleOf(p)));
-  const hires=personPanels.find(p=>/^당월 입사자(\s|$)/.test(titleOf(p)));
-  const exits=personPanels.find(p=>/^당월 퇴사자(\s|$)/.test(titleOf(p)));
-  const manager=panels.find(p=>titleOf(p)==='현장관리자 현황');
-  const company=root.querySelector('.hr-company-summary');
-  const corp=panels.find(p=>['법인별 운영 인원','선택월 말 법인별 인원'].includes(titleOf(p)));
-  const corpContainer=corp?(corp.closest('.section')||corp):null;
-  const toLists=root.querySelector('.dashboard-org-to-summary');
+  let hires=find(/^당월 입사자(?:\s|$)/);
+  let exits=find(/^당월 퇴사자(?:\s|$)/);
+  if(!hires||(/\d{4}-\d{2}/.test(header(hires))&&!header(hires).includes(monthKey))){
+   const correct=makeRoster('hire');if(hires)hires.replaceWith(correct);hires=correct;
+  }
+  if(!exits||(/\d{4}-\d{2}/.test(header(exits))&&!header(exits).includes(monthKey))){
+   const correct=makeRoster('exit');if(exits)exits.replaceWith(correct);exits=correct;
+  }
+  let leaders=find(/^현장관리자 현황$/);
+  if(!leaders){
+   // Historical month-end snapshots do not store roles; show current role registrations, explicitly labelled.
+   const roles=['그룹장','파트장','라인장'];
+   const people=employees.filter(e=>e.status!=='퇴사'&&roles.includes(e.field_leader_role));
+   leaders=document.createElement('section');leaders.className='panel';
+   leaders.innerHTML='<div class="report-head"><h2>현장관리자 현황</h2><button class="btn" onclick="setView(\'leaders\')">전체 현황 보기 →</button></div>'+
+    '<p class="hint">현재 등록된 현장관리자 기준 · 과거 월말 직책 재현 자료는 아님</p>'+
+    '<div class="kpirow">'+roles.map(r=>'<span>'+r+' <strong>'+people.filter(e=>e.field_leader_role===r).length+'</strong>명</span>').join('')+'<span>합계 <strong>'+people.length+'</strong>명</span></div>';
+  }
+  const summary=root.querySelector('.hr-company-summary');
+  const corporation=find(/^(법인별 운영 인원|선택월 말 법인별 인원|\d{1,2}월 말 법인별 인원)(?:$|\s)/);
+  const to=root.querySelector('.dashboard-org-to-summary');
   const cards=root.querySelector('.cards');
-  // Preserve every panel and its existing event controls: only move the original nodes.
-  const anchor=cards||toLists;
+  // Some dashboard versions have a TO comparison panel sharing a two-column container with
+  // corporation headcount. Keep that comparison, but never move its container above the ordered areas.
+  const oldSection=corporation?.closest('.section');
+  const anchor=cards||to;
   if(anchor){
-   let tail=anchor;
-   for(const item of [toLists,corpContainer,company,hires,exits,manager]){
-    if(item&&item!==tail&&!item.contains(tail)){
-     tail.insertAdjacentElement('afterend',item);
-     tail=item;
-    }
+   let after=anchor;
+   for(const area of [to,corporation,summary,hires,exits,leaders]){
+    if(!area||area===after||area.contains(after))continue;
+    after.insertAdjacentElement('afterend',area);
+    after=area;
+   }
+   if(oldSection){
+    if(oldSection.querySelector('section.panel'))after.insertAdjacentElement('afterend',oldSection);
+    else oldSection.remove();
    }
   }
+  // All dashboard-only occurrences of the fixed word update when the selected month changes.
+  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+  let node;
+  while((node=walker.nextNode()))if(node.nodeValue.includes('선택월'))node.nodeValue=node.nodeValue.replaceAll('선택월',month+'월');
+  // Preserve the original company headline; only adapt its column labels.
   return root.innerHTML;
  };
 })();
