@@ -6543,4 +6543,50 @@ executiveView=function(){
  };
 })();
 </script>
+
+<style id="hrDashboardLeaderUnionSplitStyle20261127">
+/* Only the final dashboard leader / union panels are laid out in two columns. */
+#hrDashboardLeaderUnionPair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;margin-bottom:17px;align-items:stretch}
+#hrDashboardLeaderUnionPair>.panel{min-width:0;margin:0}
+#hrDashboardLeaderUnionPair .kpirow{gap:10px 16px}
+#hrDashboardLeaderUnionPair .kpirow strong{font-size:18px}
+#hrDashboardLeaderUnionPair .report-head h2{margin-bottom:0}
+#hrDashboardLeaderUnionPair .report-head{margin-bottom:14px}
+@media(max-width:960px){#hrDashboardLeaderUnionPair{grid-template-columns:1fr}}
+@media print{#hrDashboardLeaderUnionPair{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+<script id="hrDashboardLeaderUnionSplit20261127">
+(function(){
+ 'use strict';
+ const previousDashboard=dashboard;
+ dashboard=function(){
+  const html=previousDashboard.apply(this,arguments);
+  const root=document.createElement('div');root.innerHTML=html;
+  const leader=[...root.querySelectorAll('section.panel')].find(p=>p.querySelector('h2')?.textContent.trim()==='현장관리자 현황');
+  if(!leader)return html;
+  const button=leader.querySelector('.report-head button');
+  if(button)button.textContent='현장관리자 현황 →';
+  const employees=Array.isArray(db?.employees)?db.employees:[];
+  const office=Array.isArray(db?.office_union_members)?db.office_union_members:[];
+  // These are current membership counts (not the selected historical month-end snapshot).
+  const production=employees.filter(e=>e.status!=='퇴사'&&String(e.position||'').trim()!=='계약직'&&e.union_status==='가입');
+  const officeMembers=office.filter(e=>e.status!=='퇴사'&&(e.union_status==='가입'||!e.union_status));
+  const roleNames=['조합원','대의원','회계감사','사무국장','부위원장','위원장'];
+  const roleOf=e=>String(e.union_role||'').trim();
+  const known=roleNames.filter(r=>production.some(e=>roleOf(e)===r)||officeMembers.some(e=>(roleNames.includes(roleOf(e))?roleOf(e):(typeof window.hrUnionOfficeRole==='function'?window.hrUnionOfficeRole(e):'조합원'))===r));
+  const union=document.createElement('section');union.className='panel';union.id='hrDashboardUnionSummary';
+  union.innerHTML='<div class="report-head"><h2>노조현황</h2><button type="button" class="btn" onclick="setView(\'union\')">노동조합 →</button></div>'+
+   '<div class="kpirow"><span>생산직 <strong>'+production.length+'</strong>명</span><span>사무직 <strong>'+officeMembers.length+'</strong>명</span><span>합계 <strong>'+(production.length+officeMembers.length)+'</strong>명</span></div>'+
+   '<p class="hint">현재 등록된 조합원 기준 · 생산직/사무직 구분 집계</p>'+
+   (known.length?'<div class="kpirow">'+known.map(r=>{
+    const n=production.filter(e=>roleOf(e)===r).length+officeMembers.filter(e=>(roleNames.includes(roleOf(e))?roleOf(e):(typeof window.hrUnionOfficeRole==='function'?window.hrUnionOfficeRole(e):'조합원'))===r).length;
+    return '<span>'+r+' <strong>'+n+'</strong>명</span>';
+   }).join('')+'</div>':'');
+  const pair=document.createElement('div');pair.id='hrDashboardLeaderUnionPair';
+  leader.replaceWith(pair);
+  pair.append(leader,union);
+  return root.innerHTML;
+ };
+})();
+</script>
 </body></html>
