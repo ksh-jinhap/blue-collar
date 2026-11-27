@@ -6494,4 +6494,53 @@ executiveView=function(){
  };
 })();
 </script>
+<script id="recruitmentAutomaticRequestNumber20261127">
+(function(){
+ 'use strict';
+ // Use the complete recruitment collection (not the year-filtered screen) to avoid reusing numbers.
+ function numberOf(value){
+  const text=String(value==null?'':value).trim();
+  return /^\d+$/.test(text)?Number(text):NaN;
+ }
+ function nextNumber(){
+  const rows=Array.isArray(db.recruitment)?db.recruitment:[];
+  const highest=rows.reduce((max,row)=>{
+   const n=numberOf(row&&row.request_no);
+   return Number.isSafeInteger(n)&&n>max?n:max;
+  },0);
+  return String(highest+1).padStart(3,'0');
+ }
+ const previousOpen=openRecruitment;
+ openRecruitment=function(id=null,encoded=''){
+  previousOpen(id,encoded);
+  const input=document.getElementById('rNo');
+  if(!input)return;
+  // Existing numbers never change on edit. Only a newly opened request is auto-numbered.
+  if(id===null||id===undefined){
+   input.value=nextNumber();
+   input.readOnly=true;
+   input.title='기존 요청번호의 최대값 다음 순번이 자동 부여됩니다.';
+  }
+ };
+ const previousSave=saveRecruitment;
+ saveRecruitment=function(id){
+  const input=document.getElementById('rNo');
+  if(!input)return previousSave(id);
+  if(id===null||id===undefined){
+   // Recheck at save time in case another request was added after opening the editor.
+   input.value=nextNumber();
+  }
+  const value=String(input.value||'').trim();
+  const numeric=numberOf(value);
+  if(!Number.isSafeInteger(numeric)||numeric<1){
+   alert('채용 요청번호는 001 이상의 숫자여야 합니다.');return;
+  }
+  const duplicate=(db.recruitment||[]).some(row=>
+   String(row.id)!==String(id)&&numberOf(row.request_no)===numeric
+  );
+  if(duplicate){alert('이미 사용 중인 채용 요청번호입니다. 다시 확인하세요.');return;}
+  return previousSave(id);
+ };
+})();
+</script>
 </body></html>
