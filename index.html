@@ -6589,4 +6589,46 @@ executiveView=function(){
  };
 })();
 </script>
+<script id="hrAllViewsSelectedMonthLabels20261127">
+(function(){
+ 'use strict';
+ // Display-only labels: never modify stored records, form inputs, or original rendering templates.
+ const root=document.getElementById('content');
+ if(!root)return;
+ const monthFrom=selector=>{
+  const el=root.querySelector(selector);
+  if(!el)return null;
+  const n=Number(el.value);
+  return Number.isInteger(n)&&n>=1&&n<=12?n:null;
+ };
+ const visibleMonth=()=>{
+  // Monthly trend has its own comparison-month filter; other views use the selected plan month.
+  const local=monthFrom('#qaTrendMonth')||monthFrom('#monthReportMonth')||monthFrom('#planMonth');
+  if(local)return local;
+  const n=typeof planMonth==='undefined'?NaN:Number(planMonth);
+  return Number.isInteger(n)&&n>=1&&n<=12?n:null;
+ };
+ let active=false;
+ function update(){
+  if(active)return;
+  const month=visibleMonth();
+  if(!month)return;
+  active=true;
+  try{
+   const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
+   let node;
+   while((node=walker.nextNode())){
+    if(!node.nodeValue.includes('선택월')&&!node.nodeValue.includes('선택 월'))continue;
+    const parent=node.parentElement;
+    if(!parent||parent.closest('script,style,textarea,select,option,button,[contenteditable="true"]'))continue;
+    const next=node.nodeValue.replace(/선택\s*월/g,month+'월');
+    if(next!==node.nodeValue)node.nodeValue=next;
+   }
+  }finally{active=false;}
+ }
+ const observer=new MutationObserver(update);
+ observer.observe(root,{childList:true,subtree:true,characterData:true});
+ update();
+})();
+</script>
 </body></html>
